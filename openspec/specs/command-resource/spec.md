@@ -16,22 +16,37 @@ houbridge resource info RESOURCE_ID
 
 `RESOURCE_ID` is a required semantic alias or canonical SHA-256 Resource id.
 
-Success SHALL contain exactly:
+Success SHALL report MIME together with exactly one size measure selected by the Resource subsystem's existing text/binary classification.
+
+A text-like Resource SHALL use:
 
 ```json
 {
-  "bytes": 1234,
   "mime": "application/json",
   "tokens": 256
 }
 ```
 
-`mime` and `tokens` MAY be `null`. The supplied Resource id and canonical hash SHALL NOT be repeated in this minimal metadata response.
+A binary Resource SHALL use:
+
+```json
+{
+  "mime": "application/octet-stream",
+  "bytes": 1234
+}
+```
+
+`mime` MAY be `null`. `tokens` SHALL be present only for text-like Resources. `bytes` SHALL be present only for binary Resources. The supplied Resource id and canonical hash SHALL NOT be repeated in this minimal metadata response.
+
+#### Scenario: Inspect text Resource metadata
+- **WHEN** a Resource is classified as text-like
+- **THEN** `tokens` reports its estimated token count
+- **AND** `bytes` is omitted
 
 #### Scenario: Inspect binary Resource metadata
-- **WHEN** a binary Resource has no token estimate
-- **THEN** `tokens` is `null`
-- **AND** `bytes` still reports the payload byte size
+- **WHEN** a Resource is classified as binary
+- **THEN** `bytes` reports the payload byte size
+- **AND** `tokens` is omitted
 
 ### Requirement: Expose bounded Resource get
 
