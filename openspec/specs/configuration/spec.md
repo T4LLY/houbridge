@@ -1,0 +1,149 @@
+# Configuration Specification
+
+## Purpose
+
+Define persistent Houbridge configuration, defaults, layering, validation, and feature enablement.
+
+## Requirements
+
+### Requirement: Use global configuration with optional current-directory overrides
+
+Houbridge SHALL use a global `config.toml` as the base configuration and MAY apply `<cwd>/.houbridge.toml` as a deep current-directory override. Missing local configuration SHALL be normal and SHALL NOT cause a local file to be created automatically.
+
+#### Scenario: Run without an existing global config file
+- **WHEN** the global Houbridge `config.toml` does not exist
+- **THEN** Houbridge creates it with all required tables and generated defaults before loading configuration
+
+#### Scenario: Override one setting for the current directory
+- **WHEN** `.houbridge.toml` supplies one nested setting
+- **THEN** that setting overrides the corresponding global value
+- **AND** unspecified settings continue to come from the global configuration
+
+#### Scenario: No local config exists
+- **WHEN** `<cwd>/.houbridge.toml` is absent
+- **THEN** Houbridge uses the global configuration without creating the local file
+
+#### Scenario: Config file is malformed or incomplete
+- **WHEN** a required table/value is missing or TOML parsing fails
+- **THEN** Houbridge reports an invalid-configuration error
+
+### Requirement: Resolve Houbridge settings from configuration and invocation arguments
+
+Houbridge-specific persistent settings SHALL come from TOML configuration or explicit invocation arguments. Standard Houdini/SideFX discovery environment such as `HFS` and standard third-party cache environment variables MAY be honored for their native purposes.
+
+#### Scenario: An invocation overrides a configurable option
+- **WHEN** a command supplies a supported per-invocation override
+- **THEN** that invocation uses the explicit value without mutating persistent TOML configuration
+
+### Requirement: Configure the global operational storage root
+
+`[storage].root` SHALL select the global operational Houbridge data root. An empty generated value SHALL resolve to the platform-standard Houbridge user data location.
+
+#### Scenario: Storage root is empty
+- **WHEN** `[storage].root` is the generated empty string
+- **THEN** the platform-standard Houbridge user data directory is used for global operational state
+
+#### Scenario: Storage root is configured
+- **WHEN** `[storage].root` contains a path
+- **THEN** that path is expanded and used for global operational state
+
+### Requirement: Configure Houdini session target separately from process behavior
+
+`[session].port` SHALL define the default local Houdini openport. `[houdini]` SHALL independently configure explicit `hcommand`/GUI executable overrides and transport, lock, startup, and polling timeouts.
+
+Generated defaults SHALL be:
+
+- `[session].port = 18888`
+- `[houdini].hcommand = ""`
+- `[houdini].executable = ""`
+- `[houdini].transport_timeout_seconds = 120`
+- `[houdini].lock_timeout_seconds = 120`
+- `[houdini].startup_timeout_seconds = 60`
+- `[houdini].startup_poll_interval_seconds = 0.25`
+
+#### Scenario: Current directory selects a Houdini port
+- **WHEN** local configuration overrides `[session].port`
+- **THEN** Houdini-facing commands in that working directory use the overridden port unless the invocation explicitly selects another permitted port
+
+#### Scenario: Session start explicitly selects a port
+- **WHEN** Session start receives an explicit port override
+- **THEN** it uses that port for that invocation without mutating persistent configuration
+
+### Requirement: Configure workspace script-search persistence
+
+`[local_script_database].enabled` SHALL control workspace script semantic index creation and refresh. The generated default SHALL be `true`.
+
+#### Scenario: Local script database is disabled
+- **WHEN** effective `[local_script_database].enabled` is `false`
+- **THEN** local script search does not create or update `.houbridge/search.db`
+
+### Requirement: Configure search embeddings and hybrid ranking
+
+The code embedding profile and hybrid-search parameters SHALL be configurable. Generated defaults SHALL be:
+
+- `[search.embedding].code_profile = "minishlab/potion-code-16M-v2"`
+- `[search.hybrid].rrf_k = 60`
+- `[search.hybrid].candidate_multiplier = 8`
+- `[search.hybrid].candidate_min = 32`
+
+#### Scenario: Search uses configured hybrid parameters
+- **WHEN** a hybrid search path is constructed
+- **THEN** reciprocal-rank fusion and candidate fan-out use the effective configured values
+
+#### Scenario: Script search uses the code profile
+- **WHEN** workspace script semantic search embeds fragments and queries
+- **THEN** it uses the effective `[search.embedding].code_profile`
+
+### Requirement: Configure Resource inspection
+
+Generated Resource inspection defaults SHALL be:
+
+- `[resource].inline_limit_bytes = 16384`
+- `[resource].search_limit = 10`
+
+These settings control bounded Resource inspection and SHALL NOT change where Resource payloads are persisted.
+
+#### Scenario: Resource reading uses configured limits
+- **WHEN** a text Resource is inspected
+- **THEN** the effective Resource inspection limits are applied subject to fixed hard maxima
+
+### Requirement: Configure screenshot limits and retention
+
+Generated screenshot defaults SHALL be:
+
+- `[screenshot].retention_hours = 1`
+- `[screenshot].max_width = 2048`
+- `[screenshot].max_height = 2048`
+
+#### Scenario: Screenshot output is bounded
+- **WHEN** a screenshot request would exceed configured dimensions
+- **THEN** Capture reduces the output according to the Capture specification
+
+### Requirement: Configure the shared inline-output threshold under Output
+
+The generated configuration SHALL define `[output].inline_max_tokens = 256` as the common soft inline token threshold. The common Output subsystem SHALL consume this value.
+
+#### Scenario: Default config is created
+- **WHEN** Houbridge writes a fresh global config
+- **THEN** `[output].inline_max_tokens` is `256`
+- **AND** feature services do not implement private configured thresholds
+
+### Requirement: Reject configuration above fixed output hard limits
+
+Configurable output limits MAY tighten soft limits but SHALL NOT exceed the fixed hard maxima defined by the Output Policy.
+
+#### Scenario: Global or local configuration exceeds a hard maximum
+- **WHEN** a configured inline or Resource search/output limit exceeds its fixed maximum
+- **THEN** configuration loading fails as invalid
+
+### Requirement: Cache unchanged TOML parsing without hiding file changes
+
+Configuration loading MAY cache parsed TOML for efficiency, but the cache SHALL be invalidated when the underlying file's observed modification state changes.
+
+#### Scenario: Config file is unchanged
+- **WHEN** the same global/local TOML file is loaded repeatedly without modification
+- **THEN** Houbridge may reuse the parsed representation
+
+#### Scenario: Config file changes
+- **WHEN** file modification metadata/content changes between loads
+- **THEN** the next configuration load observes the updated values
