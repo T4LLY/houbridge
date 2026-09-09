@@ -8,7 +8,7 @@ Define caller-provided Houdini Python execution, caller-file execution, executio
 
 ### Requirement: Execute arbitrary Houdini Python
 
-Execution SHALL accept caller-provided Python source and execute it inside the selected running Houdini GUI session using Houdini's native Python environment. Multiline source, quotes, Unicode, and other valid Python source SHALL be transported without shell re-quoting changing the source contents.
+Execution SHALL accept caller-provided Python source and execute it inside the selected running Houdini session using Houdini's native Python environment. Multiline source, quotes, Unicode, and other valid Python source SHALL be transported without shell re-quoting changing the source contents.
 
 #### Scenario: Execute multiline Unicode source
 - **WHEN** source contains multiple lines, quotes, or Unicode text

@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Define discovery, inspection, reuse, and local launch of Houdini GUI sessions without binding Houbridge to a Houdini license edition. Command JSON schemas are specified separately.
+Define discovery, inspection, reuse, and local launch of Houdini sessions without binding Houbridge to a Houdini license edition. Command JSON schemas are specified separately.
 
 ## Requirements
 
 ### Requirement: Inspect a reachable Houdini session generically
 
-Session inspection SHALL use one Houdini-side probe for all supported GUI license categories. It SHALL report the actual Houdini application version, native license category, active Hip path when available, and the selected local port without inferring edition from executable name or launch path.
+Session inspection SHALL use one Houdini-side probe for supported GUI and headless sessions. It SHALL report the actual Houdini application version, native license category, active Hip path when available, selected local port, and whether the session is headless, without inferring those values from executable name or launch path. `headless` SHALL be derived from Houdini UI availability and SHALL be `true` when the UI is unavailable.
 
 #### Scenario: Inspect a Commercial session
 - **WHEN** the configured local Houdini openport is reachable
@@ -23,6 +23,11 @@ Session inspection SHALL use one Houdini-side probe for all supported GUI licens
 - **WHEN** the current scene is untitled or the native Hip path cannot represent a saved project
 - **THEN** Session inspection still succeeds without inventing a saved project identity
 
+#### Scenario: Inspect a headless session
+- **WHEN** the reachable Houdini process reports that its UI is unavailable
+- **THEN** Session inspection reports `headless` as `true`
+- **AND** version, license category, active Hip path, and port use the same probe contract
+
 ### Requirement: Reuse an already reachable target when starting a session
 
 Session start SHALL first probe the requested local port. If a compatible Houdini session is already reachable, Houbridge SHALL reuse it and SHALL NOT launch a second process for the same target.
@@ -30,7 +35,7 @@ Session start SHALL first probe the requested local port. If a compatible Houdin
 #### Scenario: Target is already reachable
 - **WHEN** Session start probes the requested port successfully
 - **THEN** the existing Houdini process is reused
-- **AND** no new Houdini GUI process is created
+- **AND** no new Houdini process is created
 
 ### Requirement: Load an explicitly requested HIP file through Session start launch semantics
 
@@ -48,30 +53,36 @@ The existing reuse-first rule SHALL remain authoritative. When a target is alrea
 - **THEN** the existing process is reused
 - **AND** the requested launch file is not loaded into that running scene
 
-### Requirement: Launch Houdini without selecting a license edition
+### Requirement: Launch the selected Houdini process mode without selecting a license edition
 
-When no compatible session is reachable, Session start SHALL launch a Houdini GUI executable generically and provide invocation-local HScript that opens the requested bridge port. Houbridge SHALL NOT add Apprentice, Indie, Core, Education, or Commercial-specific launch logic.
+When no compatible session is reachable, Session start SHALL launch either the normal Houdini GUI mode or, when headless launch is selected, a Houdini-provided headless Python runtime that can remain available for openport commands. Both modes SHALL open the requested bridge port and SHALL use the same post-launch Session probe. Houbridge SHALL NOT add Apprentice, Indie, Core, Education, or Commercial-specific launch logic.
 
-#### Scenario: Launch a discovered installation
-- **WHEN** no explicit GUI executable is configured and no session is reachable
+#### Scenario: Launch a discovered GUI installation
+- **WHEN** no explicit executable is selected, headless launch is not requested, and no session is reachable
 - **THEN** Houbridge launches the newest discoverable compatible Houdini GUI installation
-- **AND** opens the selected local bridge port through a temporary HScript payload
+- **AND** opens the selected local bridge port through a temporary startup payload
 
-#### Scenario: Launch an explicit executable
-- **WHEN** an explicit Houdini GUI executable is configured or supplied
-- **THEN** that executable is launched through the same generic path
+#### Scenario: Launch a discovered headless installation
+- **WHEN** no explicit executable is selected, headless launch is requested, and no session is reachable
+- **THEN** Houbridge launches the compatible headless Houdini Python runtime from the selected installation
+- **AND** enables background handling of openport commands
+- **AND** opens the selected local bridge port before reporting startup success
+
+#### Scenario: Launch an explicit executable or tool selector
+- **WHEN** an explicit executable/tool selector is configured or supplied for the selected launch mode
+- **THEN** Session resolves and launches the corresponding process through that mode's normal path
 - **AND** its path is not used to infer the active license category
 
 ### Requirement: Discover SideFX tools from explicit settings, native environment, and standard installations
 
-Tool discovery SHALL allow `hcommand` and the Houdini GUI executable to be resolved without requiring an already-configured Houdini shell. Explicit tool configuration SHALL take precedence. Standard Houdini environment information such as `HFS` MAY be used for native discovery. On Windows, standard Side Effects Software installation directories SHALL be searched when necessary, choosing the newest compatible installation.
+Tool discovery SHALL allow `hcommand`, the Houdini GUI executable, and the corresponding headless Houdini Python runtime to be resolved without requiring an already-configured Houdini shell. Explicit tool selection SHALL take precedence. Standard Houdini environment information such as `HFS` MAY be used for native discovery. On Windows, standard Side Effects Software installation directories SHALL be searched when necessary, choosing the newest compatible installation.
 
 #### Scenario: Explicit hcommand is configured
 - **WHEN** the explicit path exists
 - **THEN** it is used before automatic discovery
 
-#### Scenario: Explicit GUI executable is missing
-- **WHEN** a caller explicitly selects a Houdini executable that does not exist
+#### Scenario: Explicit launch tool is missing
+- **WHEN** a caller explicitly selects a Houdini executable/tool that cannot resolve the executable required by the selected launch mode
 - **THEN** Session reports a structured executable-not-found failure
 - **AND** does not silently launch a different edition or installation
 
@@ -88,13 +99,13 @@ When Houbridge resolves a SideFX executable from a Houdini installation, subproc
 - **WHEN** the current process does not already provide a usable `HFS`
 - **THEN** the launched SideFX subprocess receives `HFS` derived from that installation
 
-### Requirement: Keep session targets loopback-only
+### Requirement: Select sessions by explicit port
 
-Session target selection SHALL use the local host and an explicit port. Houbridge SHALL NOT expose a persistent configurable remote host feature.
+Session target selection SHALL use the configured port or an invocation-local port override.
 
 #### Scenario: Use the default port
 - **WHEN** no per-invocation port is supplied
-- **THEN** the effective configured local port is used
+- **THEN** the effective configured port is used
 
 #### Scenario: Use a one-shot port override
 - **WHEN** Session start or another permitted operation supplies a port override

@@ -96,7 +96,6 @@ Commands that address Houdini directly MAY expose the following common options e
 | `--root` | path | optional | Override the Houbridge operational state root used by that invocation. |
 | `--hcommand` | text/path | optional | Override the configured SideFX `hcommand` executable. |
 
-The target host SHALL remain local-only.
 
 #### Scenario: Explicit port is supplied
 - **WHEN** a command accepts `--port 20001`
