@@ -83,6 +83,19 @@ Houbridge SHALL read and modify the active Houdini scene through native Houdini 
 - **THEN** Session, Capture, Search, and Execution operate on the current native Houdini state
 - **AND** their operation does not depend on Houbridge persistence being present inside the scene
 
+### Requirement: Centralize canonical public scalar formatting
+
+Canonical public scalar formatting that must remain identical across features SHALL live in shared formatting/output primitives rather than feature-specific result builders. This includes the shared Search score formatter and the shared public date-time formatter defined by the Search and Command Contract specifications.
+
+#### Scenario: Two Search features expose scores
+- **WHEN** different Search services create public hit objects
+- **THEN** they use the same shared Search score-formatting boundary
+
+#### Scenario: Multiple command families expose date-times
+- **WHEN** more than one feature returns a public date-time field
+- **THEN** those values use the same shared public date-time formatter
+- **AND** feature modules do not duplicate canonical formatting logic
+
 ### Requirement: Centralize all public output limiting
 
 All command payloads SHALL pass through one common Output subsystem. Feature-specific CLI or service modules SHALL NOT implement independent token-limit decisions, Resource fallback rules, or final hard-output checks.

@@ -8,7 +8,7 @@ Define the single cross-cutting output-budget mechanism used by every public com
 
 ### Requirement: Apply one shared inline token threshold
 
-The system SHALL estimate serialized text/JSON payload token cost through the common Output subsystem. The generated default inline threshold SHALL remain 256 tokens. Configuration or command-level overrides MAY tighten or change the soft threshold where separately specified, but SHALL NOT bypass the fixed hard token ceiling.
+The system SHALL estimate serialized text/JSON payload token cost through the common Output subsystem. The generated default inline threshold SHALL remain 256 tokens. The effective soft threshold SHALL come from the shared `[output].inline_max_tokens` configuration. Feature commands SHALL NOT own private inline-token override options. The configured threshold SHALL NOT bypass the fixed hard token ceiling.
 
 #### Scenario: A result is within the inline threshold
 - **WHEN** a text or JSON payload is estimated at or below the effective inline threshold

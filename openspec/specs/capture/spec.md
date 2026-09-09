@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define viewport inspection, viewport/window screenshots, OCR, and turntable capture while preserving the user's Houdini viewer state and keeping temporary image output bounded. Command JSON schemas are specified separately.
+Define viewport inspection, viewport/window screenshots, OCR, and turntable video capture while preserving the user's Houdini viewer state and keeping temporary image/video output bounded. Command JSON schemas are specified separately.
 
 ## Requirements
 
@@ -30,7 +30,7 @@ Capture SHALL be able to write a PNG representing the active Scene Viewer viewpo
 
 ### Requirement: Capture directed views without modifying the user's viewer
 
-Directed captures SHALL use a temporary/cloned Scene Viewer state rather than permanently changing the user's current viewer. Supported directed capture behavior SHALL provide front, right, back, left, top, bottom, and perspective-style view handling where applicable.
+Directed captures SHALL use a temporary/cloned Scene Viewer state rather than permanently changing the user's current viewer. Supported directed views SHALL be `top`, `bottom`, `front`, `back`, `left`, `right`, `persp`, and `uv`.
 
 #### Scenario: Capture a front view
 - **WHEN** a front-directed capture is requested
@@ -44,34 +44,68 @@ Directed captures SHALL use a temporary/cloned Scene Viewer state rather than pe
 
 ### Requirement: Capture a fixed captioned quad image
 
-Capture SHALL support a fixed four-view quad reference image with readable view captions.
+Capture SHALL support one four-view image arranged top/perspective/front/right in a fixed two-by-two layout with readable captions.
 
 #### Scenario: Capture quad reference views
 - **WHEN** quad capture is requested
-- **THEN** the defined four reference views are captured and composed into one image
+- **THEN** top, perspective, front, and right views are composed into one image
 - **AND** each quadrant is captioned with its view identity
 
-### Requirement: Apply reusable display presets
+### Requirement: Parse screenshot presets strictly
 
-Viewport and permitted window capture paths SHALL support reusable screenshot display presets for shading, overlays, and attribute visualization. Unknown preset settings SHALL fail explicitly rather than being ignored silently.
+Screenshot presets SHALL be JSON objects parsed through one Capture preset loader. The loader SHALL accept only the keys and values defined by the Capture command contract and SHALL reject unknown settings rather than ignoring them. View and shading values SHALL use their source-defined case-insensitive normalization; overlay keys and attribute classes SHALL remain restricted to their defined names.
+
+Viewport display settings SHALL be applied to a temporary cloned Scene Viewer. Attribute entries SHALL use Houdini viewport marker visualizers for the requested point/primitive/vertex/detail attributes.
 
 #### Scenario: Inspect geometry with a preset
-- **WHEN** a supported preset is requested
-- **THEN** the temporary capture viewer applies the requested shading/overlay/attribute settings before capture
+- **WHEN** a preset enables `smoothwire`, point numbers, and a point attribute marker
+- **THEN** those settings are applied to the temporary capture viewer
 - **AND** the user's original viewer remains unchanged
 
 #### Scenario: Preset contains an unknown setting
 - **WHEN** preset parsing encounters an unsupported key or value
 - **THEN** Capture rejects the preset as invalid
 
+### Requirement: Enforce mode-specific preset capabilities
+
+Viewport capture SHALL allow preset `view`, `shading`, `overlays`, and `attributes` but not `crop`. Window capture SHALL allow only `crop`. Turntable capture SHALL allow `shading`, `overlays`, and `attributes` but not `view` or `crop`.
+
+#### Scenario: Viewport receives a crop preset
+- **WHEN** viewport capture receives a preset with `crop`
+- **THEN** Capture rejects it with the viewport/window crop conflict
+
+#### Scenario: Window receives display settings
+- **WHEN** window capture receives preset shading, overlays, attributes, or view
+- **THEN** Capture rejects the preset before capture
+
+#### Scenario: Turntable receives view or crop
+- **WHEN** turntable capture receives preset `view` or `crop`
+- **THEN** Capture rejects the preset before frame production
+
 ### Requirement: Scale before enforcing maximum dimensions
 
-Requested screenshot scale SHALL be applied before clamping to configured maximum width and height. Aspect ratio SHALL be preserved.
+Viewport images, window images, and turntable source frames SHALL use one shared scale-and-clamp calculation. The requested positive scale SHALL be applied first, then the result SHALL be downscaled if necessary to fit both effective `[screenshot].max_width` and `[screenshot].max_height` while preserving aspect ratio.
+
+Generated defaults SHALL be `max_width = 2048` and `max_height = 2048`.
+
+The common calculation SHALL be equivalent to:
+
+```text
+scaled_width  = max(1, round(source_width  * scale))
+scaled_height = max(1, round(source_height * scale))
+clamp = min(1.0, max_width / scaled_width, max_height / scaled_height)
+final_width  = max(1, round(scaled_width  * clamp))
+final_height = max(1, round(scaled_height * clamp))
+```
 
 #### Scenario: Requested scale exceeds image budget
 - **WHEN** scale would produce an image larger than configured maximum dimensions
 - **THEN** Capture computes the scaled size first
-- **AND** reduces it to fit the configured maximum dimensions without stretching aspect ratio
+- **AND** reduces it to fit both configured maximum dimensions without stretching aspect ratio
+
+#### Scenario: Scale remains within image budget
+- **WHEN** the scaled dimensions are within both maximums
+- **THEN** Capture does not downscale merely to reach the configured maximum
 
 ### Requirement: Capture the Houdini main window
 
@@ -81,17 +115,20 @@ Capture SHALL be able to capture the Houdini main application window through the
 - **WHEN** a window capture is requested without a crop selector
 - **THEN** the published PNG represents the Houdini main window
 
-### Requirement: Emit image-relative UI bounds for window capture
+### Requirement: Return image-relative UI bounds as structured result data
 
-Window capture SHALL be able to collect pane/tab or Scene Viewer viewport bounds and transform them into coordinates relative to the final published image, accounting for native window coordinates, DPI conversion, crop, and resize.
+Window capture SHALL collect pane-tab and Scene Viewer viewport bounds and transform them into coordinates relative to the final published image, accounting for native window coordinates, DPI conversion, crop, scale, and maximum-dimension clamping. The resulting bounds document SHALL be returned as structured command data.
 
 #### Scenario: Window screenshot is resized
 - **WHEN** a captured window image is resized before publication
-- **THEN** associated bounds describe locations in the final image coordinate space
+- **THEN** returned bounds describe locations in the final image coordinate space
+- **AND** returned width/height equal the final PNG dimensions
 
 ### Requirement: Crop a window capture to one supported UI region
 
-Window capture SHALL support selecting one pane tab such as a Network Editor or one Scene Viewer viewport when the selector resolves unambiguously. Ambiguous selectors SHALL fail rather than selecting an arbitrary region.
+Window capture SHALL support selecting one pane tab such as a Network Editor or one Scene Viewer viewport when the selector resolves unambiguously. Pane tabs MAY be selected by pane-tab name or pane type; repeated matches MAY use a zero-based `:N` suffix. Nested Scene Viewer viewports SHALL use `viewport:<type-or-name>` and MAY also use a zero-based `:N` suffix. Ambiguous, missing, or out-of-range selectors SHALL fail rather than selecting an arbitrary region.
+
+Cropping SHALL occur before final scale-and-clamp so the selected region receives the available output resolution.
 
 #### Scenario: Crop a Network Editor
 - **WHEN** the crop selector resolves to one Network Editor pane tab
@@ -105,29 +142,21 @@ Window capture SHALL support selecting one pane tab such as a Network Editor or 
 - **WHEN** more than one visible region satisfies the selector
 - **THEN** Capture reports ambiguity and does not guess
 
-### Requirement: Reject unsupported preset/crop combinations
-
-Capture SHALL reject preset or crop combinations that the selected capture mode cannot apply correctly.
-
-#### Scenario: Viewport capture receives a window-only crop preset
-- **WHEN** a crop selector is supplied to a capture mode that cannot honor it
-- **THEN** Capture rejects that combination
-
-#### Scenario: Turntable receives view/crop preset options
-- **WHEN** turntable capture is asked to use unsupported directed-view or crop behavior
-- **THEN** Capture rejects that combination before frame production
-
 ### Requirement: Use operating-system temporary storage
 
-Screenshot and turntable image outputs SHALL be published below the operating-system temporary directory and returned as filesystem paths according to the Capture command contracts.
+Screenshot PNGs and turntable videos SHALL be published below the operating-system temporary directory and returned as filesystem paths according to the Capture command contracts.
 
 #### Scenario: Screenshot succeeds
 - **WHEN** a PNG is published
 - **THEN** its default capture location is in the operating-system temporary area
 
-### Requirement: Use readable sequential screenshot filenames
+#### Scenario: Turntable succeeds
+- **WHEN** a video is encoded successfully
+- **THEN** the returned MP4 path is in the managed temporary capture area
 
-Screenshot filenames SHALL use the readable `kind + minute + sequence` convention so multiple captures are easy to distinguish without opaque random names.
+### Requirement: Use readable sequential capture names
+
+Screenshot filenames SHALL use the readable `kind + minute + sequence` convention so multiple captures are easy to distinguish without opaque random names. Turntable working/output locations SHALL likewise avoid collisions for captures in the same minute.
 
 #### Scenario: Multiple viewport captures occur in one minute
 - **WHEN** more than one viewport capture is published during the same minute
@@ -135,32 +164,27 @@ Screenshot filenames SHALL use the readable `kind + minute + sequence` conventio
 
 ### Requirement: Publish only completed capture files
 
-Capture SHALL not expose partially written PNGs as successful output. Temporary/in-progress files SHALL be finalized atomically or otherwise withheld until complete.
+Capture SHALL not expose partially written PNGs or MP4 files as successful output. Temporary/in-progress files SHALL be finalized or otherwise withheld until complete.
 
 #### Scenario: Capture fails during image production
 - **WHEN** the capture pipeline fails before a valid PNG is complete
 - **THEN** no incomplete final PNG is advertised as successful
 
-### Requirement: Expire temporary screenshots lazily
+#### Scenario: Video encoding fails
+- **WHEN** `ffmpeg` fails before a valid MP4 is complete
+- **THEN** no successful turntable video path is returned
 
-Capture SHALL lazily remove expired Houbridge-created screenshot files according to configured retention. Cleanup SHALL target Houbridge's known temporary naming/layout and SHALL not delete a screenshot that the user copied or moved elsewhere.
+### Requirement: Expire temporary capture output lazily
 
-#### Scenario: A screenshot command runs
-- **WHEN** Capture starts a new screenshot operation
+Capture SHALL lazily remove expired Houbridge-created screenshot and turntable output according to configured retention. Cleanup SHALL target Houbridge's known temporary naming/layout and SHALL not delete output that the user copied or moved elsewhere.
+
+#### Scenario: A capture command runs
+- **WHEN** Capture starts a new managed capture operation
 - **THEN** expired Houbridge capture files in the managed temporary area may be reclaimed
 
-#### Scenario: A screenshot was moved elsewhere
-- **WHEN** a prior image no longer resides in the managed temporary capture location
+#### Scenario: A capture was moved elsewhere
+- **WHEN** prior output no longer resides in the managed temporary capture location
 - **THEN** cleanup does not chase and delete the moved copy
-
-### Requirement: Preserve window-bounds sidecar lifecycle
-
-When window capture produces bounds metadata, the sidecar SHALL be published and expired with the corresponding managed screenshot.
-
-#### Scenario: Window bounds are produced
-- **WHEN** a window capture has UI bounds metadata
-- **THEN** the bounds sidecar is written next to the managed screenshot
-- **AND** cleanup can remove both once expired
 
 ### Requirement: Extract OCR text and compact bounding boxes
 
@@ -209,46 +233,53 @@ OCR SHALL return its complete logical recognition result to the common Output su
 - **WHEN** the logical OCR result exceeds the common inline budget
 - **THEN** the common Output subsystem Resource-backs the oversized result
 
-### Requirement: Capture a turntable image sequence
+### Requirement: Capture a clockwise turntable and encode video
 
-Turntable capture SHALL clone the relevant viewer state, rotate a perspective capture camera/view around a world-space pivot, and publish a sequence of completed PNG frames at the requested frame count and frame rate.
+Turntable capture SHALL clone the current Scene Viewer, choose an available Perspective viewport, preserve its current camera position as the starting position, and orbit that camera clockwise through 360 degrees around the explicit world-space pivot on world Y. The pivot SHALL default to `(0,0,0)`. Every frame SHALL remain aimed at that pivot. The user's Scene Viewer SHALL not be modified.
 
-#### Scenario: Capture a turntable
-- **WHEN** a turntable is requested without an explicit pivot
-- **THEN** Capture derives the normal capture pivot and rotates around it
-- **AND** frame numbering is deterministic for later encoding
+The default frame count SHALL be `160`; the default FPS SHALL be `30`.
+
+#### Scenario: Capture the default turntable
+- **WHEN** no explicit pivot, frame count, or FPS is supplied
+- **THEN** Capture produces 160 source frames around world origin
+- **AND** the frames are encoded at 30 FPS
+- **AND** the user's current Scene Viewer is not modified
 
 #### Scenario: Capture around an explicit pivot
 - **WHEN** the caller supplies three finite world-space coordinates
 - **THEN** those coordinates are used as the turntable pivot
+- **AND** every frame remains aimed at that pivot
 
 #### Scenario: Reject an invalid pivot
 - **WHEN** the pivot does not contain exactly three finite numbers
 - **THEN** Capture rejects the request before frame capture
 
-### Requirement: Apply turntable scale before maximum dimensions
+### Requirement: Treat turntable frames as encoding intermediates
 
-Turntable frame dimensions SHALL follow the same scale-then-clamp rule as screenshot capture.
+Turntable capture SHALL support MP4 video as its only published artifact. Sequential PNG source frames MAY be generated in transient storage for encoding but SHALL NOT be retained as supported output after successful encoding and SHALL NOT be part of the public success contract.
 
-#### Scenario: Turntable scale exceeds configured dimensions
-- **WHEN** requested scale would make frames exceed configured width/height
-- **THEN** final frames are reduced within the configured budget while preserving aspect ratio
+#### Scenario: Video encoding succeeds
+- **WHEN** all requested turntable frames are captured and encoding succeeds
+- **THEN** the command publishes the MP4 video artifact
+- **AND** transient source frames are not retained as supported output artifacts
+- **AND** public success does not expose frame directory, frame pattern, or frame count fields
 
-### Requirement: Optionally encode turntable frames with ffmpeg
+### Requirement: Always encode turntable video with ffmpeg
 
-Turntable capture SHALL optionally encode the preserved PNG sequence using `ffmpeg`. Missing or failed `ffmpeg` SHALL not destroy already completed source frames. H.264 encoding SHALL pad odd frame dimensions as necessary rather than rejecting otherwise valid captures.
+Turntable capture SHALL invoke `ffmpeg` after source-frame capture. The encode profile SHALL use H.264 (`libx264`) with `yuv420p`. Odd frame dimensions SHALL be padded to codec-safe even dimensions without changing the source aspect content. If `ffmpeg` is unavailable or encoding fails, turntable capture SHALL fail rather than returning a frame-sequence success result.
 
 #### Scenario: ffmpeg is unavailable
-- **WHEN** video encoding is requested but `ffmpeg` cannot be run
-- **THEN** Capture reports the encoding failure while preserving the completed PNG sequence
+- **WHEN** `ffmpeg` cannot be resolved on `PATH`
+- **THEN** Capture reports `ffmpeg_not_found`
+- **AND** no successful turntable result is emitted
 
 #### Scenario: Accepted frame dimensions are odd
-- **WHEN** H.264 encoding receives an odd width or height
-- **THEN** the encoding path pads to valid dimensions without changing the source frame files
+- **WHEN** an encoded source frame has odd width or height
+- **THEN** the encoding filter pads it to the next even dimension
 
 ### Requirement: Keep injected Capture code under the Capture script boundary
 
-Houdini-side viewport/window/turntable implementation SHALL be grouped below `houbridge/houdini/scripts/capture/`, with common display/view helpers factored there rather than duplicated as large host-side source strings.
+Houdini-side viewport/window/turntable implementation SHALL be grouped below `houbridge/houdini/scripts/capture/`, with common display/view/sizing/preset helpers factored there rather than duplicated as large host-side source strings.
 
 #### Scenario: Screenshot and turntable share viewer helpers
 - **WHEN** both features need cloning, sizing, presets, or display logic

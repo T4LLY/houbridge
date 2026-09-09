@@ -222,6 +222,30 @@ Derived search storage SHALL distinguish embedding profile identity so vectors c
 - **THEN** profile identity remains explicit
 - **AND** queries consume only compatible vectors unless a feature explicitly spans profiles
 
+### Requirement: Normalize every public Search score through one shared formatter
+
+All public Search `score` values SHALL be produced by one shared Search score-formatting function. Feature-specific result builders SHALL NOT directly multiply or round public scores.
+
+The shared formatter SHALL apply metric-specific public scaling before rounding:
+
+- dense cosine similarity: `raw_score * 1000`,
+- reciprocal-rank-fusion score: `raw_score * 10000`.
+
+The public serialized score SHALL remain a JSON number and SHALL contain exactly six fractional decimal digits, for example `301.278910` or `317.540323`. The integer part SHALL not be padded; its width follows the calculated value.
+
+#### Scenario: Format a dense cosine score
+- **WHEN** the internal dense score is `0.30127891`
+- **THEN** the public score is serialized as `301.278910`
+
+#### Scenario: Format a reciprocal-rank-fusion score
+- **WHEN** the internal RRF score is approximately `0.0317540323`
+- **THEN** the public score is serialized as `317.540323`
+
+#### Scenario: A Search feature emits results
+- **WHEN** live node search, live code search, or workspace script search exposes a public score
+- **THEN** the score passes through the shared formatter
+- **AND** the feature does not implement a local public multiplier or rounding rule
+
 ### Requirement: Keep injected live-search capture code under the Search script boundary
 
 Houdini-side node scanning and code extraction source used by live Search SHALL reside below `houbridge/houdini/scripts/search/` or focused shared Houdini query modules.

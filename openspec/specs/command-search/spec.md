@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define public syntax, options, and JSON response contracts for live Python/VEX code search, local script search, and live Houdini node search.
+Define public syntax, options, score formatting, and JSON response contracts for live Python/VEX code search, local script search, and live Houdini node search.
 
 ## Requirements
 
@@ -51,7 +51,7 @@ Python and VEX search success SHALL use:
       "path": "/obj/geo1/python1",
       "node_type": "python",
       "resource": "<code-resource-id>",
-      "score": 9500.0
+      "score": 317.540323
     }
   ]
 }
@@ -59,14 +59,14 @@ Python and VEX search success SHALL use:
 
 Each hit SHALL contain exactly `path`, `node_type`, `resource`, and `score`. Searchable source code SHALL NOT be copied into the public hit JSON; the complete source SHALL be available through `resource`.
 
-For normal lexical/hybrid search, `score` uses the public normalized RRF score. For `--like`, `score` is the rounded dense similarity value.
+For normal lexical/hybrid search, `score` SHALL use the shared public RRF formatter. For `--like`, `score` SHALL use the shared public dense-similarity formatter. All public Search scores SHALL use the common score-formatting requirement defined by the Search feature specification.
 
 #### Scenario: Python hit is returned
 - **WHEN** a Python code entry ranks in the result set
 - **THEN** its code body is stored as a Resource
 - **AND** the hit contains no inline `source` or `code` field
 
-### Requirement: Expose local script semantic search
+### Requirement: Expose local script semantic search with a minimal result envelope
 
 The syntax SHALL be:
 
@@ -76,34 +76,29 @@ houbridge search script QUERY [--top-k INTEGER]
 
 `QUERY` is required. `--top-k` SHALL be `1..50` and default to `10`.
 
-#### Scenario: Search local scripts
-- **WHEN** a query is provided
-- **THEN** success SHALL use:
+Success SHALL contain exactly one top-level field, `hits`. Each script hit SHALL contain exactly `path` and `score`:
 
 ```json
 {
-  "query": "create geometry",
-  "root": "E:/project/.houbridge/python",
   "hits": [
     {
       "path": ".houbridge/python/build.py",
-      "score": 0.75,
-      "kind": "function",
-      "symbol": "build",
-      "qualname": "build",
-      "start_line": 4,
-      "end_line": 6
+      "score": 301.278910
     }
   ]
 }
 ```
 
-`path` and `score` are required for each script hit. `kind`, `symbol`, `qualname`, `start_line`, and `end_line` are optional and emitted only when metadata exists.
+Internal semantic-unit metadata such as symbol kind, symbol name, qualified name, line range, namespace, entry id, and content hash SHALL NOT be emitted by this command.
+
+#### Scenario: Search local scripts
+- **WHEN** a query produces one or more semantic matches
+- **THEN** the result contains only `hits`
+- **AND** each hit contains exactly `path` and `score`
 
 #### Scenario: No script hit exists
 - **WHEN** the script query has no result
-- **THEN** `query` and `root` remain present
-- **AND** `hits` is an empty array
+- **THEN** success is `{"hits":[]}`
 
 ### Requirement: Expose live node search
 

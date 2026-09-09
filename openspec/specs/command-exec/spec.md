@@ -20,7 +20,6 @@ Exactly one of `--code` or `--file` SHALL be supplied. Arguments after `--` SHAL
 | --- | --- | --- |
 | `--code TEXT` | mutually exclusive with `--file` | Python source executed in Houdini. |
 | `--file PATH` | file path; mutually exclusive with `--code` | Read as UTF-8 on the Houbridge side. |
-| `--inline-max-tokens INTEGER` | `0..4096` | Override the configured soft inline threshold for this invocation. |
 | `--port INTEGER` | `1..65535` | Common local target option. |
 | `--root PATH` | optional | Common runtime option. |
 | `--hcommand TEXT` | optional | Common runtime option. |

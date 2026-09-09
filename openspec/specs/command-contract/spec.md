@@ -102,6 +102,26 @@ The target host SHALL remain local-only.
 - **WHEN** a command accepts `--port 20001`
 - **THEN** that invocation targets local port `20001`
 
+### Requirement: Format public date-time values through one shared formatter
+
+Every public JSON field whose value is a date-time or timestamp SHALL be formatted by one shared date-time formatting function as `YYYY-MM-DDTHH:MM:SS`, for example `2026-09-08T06:58:22`. Public date-time strings SHALL omit fractional seconds and timezone suffixes.
+
+The feature that owns the timestamp SHALL determine or convert the intended time basis before calling the formatter. Feature result builders SHALL NOT independently format public date-time values with direct `isoformat()` or `strftime()` calls.
+
+#### Scenario: A command returns a public timestamp
+- **WHEN** a logical result contains a date-time value
+- **THEN** the shared formatter serializes it with second precision
+- **AND** the result contains no fractional-second component or timezone suffix
+
+### Requirement: Preserve canonical numeric lexical formatting in JSON
+
+The shared JSON emitter SHALL preserve canonical lexical formatting required by command contracts for public numeric values. In particular, a Search score normalized as `301.278910` SHALL be emitted as the JSON number `301.278910`, not as `301.27891` and not as the JSON string `"301.278910"`.
+
+#### Scenario: A six-decimal Search score ends in zero
+- **WHEN** a Search result contains the normalized score `301.278910`
+- **THEN** compact JSON emission preserves all six fractional digits
+- **AND** the emitted token is a JSON number
+
 ### Requirement: Apply the common Output Policy after command payload construction
 
 Command specifications define logical success JSON. Except for bounded Resource inspection commands, the complete logical result SHALL pass through the common Output subsystem. When the common soft inline budget requires whole-result Resource fallback, the complete logical result SHALL be persisted as a Resource and the minimal fallback SHALL be:

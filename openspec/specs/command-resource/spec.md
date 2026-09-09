@@ -38,10 +38,10 @@ Success SHALL contain exactly:
 The syntax SHALL be:
 
 ```text
-houbridge resource get RESOURCE_ID [--allow-full]
+houbridge resource get RESOURCE_ID [--full]
 ```
 
-`--allow-full` MAY bypass only the configured soft Resource inline-read threshold. It SHALL NOT bypass the fixed 65536-byte CLI hard boundary.
+`--full` MAY bypass only the configured soft Resource inline-read threshold. It SHALL NOT bypass the fixed 65536-byte CLI hard boundary.
 
 Small text success SHALL be:
 
@@ -67,14 +67,14 @@ A non-text Resource SHALL use:
 {"truncated":false,"binary":true}
 ```
 
-#### Scenario: Allow-full is requested below hard boundary
+#### Scenario: Full read is requested below hard boundary
 - **WHEN** a text Resource exceeds only the configured soft threshold
-- **AND** `--allow-full` is supplied
+- **AND** `--full` is supplied
 - **THEN** the complete body may be returned
 
 #### Scenario: Resource exceeds hard boundary
 - **WHEN** a text Resource exceeds 65536 bytes
-- **THEN** `get` does not inline the body even with `--allow-full`
+- **THEN** `get` does not inline the body even with `--full`
 - **AND** returns `truncated:true` and `next_offset:0`
 
 ### Requirement: Expose bounded Resource slicing

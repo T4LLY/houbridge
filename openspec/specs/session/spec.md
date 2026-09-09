@@ -32,6 +32,22 @@ Session start SHALL first probe the requested local port. If a compatible Houdin
 - **THEN** the existing Houdini process is reused
 - **AND** no new Houdini GUI process is created
 
+### Requirement: Load an explicitly requested HIP file through Session start launch semantics
+
+Session start MAY receive an invocation-local HIP file path for a newly launched Houdini process. When no compatible target is reachable, the launched process SHALL load that file and startup success SHALL not be reported until the normal session probe succeeds. The file path SHALL not become persistent Houbridge configuration.
+
+The existing reuse-first rule SHALL remain authoritative. When a target is already reachable, Session SHALL reuse that process and SHALL NOT load the launch-only file argument into the running scene.
+
+#### Scenario: Launch with a requested HIP file
+- **WHEN** no target is reachable and Session start receives a readable HIP file
+- **THEN** Houdini is launched with that file loaded
+- **AND** the post-start probe reports the active HIP path
+
+#### Scenario: Existing target is reachable with a file option
+- **WHEN** a target already responds and Session start also receives a launch file
+- **THEN** the existing process is reused
+- **AND** the requested launch file is not loaded into that running scene
+
 ### Requirement: Launch Houdini without selecting a license edition
 
 When no compatible session is reachable, Session start SHALL launch a Houdini GUI executable generically and provide invocation-local HScript that opens the requested bridge port. Houbridge SHALL NOT add Apprentice, Indie, Core, Education, or Commercial-specific launch logic.
