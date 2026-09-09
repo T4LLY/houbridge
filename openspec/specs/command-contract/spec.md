@@ -15,6 +15,7 @@ The Houbridge CLI SHALL expose the following command families in this specificat
 - `houbridge capture ...`
 - `houbridge search ...`
 - `houbridge resource ...`
+- `houbridge task ...`
 
 #### Scenario: Show top-level help
 - **WHEN** the user requests top-level help
@@ -88,7 +89,7 @@ Argument-parser failures that occur before a Houbridge command handler is dispat
 
 ### Requirement: Share runtime target options
 
-Commands that address Houdini directly MAY expose the following common options exactly where specified by their command contract:
+Commands that address Houdini directly MAY expose the following common options exactly where specified by their command contract. Resource commands define their own `--root` workspace-selection semantics in the Resource command specification.
 
 | Option | Value | Constraint | Meaning |
 | --- | --- | --- | --- |

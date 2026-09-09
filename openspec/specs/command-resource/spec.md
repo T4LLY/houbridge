@@ -6,12 +6,28 @@ Define syntax, options, bounded inspection semantics, temporary dump behavior, a
 
 ## Requirements
 
+
+### Requirement: Select the Resource workspace explicitly when requested
+
+`resource info`, `resource get`, `resource search`, `resource slice`, and `resource dump` SHALL all accept `--root ROOT`. When omitted, Resource lookup SHALL use the current working directory as the workspace root. When supplied, Resource lookup SHALL use `<ROOT>/.houbridge/resources.db` without changing the process working directory.
+
+The same Resource id MAY therefore be resolved from a Task's returned `resource` and `root` values by passing that root to any Resource inspection command.
+
+#### Scenario: Inspect a Resource from another workspace
+- **WHEN** `houbridge resource get RESOURCE_ID --root E:/project` is invoked from another current directory
+- **THEN** Resource lookup uses `E:/project/.houbridge/resources.db`
+- **AND** the caller's process working directory is not changed as a side effect
+
+#### Scenario: Root is omitted
+- **WHEN** a Resource inspection command does not supply `--root`
+- **THEN** the current working directory is used as the Resource workspace root
+
 ### Requirement: Expose Resource metadata inspection
 
 The syntax SHALL be:
 
 ```text
-houbridge resource info RESOURCE_ID
+houbridge resource info RESOURCE_ID [--root ROOT]
 ```
 
 `RESOURCE_ID` is a required semantic alias or canonical SHA-256 Resource id.
@@ -53,7 +69,7 @@ A `binary` Resource SHALL use:
 The syntax SHALL be:
 
 ```text
-houbridge resource dump RESOURCE_ID
+houbridge resource dump RESOURCE_ID [--root ROOT]
 ```
 
 `RESOURCE_ID` is a required semantic alias or canonical SHA-256 Resource id. The command SHALL read the exact stored payload bytes, derive an extension from the stored MIME with `mimetypes.guess_extension()`, fall back to `.bin` when no extension is available, and publish the completed file through the shared temporary-artifact boundary.
@@ -84,7 +100,7 @@ Success SHALL contain exactly:
 The syntax SHALL be:
 
 ```text
-houbridge resource get RESOURCE_ID [--full]
+houbridge resource get RESOURCE_ID [--root ROOT] [--full]
 ```
 
 `--full` MAY bypass only the configured soft Resource inline-read threshold. It SHALL NOT bypass the fixed 65536-byte CLI hard boundary.
@@ -128,7 +144,7 @@ A `binary` Resource SHALL use:
 The syntax SHALL be:
 
 ```text
-houbridge resource slice RESOURCE_ID --offset INTEGER --limit INTEGER
+houbridge resource slice RESOURCE_ID [--root ROOT] --offset INTEGER --limit INTEGER
 ```
 
 `--offset` is required and SHALL be at least `0`. `--limit` is required, SHALL be at least `1`, and SHALL NOT exceed `16384`.
@@ -164,7 +180,7 @@ When more characters remain after the returned chunk, success SHALL use:
 The syntax SHALL be:
 
 ```text
-houbridge resource search RESOURCE_ID QUERY [--offset INTEGER]
+houbridge resource search RESOURCE_ID QUERY [--root ROOT] [--offset INTEGER]
 ```
 
 `QUERY` is required and non-empty. `--offset` defaults to `0` and selects the zero-based hit offset. Search is case-insensitive literal substring search and one response SHALL expose no more than the configured bounded search limit and never more than 100 hits.

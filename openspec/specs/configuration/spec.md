@@ -96,16 +96,37 @@ The code embedding profile and hybrid-search parameters SHALL be configurable. G
 
 ### Requirement: Configure Resource inspection
 
-Generated Resource inspection defaults SHALL be:
+Generated Resource defaults SHALL be:
 
 - `[resource].inline_limit_bytes = 16384`
 - `[resource].search_limit = 10`
+- `[resource].ttl_hours = 72`
 
-These settings control bounded Resource inspection and SHALL NOT change where Resource payloads are persisted.
+The inspection settings control bounded Resource reading/search. `ttl_hours` controls operational Resource retention. These settings SHALL NOT change where Resource payloads are persisted.
 
 #### Scenario: Resource reading uses configured limits
 - **WHEN** a text Resource is inspected
 - **THEN** the effective Resource inspection limits are applied subject to fixed hard maxima
+
+#### Scenario: Generated Resource retention is used
+- **WHEN** no Resource TTL override is configured
+- **THEN** Resource retention uses `72` hours
+- **AND** Task terminal retention uses that same effective duration
+
+
+### Requirement: Configure Async Task concurrency only
+
+The generated configuration SHALL define `[task].max_concurrency = 1`. The value SHALL be an integer greater than or equal to `1`. This setting SHALL limit concurrently running Async Tasks across Houbridge and SHALL NOT count synchronous `exec` invocations as global Task slots. Per-Houdini-PID serialization remains fixed at one independently of this setting.
+
+Task SHALL not define a separate TTL configuration; terminal Task retention SHALL use the effective `[resource].ttl_hours`.
+
+#### Scenario: Generated Task configuration is used
+- **WHEN** no Task concurrency override is configured
+- **THEN** at most one Async Task runs globally
+
+#### Scenario: Task concurrency is increased
+- **WHEN** `[task].max_concurrency` is greater than `1`
+- **THEN** additional Async Tasks may run only when the Task and per-PID concurrency rules permit them
 
 ### Requirement: Configure screenshot limits and retention
 

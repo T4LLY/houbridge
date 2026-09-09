@@ -8,15 +8,20 @@ Define workspace-local, content-addressed Resources used for large or inspectabl
 
 ### Requirement: Keep Resources self-contained
 
-Resources SHALL be self-contained workspace inspection artifacts. Resource lookup, reading, slicing, search, and semantic alias resolution SHALL depend only on Resource persistence and generic configuration.
+Resources SHALL be self-contained workspace inspection artifacts. Resource lookup, reading, slicing, search, and semantic alias resolution SHALL depend only on Resource persistence and generic configuration. The default workspace root SHALL be the current working directory; a caller MAY explicitly select another workspace root, in which case Resource persistence SHALL resolve below that root without changing process cwd.
 
 #### Scenario: Reopen a workspace Resource
 - **WHEN** a Resource id from `<cwd>/.houbridge/resources.db` is inspected later
 - **THEN** Resource resolves it from the Resource database without requiring another feature database
 
+#### Scenario: Open an explicitly selected workspace Resource
+- **WHEN** a caller selects workspace root `E:/project`
+- **THEN** Resource persistence resolves from `E:/project/.houbridge/resources.db`
+- **AND** the Resource subsystem does not require the process cwd to become `E:/project`
+
 ### Requirement: Store all Resource state in one workspace database
 
-Resource payload bytes, metadata, canonical identities, semantic aliases, and semantic tag registry SHALL be stored in `<current-working-directory>/.houbridge/resources.db`. The implementation SHALL NOT create `.houbridge/resources/` or another Resource payload-file tree.
+Resource payload bytes, metadata, canonical identities, semantic aliases, and semantic tag registry SHALL be stored in `<workspace-root>/.houbridge/resources.db`, where the workspace root defaults to the current working directory and may be explicitly selected by the caller. The implementation SHALL NOT create `.houbridge/resources/` or another Resource payload-file tree.
 
 #### Scenario: Store a binary Resource
 - **WHEN** arbitrary bytes are stored
@@ -109,9 +114,12 @@ The ordinal SHALL have a minimum width of three digits (`000`, `001`, ...); valu
 - **THEN** the semantic id ends in `1000`
 - **AND** no existing ordinal is reused
 
-#### Scenario: Resource embedding is zero length
-- **WHEN** Potion produces the defined zero-embedding failure
-- **THEN** semantic tagging falls back to `resource`, `unknown`, `content`
+The shared semantic base generator SHALL accept a caller-supplied fallback stem rather than embedding feature-specific fallback names in generic generation logic. Resource SHALL supply fallback stem `resource-unknown-content` for its defined semantic fallback condition. Resource ordinal allocation SHALL remain owned by Resource persistence rather than by the generic semantic base generator.
+
+#### Scenario: Resource embedding reaches the defined fallback condition
+- **WHEN** Potion produces the defined semantic fallback condition
+- **THEN** Resource supplies fallback stem `resource-unknown-content` to the shared generator
+- **AND** the generic generator does not choose a Resource-specific name on its own
 - **AND** other semantic-id failures are not silently hidden by that fallback
 
 ### Requirement: Filter unusable semantic tag atoms
@@ -151,6 +159,25 @@ Execution result, stdout, stderr, and exception/traceback payloads SHALL be stor
 #### Scenario: Large execution result
 - **WHEN** the common Output Policy does not allow the body inline
 - **THEN** the complete artifact remains available as a Resource
+
+#### Scenario: Async Task completes successfully
+- **WHEN** Task finalizes successful stdout/stderr into its completion Resource
+- **THEN** Resource stores the exact Task-defined JSON payload under the Task's captured origin workspace root
+- **AND** Task-specific metadata is not added to generic Resource metadata
+
+### Requirement: Retain Resources for the configured Resource TTL
+
+Resource retention SHALL use `[resource].ttl_hours`. The generated default SHALL be `72` hours. A Resource older than the effective retention duration is eligible for lazy cleanup and SHALL not be treated as a long-term archival store solely because it is content-addressed. Resource reads SHALL NOT extend the configured retention duration.
+
+Long-term preservation outside the operational Resource retention window SHALL use explicit file materialization such as `resource dump`.
+
+#### Scenario: Resource passes its retention window
+- **WHEN** a Resource is older than the effective `[resource].ttl_hours` duration
+- **THEN** Resource cleanup may remove its operational payload/metadata according to the Resource persistence implementation
+
+#### Scenario: Resource is read repeatedly
+- **WHEN** `resource get` or another inspection command reads an existing Resource
+- **THEN** the read does not extend its configured retention duration
 
 ### Requirement: Materialize Resource payloads as temporary files
 

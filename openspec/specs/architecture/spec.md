@@ -43,36 +43,60 @@ The top-level feature subsystems SHALL be `resource`, `output`, `session`, `capt
 - **AND** Search does not open or mutate Resource database tables directly
 
 #### Scenario: Execution sends Python to Houdini
-- **WHEN** Execution dispatches caller-provided source
+- **WHEN** synchronous Execution dispatches caller-provided file source
 - **THEN** Execution uses the shared Houdini transport and target-coordination boundaries
 - **AND** transport does not acquire feature-specific persistence responsibilities
+
+#### Scenario: Task Runtime executes queued Python
+- **WHEN** Task Runtime dispatches a queued Task
+- **THEN** it reuses the shared low-level Houdini execution and target-coordination primitives
+- **AND** it does not invoke the public `exec` command recursively
+- **AND** Task persistence remains owned by Task rather than transport
 
 ### Requirement: Construct only the runtime required by the requested command
 
 The CLI composition root SHALL construct only the services required by the selected command. A feature SHALL NOT require initialization of unrelated databases or feature runtimes merely to execute its own operation.
 
-#### Scenario: Execute Python
-- **WHEN** `houbridge exec` is invoked
+#### Scenario: Execute Python synchronously
+- **WHEN** `houbridge exec --file` is invoked without `--async`
 - **THEN** the runtime constructs the execution, transport, target, Resource/output, and configuration dependencies required by that invocation
 - **AND** local script-search storage is not opened solely because Execution runs
+
+#### Scenario: Submit Python asynchronously
+- **WHEN** `houbridge exec --file --async` is invoked
+- **THEN** the submission path constructs the Task persistence/runtime handoff and target-probe dependencies required to create the Task
+- **AND** it does not initialize unrelated script-search storage
 
 #### Scenario: Search workspace scripts
 - **WHEN** `houbridge search script` is invoked
 - **THEN** the workspace script-search runtime is constructed
 - **AND** a Houdini connection is not required for that local-only operation
 
-### Requirement: Keep Execution state invocation-local
+### Requirement: Separate synchronous Execution state from Task operational state
 
-Execution SHALL operate on the caller's source, invocation options, transient transport files, and produced output only for the lifetime of the invocation. Execution SHALL not require project-scoped persistent execution state.
+Synchronous Execution SHALL operate on the caller's source, invocation options, transient transport files, and produced output only for the lifetime of that invocation. Async operational state that must survive the submitting CLI SHALL be owned exclusively by Task in the global Task store.
 
-#### Scenario: One execution completes
+#### Scenario: One synchronous execution completes
 - **WHEN** the Houdini invocation and output collection finish
 - **THEN** Execution returns the logical result to the common Output subsystem
-- **AND** no project-scoped execution record is required for a later command
+- **AND** no persistent execution record is required for a later command
 
-#### Scenario: A later execution starts
-- **WHEN** another `exec` invocation begins
-- **THEN** it does not require metadata from the earlier execution
+#### Scenario: Async submission returns
+- **WHEN** `exec --async` successfully returns a Task id
+- **THEN** submitted source copy, queue state, streams, target binding, and retention needed after CLI exit belong to Task
+- **AND** Execution does not duplicate that state in another database
+
+### Requirement: Coordinate managed Python execution by probed Houdini PID
+
+The shared target-coordination boundary SHALL serialize arbitrary managed Python execution by the actual probed Houdini operating-system PID, not merely by caller command type. Synchronous Exec and Async Task SHALL acquire the same per-PID serialization boundary. Task's configurable global concurrency SHALL remain a separate Task concern.
+
+#### Scenario: Same process is reached by managed executions
+- **WHEN** synchronous and asynchronous callers resolve to the same Houdini PID
+- **THEN** at most one managed arbitrary Python execution runs in that PID at a time
+
+#### Scenario: Two Houdini processes are independent
+- **WHEN** callers resolve to different Houdini PIDs
+- **THEN** target coordination permits overlap unless another owning subsystem limit applies
 
 ### Requirement: Treat Houdini scene data as live application state
 
@@ -82,6 +106,22 @@ Houbridge SHALL read and modify the active Houdini scene through native Houdini 
 - **WHEN** Houbridge connects to a running scene
 - **THEN** Session, Capture, Search, and Execution operate on the current native Houdini state
 - **AND** their operation does not depend on Houbridge persistence being present inside the scene
+
+### Requirement: Separate semantic base generation from feature ordinal allocation
+
+Shared semantic-id logic SHALL generate a semantic base from caller-supplied semantic text and SHALL accept a caller-supplied fallback stem. It SHALL NOT know whether the caller is Task, Resource, or another feature and SHALL NOT own feature persistence or ordinal counters.
+
+Resource SHALL allocate Resource ordinals in Resource persistence. Task SHALL allocate Task ordinals in `tasks.db`.
+
+#### Scenario: Task requests semantic generation
+- **WHEN** Task supplies submitted Python source and fallback stem `task-unknown`
+- **THEN** shared semantic logic returns the normal semantic base or the supplied fallback according to its defined fallback condition
+- **AND** Task persistence assigns the Task ordinal
+
+#### Scenario: Resource requests semantic generation
+- **WHEN** Resource supplies Resource semantic text and its Resource fallback stem
+- **THEN** shared semantic logic does not allocate a Resource ordinal
+- **AND** Resource persistence owns alias registration and ordinal allocation
 
 ### Requirement: Centralize canonical public scalar formatting
 
@@ -127,7 +167,7 @@ All command payloads SHALL pass through one common Output subsystem. Feature-spe
 
 ### Requirement: Keep Resource persistence database-complete
 
-The Resource subsystem SHALL store Resource payload bytes and Resource metadata in `<current-working-directory>/.houbridge/resources.db`. No sibling Resource payload directory is required.
+The Resource subsystem SHALL store Resource payload bytes and Resource metadata in `<workspace-root>/.houbridge/resources.db`, with current working directory as the default workspace root and explicit Resource root selection permitted by the Resource specifications. No sibling Resource payload directory is required.
 
 #### Scenario: Store a Resource
 - **WHEN** a Resource is created
@@ -153,17 +193,27 @@ Houbridge SHALL distinguish live Houdini state, workspace-derived search state, 
 - **AND** original source remains authoritative in the script files
 
 #### Scenario: A Resource is materialized
-- **WHEN** a command needs a durable local inspection handle for a payload
-- **THEN** that payload belongs to `<cwd>/.houbridge/resources.db`
+- **WHEN** a command needs an operational workspace inspection handle for a payload
+- **THEN** that payload belongs to the selected workspace's `.houbridge/resources.db`
+
+#### Scenario: Async Task owns global runtime state
+- **WHEN** `exec --async` creates a Task
+- **THEN** its queue state, submitted source copy while active, stream chunks, target binding, runtime coordination, and Task ordinal state belong to global `tasks.db`
+- **AND** its completion Resource remains workspace-local to the Task origin root
 
 ### Requirement: Keep the global data root operational
 
-The global Houbridge data root SHALL contain only installation/user-level operational runtime state such as locks and transient command files. Workspace Resource and script-search data SHALL use their workspace-local storage scopes.
+The global Houbridge data root SHALL contain installation/user-level operational runtime state such as locks, transient command files, and the shared `tasks.db`. Workspace Resource and script-search data SHALL use their workspace-local storage scopes.
 
 #### Scenario: Two working directories use one installation
 - **WHEN** independent workspaces use the same Houbridge installation
 - **THEN** their `.houbridge/resources.db` and `.houbridge/search.db` stores remain workspace-local
-- **AND** installation-level operational directories may still be shared
+- **AND** global operational locks, temporary coordination, and `tasks.db` may be shared
+
+#### Scenario: Task origin is another workspace
+- **WHEN** a global Task completes for origin root `E:/project`
+- **THEN** Task runtime state remains global
+- **AND** its completion Resource is written to `E:/project/.houbridge/resources.db`
 
 ### Requirement: Implement only the current specification set
 

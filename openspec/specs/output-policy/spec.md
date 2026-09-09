@@ -32,6 +32,11 @@ Every public command SHALL use the common Resource fallback path for result cont
 - **WHEN** OCR recognition output exceeds the inline budget
 - **THEN** the same common Output fallback is used rather than OCR-specific threshold code
 
+#### Scenario: Accumulated Task output is large
+- **WHEN** `task get` constructs its full logical Task state and accumulated stdout/stderr exceed the inline budget
+- **THEN** the same whole-result Resource fallback is available
+- **AND** Task does not introduce cursor-based output semantics solely for CLI size control
+
 ### Requirement: Enforce fixed absolute hard limits
 
 Soft configuration SHALL NOT raise the fixed hard limits. The absolute inline-token ceiling SHALL remain 4096 tokens and the absolute serialized CLI JSON emission limit SHALL remain 65536 bytes.
