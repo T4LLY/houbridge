@@ -24,13 +24,44 @@ Resource payload bytes, metadata, canonical identities, semantic aliases, and se
 - **AND** the Resource can be read without resolving a filesystem payload path
 
 #### Scenario: Store a text or JSON Resource
-- **WHEN** text-like content is stored
-- **THEN** the UTF-8 payload, MIME type, byte size, and estimated token count are persisted in the same Resource database
+- **WHEN** content is classified as UTF-8 text or JSON
+- **THEN** the exact payload bytes, content class, MIME type, byte size, and estimated token count are persisted in the same Resource database
 
 #### Scenario: Delete local Resource storage
 - **WHEN** `.houbridge/resources.db` is deleted
 - **THEN** previously returned local Resource references from that database may stop resolving
 - **AND** other feature stores remain independent
+
+### Requirement: Classify Resource content from exact payload bytes
+
+Resource SHALL use one shared content classifier when payload bytes are stored. Classification SHALL proceed in this order:
+
+1. inspect the payload with the `filetype` package; when a recognized binary file signature is found, classify the Resource as `binary` and use the detected MIME type,
+2. otherwise require strict UTF-8 decoding; undecodable payloads or payloads containing binary control characteristics such as NUL SHALL be classified as `binary` with `application/octet-stream` when no more specific MIME is known,
+3. for valid text, attempt JSON parsing; valid JSON SHALL be classified as `json` with MIME `application/json`,
+4. remaining valid UTF-8 content SHALL be classified as `text` with MIME `text/plain`.
+
+The resulting content class and MIME SHALL be the common basis for Resource info, get, search, slice, semantic tagging, and dump behavior. Feature-specific MIME whitelists SHALL NOT independently redefine text/binary classification.
+
+#### Scenario: PNG bytes are stored
+- **WHEN** `filetype` recognizes the PNG signature
+- **THEN** the Resource is classified as `binary`
+- **AND** its MIME is `image/png`
+
+#### Scenario: Unknown bytes are not valid UTF-8
+- **WHEN** `filetype` does not recognize the payload and strict UTF-8 decoding fails
+- **THEN** the Resource is classified as `binary`
+- **AND** its MIME falls back to `application/octet-stream`
+
+#### Scenario: UTF-8 payload contains valid JSON
+- **WHEN** strict UTF-8 decoding succeeds and JSON parsing succeeds
+- **THEN** the Resource is classified as `json`
+- **AND** its MIME is `application/json`
+
+#### Scenario: UTF-8 payload is not JSON
+- **WHEN** strict UTF-8 decoding succeeds and JSON parsing fails
+- **THEN** the Resource is classified as `text`
+- **AND** its MIME is `text/plain`
 
 ### Requirement: Use SHA-256 as canonical Resource identity
 
@@ -92,17 +123,18 @@ Semantic tags SHALL exclude tokenizer continuations, empty tokens, numeric-only 
 - **THEN** only the first ranked normalized tag is retained
 - **AND** selection continues until three distinct usable tags are obtained or generation fails
 
-### Requirement: Derive semantic text deterministically from Resource content
+### Requirement: Derive semantic text deterministically from classified Resource content
 
-Resource bytes SHALL be decoded as UTF-8 with replacement for semantic tagging. If decoded content is blank, semantic tagging SHALL use the MIME string when available, otherwise `resource`.
+`text` and `json` Resources SHALL use their decoded UTF-8 content as semantic text. A `binary` Resource SHALL use its MIME string when available, otherwise `resource`; binary payload bytes SHALL NOT be decoded with replacement solely to manufacture semantic text. Blank decoded text SHALL likewise fall back to MIME when available, otherwise `resource`.
 
-#### Scenario: Store non-text bytes
-- **WHEN** binary payload bytes decode to no meaningful non-blank text
+#### Scenario: Store binary bytes
+- **WHEN** a Resource is classified as `binary`
 - **THEN** semantic tagging uses MIME or `resource` as the semantic text source
+- **AND** arbitrary binary bytes are not interpreted as replacement-decoded text
 
 ### Requirement: Keep Resource metadata minimal
 
-Resource persistence SHALL contain content-inspection metadata needed by the Resource feature: canonical identity, MIME type when known, byte size, estimated token count when applicable, creation metadata, payload, semantic alias, and semantic tag/ordinal registry. Feature-specific caller context SHALL remain with the caller rather than being copied into generic Resource metadata.
+Resource persistence SHALL contain content-inspection metadata needed by the Resource feature: canonical identity, content class, MIME type, byte size, estimated token count when applicable, creation metadata, payload, semantic alias, and semantic tag/ordinal registry. Feature-specific caller context SHALL remain with the caller rather than being copied into generic Resource metadata.
 
 #### Scenario: Execution stores a result Resource
 - **WHEN** Execution materializes a result
@@ -120,9 +152,27 @@ Execution result, stdout, stderr, and exception/traceback payloads SHALL be stor
 - **WHEN** the common Output Policy does not allow the body inline
 - **THEN** the complete artifact remains available as a Resource
 
+### Requirement: Materialize Resource payloads as temporary files
+
+Resource SHALL support materializing the exact stored payload bytes as a completed file in the shared Houbridge temporary-artifact area. Resource SHALL derive the preferred filename extension from the stored MIME using Python's standard `mimetypes.guess_extension()`. When no extension can be inferred, `.bin` SHALL be used. Dumping SHALL NOT re-encode text/JSON or otherwise transform the stored payload.
+
+#### Scenario: Dump a PNG Resource
+- **WHEN** a Resource has MIME `image/png`
+- **THEN** its exact stored bytes are published through the shared temporary-artifact boundary
+- **AND** the resulting path uses the `.png` extension when inferred by `mimetypes`
+
+#### Scenario: Dump a MIME with no known extension
+- **WHEN** `mimetypes.guess_extension()` returns no extension
+- **THEN** the temporary artifact uses `.bin`
+
+#### Scenario: Dump JSON Resource
+- **WHEN** an `application/json` Resource is dumped
+- **THEN** the file contains the exact stored payload bytes
+- **AND** the dump path uses the MIME-derived extension rather than reserializing JSON
+
 ### Requirement: Support bounded full Resource inspection
 
-Resource inspection SHALL distinguish text-like, JSON, and binary content. A normal full read SHALL respect the configured Resource inline byte threshold, while an explicit full-read request MAY bypass only that soft inspection threshold and SHALL NOT bypass the fixed CLI hard emission boundary.
+Resource inspection SHALL use the persisted `text`, `json`, and `binary` content classes. A normal full read SHALL respect the configured Resource inline byte threshold, while an explicit full-read request MAY bypass only that soft inspection threshold and SHALL NOT bypass the fixed CLI hard emission boundary.
 
 #### Scenario: Read a small text Resource
 - **WHEN** the payload is within the configured Resource read threshold and fixed hard output boundary
@@ -133,7 +183,7 @@ Resource inspection SHALL distinguish text-like, JSON, and binary content. A nor
 - **THEN** Resource inspection decodes it as JSON data
 
 #### Scenario: Inspect binary content
-- **WHEN** a Resource is not text-like
+- **WHEN** a Resource is classified as `binary`
 - **THEN** full text decoding is not attempted
 - **AND** bounded metadata inspection remains available
 
@@ -144,7 +194,7 @@ Resource inspection SHALL distinguish text-like, JSON, and binary content. A nor
 
 ### Requirement: Support bounded UTF-8 slicing
 
-Text Resources SHALL support offset/limit slicing. Offset SHALL be non-negative and limit positive. One slice SHALL request and return at most 16384 UTF-8 bytes. When a requested character range would encode above the byte maximum, the result SHALL end at a valid UTF-8 boundary.
+`text` and `json` Resources SHALL support offset/limit slicing. Offset SHALL be non-negative and limit positive. One slice SHALL request and return at most 16384 UTF-8 bytes. When a requested character range would encode above the byte maximum, the result SHALL end at a valid UTF-8 boundary.
 
 #### Scenario: Slice a large text Resource
 - **WHEN** a bounded slice is requested
@@ -157,9 +207,9 @@ Text Resources SHALL support offset/limit slicing. Offset SHALL be non-negative 
 
 ### Requirement: Support bounded Resource text search
 
-Plain text, Python, diff, and JSON Resources SHALL support case-insensitive literal substring search without loading the whole Resource into public command output. Search shall support a zero-based result offset, use the configured per-call search result limit, and never return more than 100 hits in one operation.
+`text` and `json` Resources SHALL support case-insensitive literal substring search without loading the whole Resource into public command output. Search shall support a zero-based result offset, use the configured per-call search result limit, and never return more than 100 hits in one operation.
 
-#### Scenario: Search text-like content
+#### Scenario: Search text content
 - **WHEN** a query occurs multiple times in a text Resource
 - **THEN** Resource search finds all logical matches for hit counting
 - **AND** returns only the requested bounded hit window
@@ -191,5 +241,5 @@ Resource inspection SHALL fail explicitly for unknown Resource aliases, invalid 
 - **THEN** Resource resolution reports not found
 
 #### Scenario: Search binary Resource
-- **WHEN** text search is requested for a binary-only Resource
-- **THEN** the operation is rejected as unavailable for that MIME class
+- **WHEN** text search is requested for a `binary` Resource
+- **THEN** the operation is rejected as unavailable for that content class

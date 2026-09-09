@@ -144,7 +144,7 @@ Cropping SHALL occur before final scale-and-clamp so the selected region receive
 
 ### Requirement: Use operating-system temporary storage
 
-Screenshot PNGs and turntable videos SHALL be published below the operating-system temporary directory and returned as filesystem paths according to the Capture command contracts.
+Screenshot PNGs and turntable videos SHALL be published through the shared temporary-artifact boundary below the operating-system temporary directory and returned as filesystem paths according to the Capture command contracts. Capture SHALL provide the already-known output extension (`.png` or `.mp4`) and SHALL NOT MIME-sniff its own encoded output.
 
 #### Scenario: Screenshot succeeds
 - **WHEN** a PNG is published
@@ -164,7 +164,7 @@ Screenshot filenames SHALL use the readable `kind + minute + sequence` conventio
 
 ### Requirement: Publish only completed capture files
 
-Capture SHALL not expose partially written PNGs or MP4 files as successful output. Temporary/in-progress files SHALL be finalized or otherwise withheld until complete.
+Capture SHALL use the shared temporary-artifact publication boundary so partially written PNGs or MP4 files are never exposed as successful output. Temporary/in-progress files SHALL be finalized or otherwise withheld until complete.
 
 #### Scenario: Capture fails during image production
 - **WHEN** the capture pipeline fails before a valid PNG is complete

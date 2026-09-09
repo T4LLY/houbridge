@@ -35,7 +35,7 @@ Houbridge SHALL control Houdini through Houdini openport and SideFX `hcommand` o
 
 ### Requirement: Keep feature subsystems independently owned
 
-The top-level feature subsystems SHALL be `resource`, `output`, `session`, `capture`, `search`, and `execution`, plus shared configuration, Houdini transport, target coordination, temporary-workspace, and low-level search primitives. Each feature subsystem SHALL expose a public service boundary and own its feature-specific implementation details.
+The top-level feature subsystems SHALL be `resource`, `output`, `session`, `capture`, `search`, and `execution`, plus shared configuration, Houdini transport, target coordination, temporary-workspace, temporary-artifact publication, and low-level search primitives. Each feature subsystem SHALL expose a public service boundary and own its feature-specific implementation details.
 
 #### Scenario: Search stores a Resource
 - **WHEN** Search needs to preserve a code body or oversized logical result
@@ -95,6 +95,22 @@ Canonical public scalar formatting that must remain identical across features SH
 - **WHEN** more than one feature returns a public date-time field
 - **THEN** those values use the same shared public date-time formatter
 - **AND** feature modules do not duplicate canonical formatting logic
+
+### Requirement: Centralize temporary artifact publication
+
+Filesystem artifacts returned to callers SHALL be published through one shared temporary-artifact boundary. The boundary SHALL publish only completed files below the operating-system temporary directory, reserve collision-safe paths inside Houbridge-managed namespaces, and return the final filesystem path. Feature services SHALL provide artifact-specific bytes or completed source files and the desired filename stem/extension; they SHALL NOT duplicate temporary-root resolution or partial-file publication logic.
+
+The shared boundary MAY expose cleanup primitives for Houbridge-managed temporary namespaces, while retention policy remains owned by the feature/configuration requirement that invokes cleanup.
+
+#### Scenario: Capture publishes a PNG
+- **WHEN** Capture has produced a completed PNG
+- **THEN** Capture publishes it through the shared temporary-artifact boundary
+- **AND** Capture does not independently resolve its own operating-system temp root
+
+#### Scenario: Resource dump publishes payload bytes
+- **WHEN** Resource materializes stored payload bytes as a file
+- **THEN** Resource uses the same temporary-artifact boundary
+- **AND** no partially written dump path is returned
 
 ### Requirement: Centralize all public output limiting
 

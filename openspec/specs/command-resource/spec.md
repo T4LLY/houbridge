@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define syntax, options, bounded inspection semantics, and JSON responses for Resource metadata/read/search/slice operations.
+Define syntax, options, bounded inspection semantics, temporary dump behavior, and JSON responses for Resource metadata/read/search/slice/dump operations.
 
 ## Requirements
 
@@ -16,9 +16,9 @@ houbridge resource info RESOURCE_ID
 
 `RESOURCE_ID` is a required semantic alias or canonical SHA-256 Resource id.
 
-Success SHALL report MIME together with exactly one size measure selected by the Resource subsystem's existing text/binary classification.
+Success SHALL report MIME together with exactly one size measure selected by the Resource subsystem's shared content classification. `text` and `json` classes SHALL use token count; `binary` SHALL use byte count.
 
-A text-like Resource SHALL use:
+A `text` or `json` Resource SHALL use:
 
 ```json
 {
@@ -27,7 +27,7 @@ A text-like Resource SHALL use:
 }
 ```
 
-A binary Resource SHALL use:
+A `binary` Resource SHALL use:
 
 ```json
 {
@@ -36,17 +36,48 @@ A binary Resource SHALL use:
 }
 ```
 
-`mime` MAY be `null`. `tokens` SHALL be present only for text-like Resources. `bytes` SHALL be present only for binary Resources. The supplied Resource id and canonical hash SHALL NOT be repeated in this minimal metadata response.
+`mime` SHALL be the classifier-resolved MIME string. `tokens` SHALL be present only for `text`/`json` Resources. `bytes` SHALL be present only for `binary` Resources. The supplied Resource id and canonical hash SHALL NOT be repeated in this minimal metadata response.
 
 #### Scenario: Inspect text Resource metadata
-- **WHEN** a Resource is classified as text-like
+- **WHEN** a Resource is classified as `text` or `json`
 - **THEN** `tokens` reports its estimated token count
 - **AND** `bytes` is omitted
 
 #### Scenario: Inspect binary Resource metadata
-- **WHEN** a Resource is classified as binary
+- **WHEN** a Resource is classified as `binary`
 - **THEN** `bytes` reports the payload byte size
 - **AND** `tokens` is omitted
+
+### Requirement: Expose Resource dump to managed temporary storage
+
+The syntax SHALL be:
+
+```text
+houbridge resource dump RESOURCE_ID
+```
+
+`RESOURCE_ID` is a required semantic alias or canonical SHA-256 Resource id. The command SHALL read the exact stored payload bytes, derive an extension from the stored MIME with `mimetypes.guess_extension()`, fall back to `.bin` when no extension is available, and publish the completed file through the shared temporary-artifact boundary.
+
+Success SHALL contain exactly:
+
+```json
+{"path":"D:/Temp/.../resource-....png"}
+```
+
+`dump` SHALL support `binary`, `text`, and `json` Resources. It SHALL NOT decode, reserialize, base64-encode, or otherwise transform the payload before publication.
+
+#### Scenario: Dump a binary Resource
+- **WHEN** `resource dump` resolves a Resource with MIME `image/png`
+- **THEN** the exact payload bytes are written to a completed temporary `.png` file
+- **AND** success returns only its `path`
+
+#### Scenario: Dump an unknown MIME
+- **WHEN** the stored MIME has no extension mapping
+- **THEN** the published temporary filename ends in `.bin`
+
+#### Scenario: Dump text or JSON
+- **WHEN** a text or JSON Resource is dumped
+- **THEN** its exact stored bytes are written without text normalization or JSON reserialization
 
 ### Requirement: Expose bounded Resource get
 
@@ -70,25 +101,25 @@ Small JSON success SHALL decode the Resource as JSON:
 {"truncated":false,"result":{"foo":"bar"}}
 ```
 
-A text-like Resource that is not returned because of the soft/hard read bound SHALL use:
+A `text` or `json` Resource that is not returned because of the soft/hard read bound SHALL use:
 
 ```json
 {"truncated":true,"next_offset":0}
 ```
 
-A non-text Resource SHALL use:
+A `binary` Resource SHALL use:
 
 ```json
 {"truncated":false,"binary":true}
 ```
 
 #### Scenario: Full read is requested below hard boundary
-- **WHEN** a text Resource exceeds only the configured soft threshold
+- **WHEN** a `text` or `json` Resource exceeds only the configured soft threshold
 - **AND** `--full` is supplied
 - **THEN** the complete body may be returned
 
 #### Scenario: Resource exceeds hard boundary
-- **WHEN** a text Resource exceeds 65536 bytes
+- **WHEN** a `text` or `json` Resource exceeds 65536 bytes
 - **THEN** `get` does not inline the body even with `--full`
 - **AND** returns `truncated:true` and `next_offset:0`
 
@@ -138,7 +169,7 @@ houbridge resource search RESOURCE_ID QUERY [--offset INTEGER]
 
 `QUERY` is required and non-empty. `--offset` defaults to `0` and selects the zero-based hit offset. Search is case-insensitive literal substring search and one response SHALL expose no more than the configured bounded search limit and never more than 100 hits.
 
-For plain text-like content, success SHALL use:
+For `text` content, success SHALL use:
 
 ```json
 {
@@ -169,7 +200,7 @@ If additional hits exist beyond the returned window, `truncated:true` SHALL be a
 
 ### Requirement: Keep Resource inspection out of recursive Resource fallback
 
-`resource info`, `resource get`, `resource search`, and `resource slice` are themselves the bounded mechanism for inspecting oversized Resources. These commands SHALL use their explicit bounded responses and SHALL NOT recursively Resource-fallback their inspected body into another Resource merely because the body is large.
+Resource inspection and dump commands SHALL use their explicit bounded or path-only responses rather than recursively Resource-fallbacking the inspected payload into another Resource. `resource get`, `resource search`, and `resource slice` SHALL keep their bounded continuation behavior; `resource dump` SHALL return only the temporary artifact path.
 
 #### Scenario: Get is too large
 - **WHEN** a Resource cannot be returned within the get boundary
@@ -178,7 +209,7 @@ If additional hits exist beyond the returned window, `truncated:true` SHALL be a
 
 ### Requirement: Use the shared error envelope for Resource failures
 
-Unknown Resource ids, invalid aliases, invalid JSON structural inspection, binary text operations, empty queries, invalid offsets, and invalid slice limits SHALL use the common BridgeError JSON envelope.
+Unknown Resource ids, invalid aliases, invalid JSON structural inspection, binary text operations, empty queries, invalid offsets, invalid slice limits, and temporary dump publication failures SHALL use the common BridgeError JSON envelope.
 
 #### Scenario: Resource does not exist
 - **WHEN** `resource info missing-id` cannot resolve the id
