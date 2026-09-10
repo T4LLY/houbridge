@@ -14,7 +14,7 @@ The command syntax SHALL be:
 houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--root PATH] [--hcommand TEXT] [-- SCRIPT_ARGS...]
 ```
 
-`--file` is required. Houbridge SHALL read the file using Python source-encoding rules compatible with `tokenize.open()` before dispatch. Arguments after `--` SHALL become the executed file's arguments. Async Task metadata SHALL store the normalized absolute file path even when the caller supplied a relative path.
+`--file` is required. Houbridge SHALL read the file using Python source-encoding rules compatible with `tokenize.open()` before dispatch. After decoding, source containing an actual NUL character (`U+0000`) SHALL be rejected with BridgeError code `invalid_python_source` before synchronous dispatch or asynchronous Task creation. Arguments after `--` SHALL become the executed file's arguments. Async Task metadata SHALL store the normalized absolute file path even when the caller supplied a relative path.
 
 | Option | Constraint | Default / behavior |
 | --- | --- | --- |
@@ -45,6 +45,11 @@ houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--root P
 - **WHEN** `houbridge exec --file tool.py --purpose "build preview geometry"` is invoked
 - **THEN** the purpose is available to enabled Action History for that execution
 - **AND** it is not injected into the caller script's `sys.argv`
+
+#### Scenario: Source contains a NUL character
+- **WHEN** the decoded Python file contains `U+0000`
+- **THEN** Exec fails with `invalid_python_source` before caller Python is dispatched or an Async Task is created
+- **AND** no Action History entry is created for that rejected source
 
 ### Requirement: Return only the Task reference for successful asynchronous submission
 

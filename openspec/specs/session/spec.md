@@ -83,9 +83,9 @@ When no compatible session is reachable, Session start SHALL launch either the n
 - **THEN** Session resolves and launches the corresponding process through that mode's normal path
 - **AND** its path is not used to infer the active license category
 
-### Requirement: Discover SideFX tools from explicit settings, native environment, and standard installations
+### Requirement: Discover SideFX tools from explicit settings, Houdini environment, PATH, and Windows installations
 
-Tool discovery SHALL allow `hcommand`, the Houdini GUI executable, and the corresponding headless Houdini Python runtime to be resolved without requiring an already-configured Houdini shell. Explicit tool selection SHALL take precedence. Standard Houdini environment information such as `HFS` MAY be used for native discovery. On Windows, standard Side Effects Software installation directories SHALL be searched when necessary, choosing the newest compatible installation.
+Tool discovery SHALL allow `hcommand`, the Houdini GUI executable, and the corresponding headless Houdini Python runtime to be resolved without requiring an already-configured Houdini shell. Explicit tool selection SHALL take precedence. A usable `HFS` SHALL be consulted when present, required tool names MAY be resolved from `PATH`, and on Windows the standard Side Effects Software installation directories SHALL be searched when necessary, choosing the newest compatible installation. This specification does not require unverified platform-specific installation-directory discovery outside Windows.
 
 #### Scenario: Explicit hcommand is configured
 - **WHEN** the explicit path exists
@@ -95,6 +95,10 @@ Tool discovery SHALL allow `hcommand`, the Houdini GUI executable, and the corre
 - **WHEN** a caller explicitly selects a Houdini executable/tool that cannot resolve the executable required by the selected launch mode
 - **THEN** Session reports a structured executable-not-found failure
 - **AND** does not silently launch a different edition or installation
+
+#### Scenario: Tool is available through HFS or PATH
+- **WHEN** no explicit override is supplied and the required SideFX executable can be resolved from the effective `HFS` installation or process `PATH`
+- **THEN** Session may use that executable without requiring Windows installation-directory fallback
 
 #### Scenario: hcommand is not on PATH on Windows
 - **WHEN** no explicit path is set and standard Houdini installations exist

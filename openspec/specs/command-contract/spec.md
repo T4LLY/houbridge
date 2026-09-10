@@ -22,6 +22,15 @@ The Houbridge CLI SHALL expose the following command families in this specificat
 - **WHEN** the user requests top-level help
 - **THEN** these command families are discoverable
 
+### Requirement: Install one root console command
+
+An installed Houbridge package SHALL expose a console command named `houbridge` as the root of the public CLI. The Python module/function used as the packaging entry point SHALL remain an implementation detail and SHALL NOT be frozen by this specification.
+
+#### Scenario: Invoke the installed CLI
+- **WHEN** Houbridge is installed through its supported Python packaging path
+- **THEN** invoking `houbridge` reaches the public Houbridge CLI
+- **AND** the package's internal entry-point module may be refactored without changing the public command name
+
 ### Requirement: Use compact JSON for dispatched command results
 
 A successfully dispatched Houbridge command SHALL write exactly one compact JSON object followed by a newline for its machine result. JSON serialization SHALL use UTF-8, preserve non-ASCII text, and SHALL NOT add decorative Rich output or ANSI color to the JSON result.

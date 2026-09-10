@@ -118,7 +118,7 @@ The code embedding profile and hybrid-search parameters SHALL be configurable. G
 - **THEN** reciprocal-rank fusion and candidate fan-out use the effective configured values
 
 #### Scenario: Script search uses the code profile
-- **WHEN** workspace script semantic search embeds fragments and queries
+- **WHEN** workspace script semantic search embeds file-level documents and queries
 - **THEN** it uses the effective `[search.embedding].code_profile`
 
 ### Requirement: Configure Resource inspection

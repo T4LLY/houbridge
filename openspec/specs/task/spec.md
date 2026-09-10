@@ -243,13 +243,18 @@ If a replacement runtime observes a started Task without a completion marker whi
 
 ### Requirement: Carry History context through asynchronous execution
 
-Async submission SHALL capture the optional `purpose`, absolute origin root, file, args, source hash/source body, and the effective `[history].enabled` decision needed to finalize the same Action History semantics as synchronous Execution. Task Runtime SHALL start Action Change recording only when the queued Python invocation actually starts and History was enabled for that submission. Queue wait and Task runtime bookkeeping SHALL not create History entries by themselves.
+Async submission SHALL capture the optional `purpose`, absolute origin root, file, args, source hash/source body, the effective `[history].enabled` decision, and the effective requested `[search.embedding].code_profile` needed to finalize the same Action History semantics as synchronous Execution. The captured profile is submission context for a History database that does not yet exist; if the bound process incarnation already has a History database with a pinned code profile when the Task later starts, that database-pinned profile SHALL take precedence. Task Runtime SHALL start Action Change recording only when the queued Python invocation actually starts and History was enabled for that submission. Queue wait and Task runtime bookkeeping SHALL not create History entries by themselves.
 
 When a started invocation reaches a normal Python terminal outcome, Task Runtime SHALL offer the finalized execution context and Action Change set to the History service. A Python exception SHALL produce a `failed` History action when the session History can be finalized. History persistence failure SHALL not cause the caller Python to be replayed or change a successfully determined Python outcome.
 
 #### Scenario: Async execution was submitted with purpose
 - **WHEN** `exec --async --purpose "build preview geometry"` later starts in Houdini
 - **THEN** Task Runtime supplies that purpose and the captured origin root to History finalization
+
+#### Scenario: Embedding configuration changes while a Task is queued
+- **WHEN** a Task was submitted while the effective requested History code profile was A and local configuration later changes to B before that Task starts
+- **THEN** Task Runtime does not silently replace the Task's captured requested profile with B
+- **AND** if the bound session History database was already initialized with another pinned profile, the session database's pinned profile remains authoritative for that session
 
 #### Scenario: Task remains queued
 - **WHEN** a Task has not yet started caller Python

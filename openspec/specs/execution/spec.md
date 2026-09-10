@@ -14,6 +14,15 @@ Execution SHALL accept Python source read from a caller-supplied file using Pyth
 - **WHEN** the supplied file contains multiple lines, quotes, or Unicode text
 - **THEN** the source compiled inside Houdini is semantically identical to the file content read by Houbridge
 
+### Requirement: Reject NUL-bearing Python source before dispatch
+
+Execution preflight SHALL reject decoded caller source containing the actual NUL character `U+0000`. This validation SHALL occur before Houdini dispatch begins so malformed source is reported as stable input error `invalid_python_source` rather than as a Houdini-side compile/transport outcome.
+
+#### Scenario: File decodes but contains U+0000
+- **WHEN** source decoding succeeds and the resulting Python source contains a NUL character
+- **THEN** Execution rejects the source before Houdini executes caller Python
+- **AND** no execution-start Action History capture is initialized
+
 ### Requirement: Preserve the file execution namespace contract
 
 User code SHALL execute with `__name__ == "__main__"` and SHALL expose the caller-supplied file path as `__file__`.

@@ -56,13 +56,13 @@ A finalized Action History entry SHALL contain:
 - execution start `time`,
 - absolute origin `root` representing the Exec submission cwd,
 - terminal Python `status` of `completed` or `failed`,
-- executed `file` path,
+- normalized absolute executed `file` path,
 - script `args`,
 - optional caller-supplied `purpose`,
 - SHA-256 `source_hash` of the exact executed Python source,
 - zero or more finalized Action Changes.
 
-The Python source body SHALL be used transiently for hashing and embedding but SHALL not be persisted as History source text. Result payloads and stdout/stderr remain owned by Execution, Task, Resource, and Output according to their specifications rather than being copied into the Action History entry.
+The executed file path SHALL be normalized to an absolute path before the History entry is committed so actions remain unambiguous when one Houdini session is operated from multiple working directories. The Python source body SHALL be used transiently for hashing and embedding but SHALL not be persisted as History source text. Result payloads and stdout/stderr remain owned by Execution, Task, Resource, and Output according to their specifications rather than being copied into the Action History entry.
 
 #### Scenario: Synchronous execution completes
 - **WHEN** caller Python starts and exits successfully with History enabled

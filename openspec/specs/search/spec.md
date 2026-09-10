@@ -10,6 +10,15 @@ Define live Houdini node search, live Python/VEX code search, and workspace-loca
 
 Live code search SHALL use an explicit registry that identifies supported Python and VEX node types/parameters. It SHALL NOT treat arbitrary text parameters as executable code merely because they contain text.
 
+The built-in registry SHALL contain at least these mappings:
+
+| Extractor | Language | Node type names | Parameter names |
+| --- | --- | --- | --- |
+| `vex-wrangle` | `vex` | `attribwrangle`, `pointwrangle`, `primitivewrangle`, `vertexwrangle`, `volumewrangle`, `wrangle` | `snippet` |
+| `python-node` | `python` | `python`, `pythonscript` | `python`, `code`, `script` |
+
+Node-type matching SHALL be case-insensitive. A namespaced Houdini node type SHALL match when either its exact type name or the portion before the first `::` matches a configured node type name. For each matching extractor, Houbridge SHALL inspect only its configured parameter names, read existing parameters through their raw value, skip parameters that cannot be read, and skip source that is empty or whitespace-only. Multiple selected references to the same Houdini node SHALL be deduplicated by `hou.Node.sessionId()` for that live capture.
+
 #### Scenario: Supported VEX node is encountered
 - **WHEN** a registered VEX-bearing Houdini node is scanned
 - **THEN** the configured code parameter is extracted with language `vex`
@@ -89,11 +98,11 @@ For live Python/VEX search, matching code bodies SHALL be materialized as Resour
 
 ### Requirement: Search current Houdini node instances
 
-Node search SHALL scan current live scene node instances. Matching SHALL be based on the node's own searchable fields and SHALL not produce a match solely because an ancestor path segment contains the query.
+Node search SHALL scan current live scene node instances. Matching SHALL be case-insensitive against the node's own `name`, node `type`, and type `category`; it SHALL not produce a match solely because an ancestor path segment contains the query. Results SHALL be ranked by match class in this order: exact field match, field-prefix match, field-substring match. Ties SHALL be ordered by node path using case-insensitive lexical order. Node search SHALL expose this ordering through result order and SHALL NOT manufacture a numeric relevance score.
 
 #### Scenario: Search all current scene nodes
 - **WHEN** no path scope is provided
-- **THEN** current live nodes are searched and ranked up to the requested limit
+- **THEN** current live nodes are searched and ordered by exact, prefix, then substring match class up to the requested limit
 
 #### Scenario: Ancestor name contains the query
 - **WHEN** a node's own searchable name/type/category does not match but an ancestor path segment does

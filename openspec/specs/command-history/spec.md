@@ -40,7 +40,7 @@ Success SHALL contain exactly one top-level field, `hits`. Each hit SHALL contai
 }
 ```
 
-`score` SHALL use the shared Search score formatter and `time` SHALL use the shared public date-time formatter.
+`score` SHALL use the shared Search score formatter and `time` SHALL use the shared public date-time formatter. Hit order SHALL be relevance ranking from the History retrieval pipeline rather than chronological ordering.
 
 #### Scenario: No current-session action matches
 - **WHEN** History search returns no candidate
@@ -58,7 +58,7 @@ The syntax SHALL be:
 houbridge history get HISTORY_ID [--port INTEGER] [--root PATH] [--hcommand TEXT]
 ```
 
-`HISTORY_ID` is a required positive session-local integer. Success SHALL return the complete public Action History entry. The returned `root` field is the absolute cwd/origin root captured for the execution and is independent of the command's `--root` operational-storage option. `purpose` SHALL be omitted when absent. Internal source hash, embedding vectors, embedding profile, FTS data, and session-key metadata SHALL not be emitted.
+`HISTORY_ID` is a required positive session-local integer. Success SHALL return the complete public Action History entry. The returned `file` SHALL be the normalized absolute path of the executed Python file captured for the action. The returned `root` field is the absolute cwd/origin root captured for the execution and is independent of the command's `--root` operational-storage option. `purpose` SHALL be omitted when absent. Internal source hash, embedding vectors, embedding profile, FTS data, and session-key metadata SHALL not be emitted.
 
 A parameter-change example is:
 
@@ -68,7 +68,7 @@ A parameter-change example is:
   "time":"2026-09-09T13:24:10",
   "status":"completed",
   "root":"E:/project",
-  "file":".houbridge/python/build.py",
+  "file":"E:/project/.houbridge/python/build.py",
   "args":["--quality","high"],
   "purpose":"build preview geometry",
   "changes":[
@@ -124,7 +124,7 @@ The syntax SHALL be:
 houbridge history list [--limit INTEGER] [--port INTEGER] [--root PATH] [--hcommand TEXT]
 ```
 
-`--limit` SHALL be a positive integer and default to `20`. Entries SHALL be ordered newest first. Each list entry SHALL contain exactly `id`, `time`, `status`, and `file`, plus `purpose` only when non-empty.
+`--limit` SHALL be a positive integer and default to `20`. Entries SHALL be ordered by action time newest first; `history list` is chronological recall and SHALL NOT apply relevance ranking. Each list entry SHALL contain exactly `id`, `time`, `status`, and `file`, plus `purpose` only when non-empty.
 
 ```json
 {
@@ -133,7 +133,7 @@ houbridge history list [--limit INTEGER] [--port INTEGER] [--root PATH] [--hcomm
       "id":44,
       "time":"2026-09-09T13:31:02",
       "status":"completed",
-      "file":".houbridge/python/render.py",
+      "file":"E:/project/.houbridge/python/render.py",
       "purpose":"update render settings"
     }
   ]
