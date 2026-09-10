@@ -96,16 +96,16 @@ Synchronous Execution SHALL own caller source, invocation options, transient tra
 - **THEN** submitted source copy, queue state, streams, target binding, and retention needed after CLI exit belong to Task
 - **AND** no History entry is created merely because a Task was queued
 
-### Requirement: Coordinate managed Python execution by probed Houdini PID
+### Requirement: Coordinate managed Python execution by exact Houdini process identity
 
-The shared target-coordination boundary SHALL serialize arbitrary managed Python execution by the actual probed Houdini operating-system PID, not merely by caller command type. Synchronous Exec and Async Task SHALL acquire the same per-PID serialization boundary. Task's configurable global concurrency SHALL remain a separate Task concern.
+Managed arbitrary Python execution SHALL be serialized by probed Houdini PID/process-incarnation identity rather than by caller command type. Synchronous Exec and Async Task SHALL acquire the same target serialization boundary. This target coordination SHALL live in a fixed platform-standard per-user Houbridge coordination directory that is independent of `[storage].root` and overridable `--root`, so two invocations selecting different operational roots still cannot execute arbitrary Python concurrently in the same Houdini process. Task's configurable concurrency SHALL remain a separate concern scoped to each effective Task operational root.
 
 #### Scenario: Same process is reached by managed executions
-- **WHEN** synchronous and asynchronous callers resolve to the same Houdini PID
-- **THEN** at most one managed arbitrary Python execution runs in that PID at a time
+- **WHEN** synchronous and asynchronous callers resolve to the same Houdini process incarnation
+- **THEN** at most one managed arbitrary Python execution runs in that process at a time even when their `--root` values differ
 
 #### Scenario: Two Houdini processes are independent
-- **WHEN** callers resolve to different Houdini PIDs
+- **WHEN** callers resolve to different Houdini process incarnations
 - **THEN** target coordination permits overlap unless another owning subsystem limit applies
 
 ### Requirement: Treat Houdini scene data as live application state
@@ -145,6 +145,15 @@ Canonical public scalar formatting that must remain identical across features SH
 - **WHEN** more than one feature returns a public date-time field
 - **THEN** those values use the same shared public date-time formatter
 - **AND** feature modules do not duplicate canonical formatting logic
+
+### Requirement: Separate active invocation workspaces from published temporary artifacts
+
+Execution/Task runtime transport buffers and started/completion markers SHALL use a shared Temporary Workspace boundary distinct from the Temporary Artifact publication boundary. Temporary Workspaces SHALL remain private implementation state, SHALL never be returned as public artifacts, and SHALL be recoverable/cleanable according to active Task ownership.
+
+#### Scenario: Async caller Python starts
+- **WHEN** Task Runtime needs stdout/stderr transport buffers and invocation markers
+- **THEN** those files are created through the Temporary Workspace boundary
+- **AND** they are not exposed through Capture/Resource artifact publication APIs
 
 ### Requirement: Centralize temporary artifact publication
 

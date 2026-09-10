@@ -90,7 +90,7 @@ Success SHALL contain exactly one top-level field, `hits`. Each script hit SHALL
 }
 ```
 
-`description` SHALL be omitted rather than emitted as `null` when the file has no module description. Internal semantic-unit metadata such as symbol kind, symbol name, qualified name, line range, namespace, entry id, and content hash SHALL NOT be emitted by this command.
+`description` SHALL be omitted rather than emitted as `null` when the file has no module description. Internal derived-index metadata such as namespace, entry id, embedding profile, and content hash SHALL NOT be emitted by this command. One current Python file SHALL appear at most once in `hits`.
 
 #### Scenario: Search a described local script
 - **WHEN** a query produces a semantic match from a Python file with a non-empty module description

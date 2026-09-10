@@ -51,14 +51,14 @@ houbridge session start [--file PATH] [--headless] [--executable TEXT] [--port I
 
 | Option | Constraint | Behavior |
 | --- | --- | --- |
-| `--file PATH` | optional existing readable file | HIP file to load when a new Houdini process is launched. |
+| `--file PATH` | optional path | HIP file validated and loaded only when a new Houdini process must be launched. |
 | `--headless` | boolean flag, default false | Launch a headless Houdini session when a new process must be started. |
 | `--executable TEXT` | optional | Explicit Houdini executable/tool selector for the selected launch mode; automatic discovery is used when omitted. |
 | `--port INTEGER` | `1..65535` | Target/open port override. |
 | `--root PATH` | optional | Common runtime option. |
 | `--hcommand TEXT` | optional | Common runtime option. |
 
-Session start SHALL retain its reuse-first behavior. `--file` and `--headless` are launch-only options. If a usable session is already reachable, it SHALL be reused and its probed `headless` value SHALL be returned; the requested launch mode SHALL NOT replace the running process. When no usable session exists on the selected port, Houbridge SHALL launch the selected mode and SHALL report success only after the selected openport is reachable and the session probe succeeds.
+Session start SHALL retain its reuse-first behavior. `--file` and `--headless` are launch-only options. `--file` existence/readability validation SHALL occur only after the initial reuse probe determines that a new process must be launched. If a usable session is already reachable, it SHALL be reused and its probed `headless` value SHALL be returned; the requested launch mode SHALL NOT replace the running process. When no usable session exists on the selected port, Houbridge SHALL launch the selected mode and SHALL report success only after the selected openport is reachable and the session probe succeeds.
 
 If a usable session already exists, success SHALL be:
 
@@ -115,6 +115,11 @@ If Houbridge launches Houdini, success SHALL additionally include `pid` and set 
 - **WHEN** no usable session exists and `--file C:/project/test.hip` is supplied
 - **THEN** the launched Houdini process opens that file
 - **AND** the successful session probe reports the loaded HIP through `session.file`
+
+#### Scenario: Invalid launch file is supplied while a session is already reachable
+- **WHEN** `--file` names a missing/unreadable path but the selected session probe succeeds
+- **THEN** the existing session is reused
+- **AND** launch-file validation is not performed because no launch is required
 
 #### Scenario: Launch-only options are supplied while a session is already reachable
 - **WHEN** `--file` or `--headless` is supplied and session probing succeeds before launch

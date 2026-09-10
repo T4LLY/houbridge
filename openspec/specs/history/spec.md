@@ -101,9 +101,9 @@ When a session History database is first initialized, it SHALL record the effect
 
 ### Requirement: Capture a lightweight in-memory Action baseline around caller Python
 
-When History is enabled, the Houdini-side Action recorder SHALL establish an invocation-local baseline immediately before caller Python starts. The baseline SHALL contain only state required by the tracked Action Change types: node session id, node path/type, parameter raw values, and input-connection identity. The baseline SHALL remain invocation-local and SHALL be discarded after History finalization.
+When History is enabled, the Houdini-side Action recorder SHALL establish an invocation-local baseline immediately before caller Python starts. The baseline SHALL contain only state required by the tracked Action Change types: node session id, node path/type, parameter raw values, input-connection identity, and supported node flag values. The baseline SHALL remain invocation-local and SHALL be discarded after History finalization.
 
-History SHALL use Houdini node event callbacks to identify changed nodes/properties during the execution window. The recorder SHALL handle `ParmTupleChanged` callbacks whose `parm_tuple` argument is `None` by comparing the affected node against its baseline/current raw parameter state.
+History SHALL use Houdini node event callbacks including creation/deletion, rename, parameter, input-rewire, and flag-change notifications to identify changed nodes/properties during the execution window. The recorder SHALL handle `ParmTupleChanged` callbacks whose `parm_tuple` argument is `None` by comparing the affected node against its baseline/current raw parameter state.
 
 #### Scenario: No tracked state changes
 - **WHEN** caller Python runs without changing any tracked node/property
@@ -119,7 +119,7 @@ History SHALL use Houdini node event callbacks to identify changed nodes/propert
 - **THEN** the Action recorder tracks the new node for the remainder of the execution window
 - **AND** later tracked changes can reference the same node session id
 
-### Requirement: Record exactly five Action Change types
+### Requirement: Record exactly six net Action Change types
 
 The finalized Action Change vocabulary SHALL be exactly:
 
@@ -129,34 +129,54 @@ node_deleted
 node_renamed
 parm_changed
 input_rewired
+flag_changed
 ```
 
-Each change SHALL preserve a Before/After description sufficient for AI recall. Node creation SHALL use `before: null`; node deletion SHALL use `after: null`. Rename, parameter, and input changes SHALL preserve both states.
+History SHALL store execution-level net state change, not every intermediate Houdini callback. Existing nodes SHALL be compared from execution-start baseline to execution-end state. Multiple changes to the same tracked property SHALL compact to one Before/After change, and a property that returns to its original value SHALL produce no change.
 
-#### Scenario: Node is created
-- **WHEN** `ChildCreated` identifies a new node during caller Python
-- **THEN** History records `node_created` using that node's session id and its created path/type as the After state
+A node created and deleted within the same execution SHALL produce no final Action Change. A newly created node that still exists at execution end SHALL produce `node_created` using its final path/type. For that surviving new node, parameter/input/flag changes from the earliest captured post-creation baseline to final state SHALL also be retained when non-zero; a separate `node_renamed` SHALL not be emitted because `node_created` already carries the final path. An existing node deleted during the execution SHALL produce `node_deleted`, and intermediate rename/parameter/input/flag changes for that deleted node SHALL not be retained. For a surviving renamed node, human-readable paths on its other changes SHALL use the final path while node session id remains the identity.
 
-#### Scenario: Node is deleted
-- **WHEN** `ChildDeleted` identifies a node before deletion
-- **THEN** History records `node_deleted` using the node's session id and its path/type as the Before state
+#### Scenario: Parameter changes several times
+- **WHEN** one parameter changes from raw value `1` to `2` to `3` during one execution
+- **THEN** History stores one `parm_changed` from `1` to `3`
 
-#### Scenario: Node is renamed
-- **WHEN** `NameChanged` occurs during caller Python
-- **THEN** History records `node_renamed` with the prior and resulting node paths
+#### Scenario: Parameter returns to original value
+- **WHEN** one parameter changes from `1` to `2` and back to `1` before execution ends
+- **THEN** no `parm_changed` is stored for that parameter
 
-#### Scenario: Input is changed
-- **WHEN** `InputRewired` occurs for an input index
-- **THEN** History records the previous and resulting upstream connection identity for that input
+#### Scenario: New node is created and deleted
+- **WHEN** caller Python creates a node and deletes it before the execution ends
+- **THEN** no final Action Change for that transient node is stored
 
-### Requirement: Store parameter changes as unevaluated raw values
+#### Scenario: Existing node is deleted after intermediate edits
+- **WHEN** an existing node is renamed or edited and then deleted before execution ends
+- **THEN** History retains `node_deleted` for that node
+- **AND** drops its intermediate rename/parameter/input/flag changes
 
-A `parm_changed` Action Change SHALL identify the node session id, current node path, parameter name, and string Before/After states obtained from Houdini raw parameter values without evaluating expressions or expanding variables. The recorder SHALL compare individual `hou.Parm` components so a changed tuple can be represented by the component parameter names that actually differ.
+#### Scenario: Node flag changes
+- **WHEN** one of `bypass`, `display`, `render`, `template`, or `selectable_template` is available for a node and has a different value at execution end than at baseline
+- **THEN** History records one `flag_changed` with boolean Before/After values
+
+### Requirement: Store parameter changes as bounded unevaluated raw values
+
+A `parm_changed` Action Change SHALL identify the node session id, final node path, parameter name, and string Before/After states obtained from Houdini raw parameter values without evaluating expressions or expanding variables. The recorder SHALL compare individual `hou.Parm` components so a changed tuple can be represented by the component parameter names that actually differ.
+
+Each Before/After raw string SHALL be encoded as UTF-8 for size accounting. Values of at most 4096 bytes SHALL be stored inline as strings. A value larger than 4096 bytes SHALL not be copied into History; instead the exact raw string SHALL be stored as a normal `text/plain` Resource in the effective global `resources.db`, and the History value SHALL be the object `{"omitted":true,"resource":"<resource-id>","tokens":<estimated-tokens>}`. `tokens` SHALL use the shared Resource/Output token estimator. The Resource obeys normal Resource retention; History does not extend that Resource's TTL.
 
 #### Scenario: Expression parameter changes
 - **WHEN** a parameter raw value changes from `$HIP/a.$F.bgeo` to `$HIP/b.$F.bgeo`
 - **THEN** History stores those raw strings as Before/After
 - **AND** does not replace them with frame-expanded filesystem paths
+
+#### Scenario: Large raw parameter value changes
+- **WHEN** one Before or After raw string exceeds 4096 UTF-8 bytes
+- **THEN** that exact string is materialized as a `text/plain` Resource
+- **AND** the History change stores `omitted:true`, the Resource id, and estimated token count instead of the large string
+
+#### Scenario: Only one side is large
+- **WHEN** one side fits inline and the other exceeds 4096 UTF-8 bytes
+- **THEN** the small side remains a string
+- **AND** only the large side uses the omitted Resource-reference object
 
 ### Requirement: Keep Action History persistence session-local and database-complete
 
@@ -168,7 +188,7 @@ Each session `history.db` SHALL contain the History entries, Action Changes, sou
 
 ### Requirement: Search source semantics and lexical action context through shared primitives
 
-History search SHALL use the shared low-level search primitives. The dense branch SHALL compare the query embedding against stored executed-source embeddings only. The lexical branch SHALL use FTS5/BM25 over a deterministic textual projection of `purpose`, `file`, `args`, and Action Change context including change type, node path/type, parameter name, connection path, and serializable Before/After values. Action Change text SHALL not be embedded as an additional semantic document.
+History search SHALL use the shared low-level search primitives. The dense branch SHALL compare the query embedding against stored executed-source embeddings only. The lexical branch SHALL use FTS5/BM25 over a deterministic textual projection of `purpose`, `file`, `args`, and Action Change context including change type, node path/type, parameter name, connection path, and serializable inline Before/After values. Omitted large parameter bodies SHALL not be copied back into History FTS from their Resource payload; the lexical projection may include only the omission marker and bounded metadata already stored in History. Action Change text SHALL not be embedded as an additional semantic document.
 
 History SHALL combine the available dense and lexical candidate rankings with the configured reciprocal-rank-fusion primitive; an empty branch does not prevent the non-empty branch from contributing through the same RRF path. Public History search scores SHALL therefore use the shared RRF score formatter.
 

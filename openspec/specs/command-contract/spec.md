@@ -105,7 +105,8 @@ Commands that address Houdini directly or access global operational persistence 
 
 #### Scenario: Explicit operational root is supplied
 - **WHEN** a command accepts `--root E:/houbridge-state`
-- **THEN** global Resource, Task, History, lock, or transient state used by that invocation resolves below `E:/houbridge-state` as defined by the owning feature
+- **THEN** global Resource, Task, History, or overridable transient state used by that invocation resolves below `E:/houbridge-state` as defined by the owning feature
+- **AND** per-Houdini target coordination remains in the fixed per-user coordination scope rather than moving with `--root`
 - **AND** the caller's current working directory is unchanged
 
 ### Requirement: Format public date-time values through one shared formatter

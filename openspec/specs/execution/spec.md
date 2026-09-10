@@ -8,7 +8,7 @@ Define caller-file Houdini Python execution, execution output capture, shared pe
 
 ### Requirement: Execute caller-side Python files inside Houdini
 
-Execution SHALL accept Python source read from a caller-supplied file and execute that exact source inside the selected running Houdini session using Houdini's native Python environment. Multiline source, quotes, Unicode, and other valid Python source SHALL be transported without shell re-quoting changing the source contents.
+Execution SHALL accept Python source read from a caller-supplied file using Python source-encoding rules compatible with `tokenize.open()` and execute that exact decoded source inside the selected running Houdini session using Houdini's native Python environment. Multiline source, quotes, Unicode, and other valid Python source SHALL be transported without shell re-quoting changing the source contents.
 
 #### Scenario: Execute multiline Unicode source
 - **WHEN** the supplied file contains multiple lines, quotes, or Unicode text
@@ -93,16 +93,17 @@ Async Task completion output is defined by the Task specification and SHALL NOT 
 
 ### Requirement: Route synchronous execution output through Resource and Output boundaries
 
-Synchronous Execution SHALL return its logical result/stdout/stderr/failure data through the shared Resource and Output boundaries defined by their specifications. Execution SHALL not implement a separate token-limit or hard-output policy.
+Synchronous Execution SHALL hand each non-empty declared result/stdout/stderr body to the common Output decision boundary using the shared token estimator. Bodies at or below the effective inline threshold SHALL remain inline and SHALL not be duplicated into per-artifact Resources solely for size control. Bodies above the threshold SHALL be materialized through Resource and replaced in the command envelope by their defined Resource reference fields. The completed command envelope SHALL then pass through the common whole-result Output Policy and serialized hard-output guard. Execution SHALL not implement a separate token estimator, threshold, or hard-output policy.
 
 #### Scenario: Result fits inline policy
 - **WHEN** a synchronous result is small enough for the common inline policy
-- **THEN** the command contract may expose the inline value together with any required Resource reference
+- **THEN** the command contract exposes the inline value
+- **AND** no per-result Resource is created solely for size control
 
 #### Scenario: Result exceeds inline policy
 - **WHEN** a synchronous result is too large for direct CLI output
-- **THEN** the complete payload remains inspectable through the Resource subsystem
-- **AND** the common Output policy determines the final bounded response
+- **THEN** that result body is materialized through Resource and omitted inline
+- **AND** the completed envelope still passes through the common Output policy
 
 ### Requirement: Keep ownership of asynchronous operational state in Task
 
@@ -120,7 +121,7 @@ Synchronous execution state SHALL remain invocation-local. When `exec --async` i
 
 ### Requirement: Serialize managed execution per Houdini process
 
-All managed Python executions directed at the same probed Houdini process id SHALL be serialized through one shared target-coordination boundary, regardless of whether the caller is synchronous Exec or Async Task. Different Houdini process ids MAY proceed independently. The per-process concurrency limit SHALL always be one.
+All managed Python executions directed at the same probed Houdini PID/process-incarnation identity SHALL be serialized through one shared target-coordination boundary, regardless of whether the caller is synchronous Exec or Async Task or which operational `--root` it selected. Different process incarnations MAY proceed independently. The per-process concurrency limit SHALL always be one.
 
 #### Scenario: Sync and async execution target the same PID
 - **WHEN** an Async Task is running against PID `1000` and a synchronous Exec targets the same PID
@@ -132,7 +133,7 @@ All managed Python executions directed at the same probed Houdini process id SHA
 
 ### Requirement: Use invocation-local execution transport files
 
-Execution MAY use a unique temporary directory and generated runnable script for transport, stream buffering, markers, and result exchange. Such files SHALL be operational invocation state rather than workspace persistence. Reusable Houdini-side implementation SHALL live below `houbridge/houdini/scripts/execution/`.
+Execution SHALL use the shared Temporary Workspace boundary when it needs a unique temporary directory, generated runnable script, transport buffers, markers, or result-exchange files. Such files SHALL be private operational invocation state rather than workspace persistence or public Temporary Artifacts. Reusable Houdini-side implementation SHALL live below `houbridge/houdini/scripts/execution/`.
 
 #### Scenario: Start a new synchronous execution
 - **WHEN** dispatch begins

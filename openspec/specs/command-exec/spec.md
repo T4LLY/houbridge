@@ -14,7 +14,7 @@ The command syntax SHALL be:
 houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--root PATH] [--hcommand TEXT] [-- SCRIPT_ARGS...]
 ```
 
-`--file` is required. The file SHALL be read as UTF-8 by Houbridge before dispatch. Arguments after `--` SHALL become the executed file's arguments.
+`--file` is required. Houbridge SHALL read the file using Python source-encoding rules compatible with `tokenize.open()` before dispatch. Arguments after `--` SHALL become the executed file's arguments. Async Task metadata SHALL store the normalized absolute file path even when the caller supplied a relative path.
 
 | Option | Constraint | Default / behavior |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--root P
 
 #### Scenario: Execute a file synchronously
 - **WHEN** `houbridge exec --file tool.py` is invoked without `--async`
-- **THEN** Houbridge reads `tool.py` as UTF-8
+- **THEN** Houbridge reads `tool.py` using Python source-encoding rules
 - **AND** waits for that Python execution to complete before returning its execution result
 
 #### Scenario: Execute a file with script arguments
@@ -37,7 +37,9 @@ houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--root P
 #### Scenario: Submit a file asynchronously
 - **WHEN** `houbridge exec --file tool.py --async -- --quality high` is invoked
 - **THEN** the exact source read for submission is used to create the Task
+- **AND** the Task stores the normalized absolute path of `tool.py`
 - **AND** `--quality` and `high` are stored as Task arguments
+- **AND** submission freezes the resolved dispatch context required for later Task Runtime execution, including the resolved `hcommand`, target port, PID/process incarnation, and required transport environment/settings
 
 #### Scenario: Supply execution purpose
 - **WHEN** `houbridge exec --file tool.py --purpose "build preview geometry"` is invoked
@@ -67,35 +69,43 @@ The submitting CLI process SHALL NOT wait for the Python file to finish. A later
 
 ### Requirement: Preserve the minimal successful synchronous execution envelope
 
-A successful synchronous execution SHALL NOT add generic `ok`, `status`, or persistent execution-identity fields. The success object MAY contain only fields required by produced output:
+A successful synchronous execution SHALL NOT add generic `ok`, `status`, or persistent execution-identity fields. Result/stdout/stderr bodies SHALL first be considered independently against the common `[output].inline_max_tokens` threshold. A non-empty body that fits SHALL remain inline without a per-artifact Resource field. A body that exceeds the threshold SHALL be materialized as a Resource and omitted inline. After that envelope is constructed, the complete envelope SHALL still pass through the common whole-result Output Policy and fixed serialized JSON hard limit.
+
+The success object MAY contain only fields required by produced output:
 
 | Field | Type | Presence |
 | --- | --- | --- |
-| `resource` | string | Present when the execution produced a result Resource. |
-| `mime` | string | Present when the result Resource has a MIME type. |
-| `result` | JSON value/string | Present only when the common inline policy permits the result body. |
-| `tokens` | integer | Present when the result is not inline and a token count is known. |
-| `stdout_resource` | string | Present when stdout is Resource-backed. |
-| `stdout` | string | Present when stdout exists and the common inline policy permits it. |
-| `stderr_resource` | string | Present when stderr is Resource-backed. |
-| `stderr` | string | Present when stderr exists and the common inline policy permits it. |
+| `resource` | string | Present when the declared `result` body is Resource-backed. |
+| `mime` | string | Present with a Resource-backed declared result. |
+| `result` | JSON value/string | Present only when the declared result fits the common inline threshold. |
+| `tokens` | integer | Present when the declared result is Resource-backed and a token count is known. |
+| `stdout_resource` | string | Present only when stdout exceeds the common inline threshold and is Resource-backed. |
+| `stdout` | string | Present only when non-empty stdout fits the common inline threshold. |
+| `stderr_resource` | string | Present only when stderr exceeds the common inline threshold and is Resource-backed. |
+| `stderr` | string | Present only when non-empty stderr fits the common inline threshold. |
 
 A synchronous execution that produces no public output MAY emit `{}`.
 
 #### Scenario: Small JSON result
 - **WHEN** a successful synchronous result is JSON and fits the effective inline token threshold
 - **THEN** output includes the decoded `result`
-- **AND** includes the result Resource fields when the result is materialized as a Resource
+- **AND** no per-result `resource` field is required
 
 #### Scenario: Large text result
 - **WHEN** a synchronous result body exceeds the effective inline token threshold
-- **THEN** output includes its `resource`
+- **THEN** output includes its `resource` and `mime`
 - **AND** omits `result`
 - **AND** includes `tokens` when known
 
 #### Scenario: Small stdout
-- **WHEN** synchronous stdout exists and fits inline
-- **THEN** output may contain `stdout` together with `stdout_resource` when stdout is Resource-backed
+- **WHEN** synchronous stdout exists and fits the effective inline token threshold
+- **THEN** output contains `stdout`
+- **AND** omits `stdout_resource`
+
+#### Scenario: Large stdout
+- **WHEN** synchronous stdout exceeds the effective inline token threshold
+- **THEN** output contains `stdout_resource`
+- **AND** omits inline `stdout`
 
 ### Requirement: Emit the synchronous execution failure envelope
 
@@ -122,6 +132,6 @@ A Python failure during synchronous execution SHALL use:
 File-read errors, invalid option values, target-probe failures, and connection failures that occur before synchronous dispatch or asynchronous Task acceptance SHALL use the common BridgeError JSON envelope.
 
 #### Scenario: Python file cannot be read
-- **WHEN** `--file` names a file Houbridge cannot read as UTF-8
+- **WHEN** `--file` names a file Houbridge cannot read using Python source-encoding rules
 - **THEN** the command exits with status `1`
 - **AND** emits the common BridgeError envelope with a file-read error code

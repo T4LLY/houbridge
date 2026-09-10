@@ -84,17 +84,28 @@ A parameter-change example is:
 }
 ```
 
-The five public Action Change shapes SHALL be:
+The six public Action Change shapes SHALL be:
 
 ```json
-{"type":"node_created","node":421,"before":null,"after":{"path":"/obj/geo1/noise1","node_type":"attribnoise"}}
-{"type":"node_deleted","node":421,"before":{"path":"/obj/geo1/noise1","node_type":"attribnoise"},"after":null}
-{"type":"node_renamed","node":417,"before":"/obj/geo1/box1","after":"/obj/geo1/box2"}
-{"type":"parm_changed","node":417,"path":"/obj/geo1/box2","parm":"sizex","before":"1","after":"2"}
-{"type":"input_rewired","node":417,"path":"/obj/geo1/box2","input":0,"before":{"node":416,"path":"/obj/geo1/grid1","output":0},"after":null}
+[
+  {"type":"node_created","node":421,"before":null,"after":{"path":"/obj/geo1/noise1","node_type":"attribnoise"}},
+  {"type":"node_deleted","node":421,"before":{"path":"/obj/geo1/noise1","node_type":"attribnoise"},"after":null},
+  {"type":"node_renamed","node":417,"before":"/obj/geo1/box1","after":"/obj/geo1/box2"},
+  {"type":"parm_changed","node":417,"path":"/obj/geo1/box2","parm":"sizex","before":"1","after":"2"},
+  {"type":"input_rewired","node":417,"path":"/obj/geo1/box2","input":0,"before":{"node":416,"path":"/obj/geo1/grid1","output":0},"after":null},
+  {"type":"flag_changed","node":417,"path":"/obj/geo1/box2","flag":"bypass","before":false,"after":true}
+]
 ```
 
-For `input_rewired`, either connection state MAY be `null`; a non-null connection object SHALL contain exactly `node`, `path`, and `output`.
+For `input_rewired`, either connection state MAY be `null`; a non-null connection object SHALL contain exactly `node`, `path`, and `output`. `flag_changed` SHALL use one of the supported flags available for that node: `bypass`, `display`, `render`, `template`, or `selectable_template`.
+
+For `parm_changed`, normal `before`/`after` values are raw strings. When one value exceeded the History inline raw-value bound, that side SHALL instead use exactly:
+
+```json
+{"omitted":true,"resource":"large-parm-value-000","tokens":9138}
+```
+
+The `resource` may later expire under normal Resource retention; `omitted:true` and `tokens` remain part of the session History entry.
 
 #### Scenario: Entry has no tracked changes
 - **WHEN** a recorded execution changed no tracked Action state

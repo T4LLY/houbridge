@@ -78,7 +78,7 @@ Success SHALL contain exactly:
 {"path":"D:/Temp/.../resource-....png"}
 ```
 
-`dump` SHALL support `binary`, `text`, and `json` Resources. It SHALL NOT decode, reserialize, base64-encode, or otherwise transform the payload before publication.
+`dump` SHALL support `binary`, `text`, and `json` Resources. It SHALL NOT decode, reserialize, base64-encode, or otherwise transform the payload before publication. The published dump uses the effective `[resource].ttl_hours` temporary retention duration (72 hours by default); callers requiring long-term storage SHALL copy or move the returned file outside Houbridge-managed temporary storage.
 
 #### Scenario: Dump a binary Resource
 - **WHEN** `resource dump` resolves a Resource with MIME `image/png`
@@ -101,7 +101,7 @@ The syntax SHALL be:
 houbridge resource get RESOURCE_ID [--root ROOT] [--full]
 ```
 
-`--full` MAY bypass only the configured soft Resource inline-read threshold. It SHALL NOT bypass the fixed 65536-byte CLI hard boundary.
+`--full` MAY bypass only the configured soft Resource inline-read threshold. It SHALL NOT bypass the fixed 65536-byte final serialized CLI JSON hard boundary.
 
 Small text success SHALL be:
 
@@ -133,7 +133,7 @@ A `binary` Resource SHALL use:
 - **THEN** the complete body may be returned
 
 #### Scenario: Resource exceeds hard boundary
-- **WHEN** a `text` or `json` Resource exceeds 65536 bytes
+- **WHEN** inlining a `text` or `json` Resource would make the final serialized `resource get` JSON exceed 65536 bytes
 - **THEN** `get` does not inline the body even with `--full`
 - **AND** returns `truncated:true` and `next_offset:0`
 

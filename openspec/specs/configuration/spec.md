@@ -23,8 +23,13 @@ Houbridge SHALL use a global `config.toml` as the base configuration and MAY app
 - **WHEN** `<cwd>/.houbridge.toml` is absent
 - **THEN** Houbridge uses the global configuration without creating the local file
 
-#### Scenario: Config file is malformed or incomplete
-- **WHEN** a required table/value is missing or TOML parsing fails
+#### Scenario: Local config is partial
+- **WHEN** `<cwd>/.houbridge.toml` contains only a permitted subset of settings
+- **THEN** it is accepted as an override layer
+- **AND** required completeness is evaluated after merge with global configuration
+
+#### Scenario: Effective config is malformed or incomplete
+- **WHEN** TOML parsing fails or the merged effective configuration lacks a required table/value
 - **THEN** Houbridge reports an invalid-configuration error
 
 ### Requirement: Resolve Houbridge settings from configuration and invocation arguments
@@ -50,7 +55,7 @@ Houbridge-specific persistent settings SHALL come from TOML configuration or exp
 
 ### Requirement: Keep shared operational settings global-only
 
-`[storage].root`, `[resource].ttl_hours`, and `[task].max_concurrency` SHALL be global-only settings because they govern stores or coordination shared across working directories. `<cwd>/.houbridge.toml` SHALL NOT override these keys. If a local configuration contains one of these global-only keys, configuration loading SHALL fail as invalid rather than silently applying different policy to the same shared operational state.
+`[storage].root`, `[resource].ttl_hours`, `[task].max_concurrency`, and `[screenshot].retention_hours` SHALL be global-only settings because they govern stores or coordination shared across working directories. `<cwd>/.houbridge.toml` SHALL NOT override these keys. If a local configuration contains one of these global-only keys, configuration loading SHALL fail as invalid rather than silently applying different policy to the same shared operational state.
 
 An explicit command `--root` remains an invocation-local override of the global operational root where that command contract permits it; it does not mutate `[storage].root`.
 
@@ -58,6 +63,11 @@ An explicit command `--root` remains an invocation-local override of the global 
 - **WHEN** `<cwd>/.houbridge.toml` contains `[resource].ttl_hours`
 - **THEN** configuration loading fails as invalid
 - **AND** the shared `resources.db` is not subject to cwd-dependent retention rules
+
+#### Scenario: Local config attempts to change capture retention
+- **WHEN** `<cwd>/.houbridge.toml` contains `[screenshot].retention_hours`
+- **THEN** configuration loading fails as invalid
+- **AND** cleanup policy for the shared managed capture namespace does not vary by cwd
 
 #### Scenario: Invocation supplies root explicitly
 - **WHEN** a command accepts `--root` and supplies a different operational root
@@ -133,17 +143,17 @@ The inspection settings control bounded Resource reading/search. `ttl_hours` con
 
 ### Requirement: Configure Async Task concurrency only
 
-The generated configuration SHALL define `[task].max_concurrency = 1`. The value SHALL be an integer greater than or equal to `1` and SHALL be global-only. This setting SHALL limit concurrently running Async Tasks across Houbridge and SHALL NOT count synchronous `exec` invocations as global Task slots. Per-Houdini-PID serialization remains fixed at one independently of this setting.
+The generated configuration SHALL define `[task].max_concurrency = 1`. The value SHALL be an integer greater than or equal to `1` and SHALL be global-only. This setting SHALL limit concurrently running Async Tasks sharing one effective global operational root and SHALL NOT count synchronous `exec` invocations as Task slots. Exact Houdini process-incarnation serialization remains fixed at one independently of this setting.
 
 Task SHALL not define a separate TTL configuration; terminal Task retention SHALL use the effective `[resource].ttl_hours`.
 
 #### Scenario: Generated Task configuration is used
 - **WHEN** no Task concurrency override is configured
-- **THEN** at most one Async Task runs globally
+- **THEN** at most one Async Task runs for that effective global operational root
 
 #### Scenario: Task concurrency is increased
 - **WHEN** `[task].max_concurrency` is greater than `1`
-- **THEN** additional Async Tasks may run only when the Task and per-PID concurrency rules permit them
+- **THEN** additional Async Tasks may run only when the Task and exact-process coordination rules permit them
 
 
 ### Requirement: Configure session Action History enablement

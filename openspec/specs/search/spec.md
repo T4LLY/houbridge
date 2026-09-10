@@ -133,23 +133,23 @@ Workspace script search SHALL recursively index Python files below `<cwd>/.houbr
 
 ### Requirement: Use the Python module docstring as the script description
 
-For valid Python source, workspace script search SHALL statically extract the module docstring without executing the file. A non-empty module docstring SHALL be treated as file-level `description` metadata and SHALL participate in semantic script ranking together with the file's searchable Python units. The original Python file SHALL remain authoritative for the description.
+For valid Python source, workspace script search SHALL statically extract the module docstring without executing the file. A non-empty module docstring SHALL be treated as file-level `description` metadata and SHALL participate in semantic script ranking together with that file's source text. The original Python file SHALL remain authoritative for the description.
 
 A file without a module docstring SHALL remain fully searchable and SHALL have no fabricated description. A Python file that cannot be parsed as an AST SHALL likewise receive no inferred description.
 
 #### Scenario: Script declares a module docstring
 - **WHEN** a valid Python file has a non-empty module docstring
 - **THEN** the normalized module docstring is retained as that file's `description` metadata
-- **AND** the description contributes to dense script search for semantic units from that file
+- **AND** the description contributes to the dense searchable representation for that file
 - **AND** the file is not executed to obtain the description
 
 #### Scenario: Script has no module docstring
 - **WHEN** a valid Python file has no non-empty module docstring
-- **THEN** its normal semantic units remain searchable
+- **THEN** the file remains searchable from its source representation
 - **AND** no description is fabricated
 
 #### Scenario: Script is temporarily invalid Python
-- **WHEN** AST parsing fails but the file remains searchable as a fallback module document
+- **WHEN** AST parsing fails but the file remains searchable as a file document
 - **THEN** no module description is inferred from comments or arbitrary string literals
 
 ### Requirement: Keep searchable script source authoritative in files
@@ -158,40 +158,42 @@ Workspace script search SHALL persist metadata, content hashes, contentless lexi
 
 #### Scenario: Inspect script-search database storage
 - **WHEN** a script has been indexed
-- **THEN** the database can identify and rank indexed units
+- **THEN** the database can identify and rank current file-level entries
 - **AND** the original file remains the authoritative searchable source
 
 ### Requirement: Keep the script index current automatically
 
-Script search SHALL refresh its workspace namespace as part of normal search when Python files are added, removed, or changed. A public rebuild command SHALL not be required for ordinary use.
+Before serving workspace script results, Script Search SHALL scan the current `.houbridge/python` tree and reconcile its file-level namespace. A newly discovered Python file SHALL be indexed automatically; a changed file SHALL replace its previous derived entry; a file no longer present in the current tree SHALL be removed from the searchable namespace before results are returned. A public rebuild command SHALL not be required for ordinary use.
+
+#### Scenario: A Python file is added
+- **WHEN** a previously unindexed Python file exists in the current `.houbridge/python` tree
+- **THEN** it is indexed before current search results are served
 
 #### Scenario: A Python file changes
-- **WHEN** its current semantic fragment identities differ from the indexed namespace
-- **THEN** stale entries are removed and current entries are indexed before search results are served
+- **WHEN** its current content hash differs from the indexed file entry
+- **THEN** the stale derived entry is replaced before search results are served
+
+#### Scenario: An indexed Python file was removed
+- **WHEN** the indexed path no longer exists in the current `.houbridge/python` tree
+- **THEN** that stale file entry is excluded/removed before search results are served
 
 #### Scenario: Index is already current
-- **WHEN** current semantic entry identities match the indexed namespace
+- **WHEN** current file paths/content hashes and embedding profile match the indexed namespace
 - **THEN** script search reuses the existing derived state
 
-### Requirement: Index semantic Python units
+### Requirement: Index one semantic document per Python file
 
-Valid Python files SHALL be split into searchable units including functions, async functions, classes, nested definitions, and module-level code outside top-level definitions. Unit metadata SHALL retain path, kind, symbol/qualified name, and source line range needed to locate the original file content.
+Workspace script search SHALL index at most one public retrieval document per Python file. The searchable representation SHALL be derived from the file's decoded Python source together with its optional normalized module description. Function, class, nested-symbol, qualified-name, and line-range fragments SHALL NOT become independently ranked script-search entries.
 
-#### Scenario: File contains nested definitions
-- **WHEN** a class or function contains nested classes/functions
-- **THEN** each semantic definition is independently searchable with its qualified name
-
-#### Scenario: File contains module-level statements
-- **WHEN** top-level executable/import/assignment code exists outside definitions
-- **THEN** those statements form a module semantic unit
-
-### Requirement: Tolerate invalid Python as a module document
-
-A non-empty Python file that cannot be parsed as an AST SHALL remain searchable as one module-level document.
+#### Scenario: File contains many functions and classes
+- **WHEN** one Python file contains multiple definitions
+- **THEN** Script Search creates one file-level retrieval entry
+- **AND** one query can return that path at most once
 
 #### Scenario: Python source is temporarily invalid
-- **WHEN** parsing raises a syntax error
-- **THEN** the non-empty file content is indexed as one module unit
+- **WHEN** source decoding succeeds but AST parsing fails
+- **THEN** the non-empty file remains searchable as one file-level document
+- **AND** no fabricated module description is added
 
 ### Requirement: Respect declared Python source encodings
 
@@ -199,18 +201,18 @@ Workspace script reading SHALL use Python's declared source-encoding rules.
 
 #### Scenario: Python file declares a supported encoding
 - **WHEN** `tokenize.open`-compatible encoding metadata is present
-- **THEN** the file is decoded using Python's source encoding rules before semantic fragmentation
+- **THEN** the file is decoded using Python's source encoding rules before building its file-level searchable representation
 
 ### Requirement: Search workspace scripts by embedding similarity
 
-Workspace script query mode SHALL use the configured code embedding profile and dense cosine similarity over current semantic units. An empty index SHALL return an empty logical result without attempting an invalid dense query.
+Workspace script query mode SHALL use the configured code embedding profile and dense cosine similarity over current file-level entries. An empty index SHALL return an empty logical result without attempting an invalid dense query.
 
 #### Scenario: Search current scripts
-- **WHEN** semantic script entries exist
+- **WHEN** current file-level script entries exist
 - **THEN** the query is embedded with the configured profile and ranked by dense similarity
 
 #### Scenario: Workspace has no indexed entries
-- **WHEN** `.houbridge/python` is missing or contains no indexable units
+- **WHEN** `.houbridge/python` is missing or contains no indexable Python files
 - **THEN** script search succeeds with no hits
 
 ### Requirement: Disable workspace script indexing as one feature unit
@@ -243,8 +245,9 @@ The shared search layer SHALL support Model2Vec-compatible embeddings, sqlite-ve
 Derived search storage SHALL distinguish embedding profile identity so vectors created under one code embedding profile are not silently interpreted as another profile.
 
 #### Scenario: Embedding profile changes
-- **WHEN** persisted derived entries use different embedding profiles
-- **THEN** profile identity remains explicit
+- **WHEN** the effective workspace script code profile changes from the profile used by existing file entries
+- **THEN** Script Search refreshes/re-embeds the affected current file entries before serving results under the new profile
+- **AND** profile identity remains explicit
 - **AND** queries consume only compatible vectors unless a feature explicitly spans profiles
 
 ### Requirement: Normalize every public Search score through one shared formatter
@@ -267,9 +270,10 @@ The public serialized score SHALL remain a JSON number and SHALL contain exactly
 - **THEN** the public score is serialized as `317.540323`
 
 #### Scenario: A retrieval feature emits results
-- **WHEN** live node search, live code search, workspace script search, or History search exposes a public score
+- **WHEN** live code search, workspace script search, or History search exposes a public score
 - **THEN** the score passes through the shared formatter
 - **AND** the feature does not implement a local public multiplier or rounding rule
+- **AND** live node search does not emit a public score because its command contract defines no score field
 
 ### Requirement: Keep injected live-search capture code under the Search script boundary
 

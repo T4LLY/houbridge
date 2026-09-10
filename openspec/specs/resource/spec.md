@@ -38,7 +38,7 @@ Resource payload bytes, active metadata, canonical identities, semantic aliases,
 Resource SHALL use one shared content classifier when payload bytes are stored. Classification SHALL proceed in this order:
 
 1. inspect the payload with the `filetype` package; when a recognized binary file signature is found, classify the Resource as `binary` and use the detected MIME type,
-2. otherwise require strict UTF-8 decoding; undecodable payloads or payloads containing binary control characteristics such as NUL SHALL be classified as `binary` with `application/octet-stream` when no more specific MIME is known,
+2. otherwise require strict UTF-8 decoding; undecodable payloads SHALL be classified as `binary` with `application/octet-stream` when no more specific MIME is known. After successful UTF-8 decoding, content SHALL also be classified as binary when it contains U+0000, U+0001..U+0008, U+000B, U+000C, U+000E..U+001F, or U+007F; TAB (U+0009), LF (U+000A), and CR (U+000D) SHALL remain permitted text controls,
 3. for valid text, attempt JSON parsing; valid JSON SHALL be classified as `json` with MIME `application/json`,
 4. remaining valid UTF-8 content SHALL be classified as `text` with MIME `text/plain`.
 
@@ -72,6 +72,20 @@ The lowercase SHA-256 hash of exact payload bytes SHALL be the canonical Resourc
 - **WHEN** identical bytes are written more than once
 - **THEN** all writes resolve to the same canonical SHA-256 identity
 - **AND** only one canonical payload is required in the Resource database
+
+### Requirement: Commit Resource identity, alias, ordinal, and retention atomically
+
+A Resource store operation SHALL coordinate canonical SHA-256 payload upsert, content classification metadata, semantic alias lookup/allocation, semantic ordinal reservation when required, and active-retention refresh in one SQLite transaction boundary. Concurrent writers SHALL not create two semantic aliases or reuse the same ordinal for different canonical Resources. Cleanup SHALL not remove active payload state concurrently with a committed write that refreshes its retention.
+
+#### Scenario: Two writers store the same new payload concurrently
+- **WHEN** both writes resolve to the same canonical SHA-256 identity
+- **THEN** one canonical payload/semantic alias mapping is committed
+- **AND** both writers resolve the same public Resource identity
+
+#### Scenario: Writer races with expiration cleanup
+- **WHEN** a Resource write refreshes retention while cleanup examines the previous deadline
+- **THEN** transaction coordination preserves the newly active payload
+- **AND** alias/ordinal state remains consistent
 
 ### Requirement: Expose stable semantic Resource aliases
 
@@ -138,7 +152,7 @@ Semantic tags SHALL exclude tokenizer continuations, empty tokens, numeric-only 
 
 ### Requirement: Keep Resource metadata minimal
 
-Resource persistence SHALL contain content-inspection metadata needed by the Resource feature: canonical identity, content class, MIME type, byte size, estimated token count when applicable, creation/retention metadata, payload, semantic alias, and semantic tag/ordinal registry. Feature-specific caller context SHALL remain with the caller rather than being copied into generic Resource metadata.
+Resource persistence SHALL contain content-inspection metadata needed by the Resource feature: canonical identity, content class, MIME type, byte size, estimated token count when applicable, creation/retention metadata, payload, semantic alias, and semantic tag/ordinal registry. Resource token counts SHALL be produced by the same shared token-estimator implementation used by the common Output Policy. Feature-specific caller context SHALL remain with the caller rather than being copied into generic Resource metadata.
 
 #### Scenario: Execution stores a result Resource
 - **WHEN** Execution materializes a result
@@ -165,7 +179,7 @@ Execution result, stdout, stderr, and exception/traceback payloads SHALL be stor
 
 Resource retention SHALL use the global-only `[resource].ttl_hours`; the generated default SHALL be `72` hours. Storing payload bytes SHALL establish or refresh the active Resource retention deadline from that write time. Re-storing identical bytes SHALL continue to deduplicate to the same canonical Resource while refreshing its active retention window. Resource reads SHALL NOT extend retention.
 
-Lazy cleanup MAY remove expired payload bytes and active inspection metadata. Semantic alias/canonical mapping and prefix ordinal reservation needed to preserve alias stability and prevent ordinal reuse SHALL survive ordinary TTL cleanup. Long-term preservation outside operational retention SHALL use explicit file materialization such as `resource dump`.
+Lazy cleanup MAY remove expired payload bytes and active inspection metadata. Semantic alias/canonical mapping and prefix ordinal reservation needed to preserve alias stability and prevent ordinal reuse SHALL survive ordinary TTL cleanup. A `resource dump` creates a temporary materialized copy; long-term preservation requires the caller to copy or move that dump outside Houbridge-managed temporary storage before its dump retention expires.
 
 #### Scenario: Identical payload is written again
 - **WHEN** an active canonical Resource is written again before expiry
@@ -187,7 +201,7 @@ Lazy cleanup MAY remove expired payload bytes and active inspection metadata. Se
 
 ### Requirement: Materialize Resource payloads as temporary files
 
-Resource SHALL support materializing the exact stored payload bytes as a completed file in the shared Houbridge temporary-artifact area. Resource SHALL derive the preferred filename extension from the stored MIME using Python's standard `mimetypes.guess_extension()`. When no extension can be inferred, `.bin` SHALL be used. Dumping SHALL NOT re-encode text/JSON or otherwise transform the stored payload.
+Resource SHALL support materializing the exact stored payload bytes as a completed file in the shared Houbridge temporary-artifact area. Resource SHALL derive the preferred filename extension from the stored MIME using Python's standard `mimetypes.guess_extension()`. When no extension can be inferred, `.bin` SHALL be used. Dumping SHALL NOT re-encode text/JSON or otherwise transform the stored payload. A Resource dump artifact SHALL use the effective `[resource].ttl_hours` duration as its temporary-artifact retention from dump publication time; creating or reading the dump SHALL NOT refresh the source Resource's database retention deadline.
 
 #### Scenario: Dump a PNG Resource
 - **WHEN** a Resource has MIME `image/png`
@@ -221,7 +235,7 @@ Resource inspection SHALL use the persisted `text`, `json`, and `binary` content
 - **AND** bounded metadata inspection remains available
 
 #### Scenario: Full read exceeds hard output boundary
-- **WHEN** text exceeds 65536 bytes
+- **WHEN** including the complete body would make the final serialized Resource-get JSON exceed 65536 bytes
 - **THEN** a full read does not inline the body even when the soft threshold is explicitly bypassed
 - **AND** bounded slicing remains available
 

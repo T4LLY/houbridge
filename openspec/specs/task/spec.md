@@ -10,7 +10,7 @@ Define minimal asynchronous execution state for long-running Houdini Python file
 
 Task operational state SHALL be stored in one `tasks.db` below the configured global Houbridge operational storage root. The database SHALL be shared across working directories and Houdini processes rather than split by cwd, target port, or PID.
 
-The Task store SHALL contain enough state to represent Task metadata, appendable stdout/stderr chunks, semantic ordinal allocation, and runtime coordination. A Task SHALL retain at least its id, status, file, args, optional purpose, absolute origin root, target port, target PID, created/started/finished timestamps as applicable, completion Resource id when applicable, the submission-time History enablement decision, and runtime failure information when applicable. The origin root SHALL be the submission process current working directory resolved to an absolute path and SHALL preserve the execution's project/cwd context for later Action History finalization.
+The Task store SHALL contain enough state to represent Task metadata, appendable stdout/stderr chunks, semantic ordinal allocation, frozen dispatch context, and runtime coordination. A Task SHALL retain at least its id, status, normalized absolute file path, args, optional purpose, absolute origin root, target port, target PID, target process-incarnation identity, resolved `hcommand` executable, the required resolved transport environment/settings, created/started/finished timestamps as applicable, completion Resource id when applicable, the submission-time History enablement decision, and runtime failure information when applicable. The origin root SHALL be the submission process current working directory resolved to an absolute path and SHALL preserve the execution's project/cwd context for later Action History finalization.
 
 #### Scenario: Two workspaces submit Tasks
 - **WHEN** Async Tasks are submitted from different current working directories
@@ -103,6 +103,15 @@ Only a successful Task reset SHALL clear Task semantic ordinal state so that all
 - **WHEN** multiple submitters allocate the same semantic base concurrently
 - **THEN** each receives a distinct ordinal
 
+### Requirement: Freeze asynchronous dispatch context at submission
+
+Async submission SHALL resolve and persist the dispatch context required after the submitting CLI process exits. At minimum this context SHALL include the resolved `hcommand` executable, selected target port, target PID/process-incarnation identity, and the resolved transport environment/settings required to invoke SideFX tooling. Task Runtime SHALL use this frozen context rather than re-resolving cwd-local configuration that may have changed after submission.
+
+#### Scenario: Local configuration changes while Task is queued
+- **WHEN** a queued Task was submitted with one resolved `hcommand`/transport context and local configuration later changes
+- **THEN** Task Runtime continues with the frozen submission context
+- **AND** the queued Task does not silently switch to newly resolved tooling or target settings
+
 ### Requirement: Drive queued Tasks through an on-demand background runtime
 
 A successful async submission SHALL be processed by an on-demand Houbridge Task Runtime that can continue after the submitting CLI process exits. The runtime SHALL coordinate through global Task operational state and MAY exit when no Task is running and no queued Task remains.
@@ -123,15 +132,28 @@ After a Task reaches a terminal state, the runtime SHALL check for executable qu
 - **THEN** coordination guarantees that some active/recoverable runtime owns the queued work
 - **AND** the Task is not stranded solely by that race
 
+### Requirement: Recover stale Task Runtime ownership lazily
+
+Task runtime ownership SHALL use recoverable lease/ownership state in `tasks.db` rather than an unbounded permanent active flag. `exec --async` submission and every public `task` command SHALL check for stale runtime ownership after opening the selected Task store. When queued/running recoverable work exists and no valid runtime owner remains, that operation SHALL ensure a replacement on-demand Task Runtime becomes active before completing its normal handoff/read operation. Recovery SHALL obey the no-replay rules for already-started invocations.
+
+#### Scenario: Runtime died while queued work remains
+- **WHEN** a later `exec --async` or `task get/list/reset` observes expired/stale runtime ownership and queued recoverable work
+- **THEN** a replacement Task Runtime is activated or awakened
+- **AND** queued work is not left stranded
+
+#### Scenario: Runtime died after caller Python started
+- **WHEN** lazy recovery encounters a started invocation
+- **THEN** replacement runtime follows started/completion markers and does not re-submit Python solely because ownership was stale
+
 ### Requirement: Limit Async Task concurrency globally and per Houdini process
 
-Task Runtime SHALL enforce `[task].max_concurrency` as the maximum number of concurrently `running` Async Tasks across Houbridge. The value SHALL be at least `1`; the generated default SHALL be `1`. This global count SHALL apply to Async Tasks only. Slot/claim accounting SHALL be coordinated through shared Task operational state so multiple runtime processes cannot each enforce only a process-local limit and collectively exceed the configured global maximum.
+Task Runtime SHALL enforce `[task].max_concurrency` as the maximum number of concurrently `running` Async Tasks sharing the same effective global operational root. The value SHALL be at least `1`; the generated default SHALL be `1`. This per-operational-root count SHALL apply to Async Tasks only. Slot/claim accounting SHALL be coordinated through that root's shared Task operational state so multiple runtime processes cannot each enforce only a process-local limit and collectively exceed the configured maximum for that Task store.
 
-Regardless of the configured global value, arbitrary managed Python execution concurrency per probed Houdini PID SHALL always be `1`, using the shared target-coordination boundary also used by synchronous Exec. A synchronous Exec SHALL not consume an Async Task global slot, but it SHALL still serialize against an Async Task targeting the same Houdini PID.
+Regardless of the configured Task value, arbitrary managed Python execution concurrency per exact probed Houdini process incarnation SHALL always be `1`, using the shared target-coordination boundary also used by synchronous Exec. A synchronous Exec SHALL not consume an Async Task slot, but it SHALL still serialize against an Async Task targeting the same Houdini process incarnation.
 
 #### Scenario: Default concurrency is used
 - **WHEN** `[task].max_concurrency = 1`
-- **THEN** at most one Async Task is running globally
+- **THEN** at most one Async Task is running for that effective global operational root
 
 #### Scenario: Higher global concurrency uses different PIDs
 - **WHEN** `[task].max_concurrency = 3` and executable queued Tasks target PIDs `1000`, `2000`, and `3000`
@@ -145,23 +167,23 @@ Regardless of the configured global value, arbitrary managed Python execution co
 - **WHEN** an Async Task runs against PID `1000` and synchronous Exec targets PID `2000`
 - **THEN** the Task global concurrency setting does not block the synchronous Exec
 
-### Requirement: Bind each Task to the Houdini process selected at submission
+### Requirement: Bind each Task to the exact Houdini process incarnation selected at submission
 
-Async submission SHALL probe the selected local Houdini target and record its target port and operating-system PID. Before dispatch, Task Runtime SHALL probe the bound port again and SHALL execute only if it still resolves to the recorded PID. A changed process SHALL not receive source submitted for the previous process.
+Async submission SHALL probe the selected local Houdini target and record its target port, operating-system PID, and process-start/incarnation identity. Before dispatch, Task Runtime SHALL probe the bound port again and SHALL execute only if both PID and process-incarnation identity still match the submission target. A changed or PID-reused process SHALL not receive source submitted for the previous process.
 
-Target PID and port are internal Task execution metadata and need not be exposed by the public Task JSON contract.
+Target PID, process-incarnation identity, and port are internal Task execution metadata and need not be exposed by the public Task JSON contract.
 
 #### Scenario: Houdini is restarted before queued execution
-- **WHEN** a Task was submitted for PID `1000` and the same port later resolves to PID `2000`
+- **WHEN** a Task was submitted for one PID/process incarnation and the same port later resolves to a different PID or a reused PID with a different incarnation
 - **THEN** the Task becomes `failed`
-- **AND** its source is not executed in PID `2000`
+- **AND** its source is not executed in the replacement process
 - **AND** runtime failure information identifies the target change
 
 ### Requirement: Persist Task stdout and stderr incrementally in tasks.db
 
 The authoritative Task stdout/stderr SHALL be appendable data in `tasks.db`, not one repeatedly rewritten monolithic Task field. Internal output chunks MAY be represented with sequence numbers and stream identity such as `stdout` and `stderr`; chunk structure SHALL remain private to the Task subsystem.
 
-Invocation-local temporary files MAY be used as transport buffers between Houdini execution and Task Runtime. Paths/markers needed to recover an active invocation MAY be retained as private Task runtime metadata while the Task is active. Task Runtime SHALL copy newly flushed stream content into `tasks.db` while the Task is running and SHALL remove invocation-local stream buffers after terminal output has been committed and they are no longer required for recovery.
+Invocation-local temporary files SHALL use the shared Temporary Workspace boundary for active execution transport buffers and started/completion markers. Paths/markers needed to recover an active invocation MAY be retained as private Task runtime metadata while the Task is active. Task Runtime SHALL copy newly flushed stream content into `tasks.db` while the Task is running and SHALL remove the Temporary Workspace after terminal output has been committed and it is no longer required for recovery.
 
 Houbridge SHALL treat stdout/stderr as ordinary Python streams. It SHALL NOT define a progress API, percentage parser, ANSI terminal emulator, carriage-return protocol, or print-event protocol.
 

@@ -49,7 +49,7 @@ Session start SHALL first probe the requested local port. If a compatible Houdin
 
 ### Requirement: Load an explicitly requested HIP file through Session start launch semantics
 
-Session start MAY receive an invocation-local HIP file path for a newly launched Houdini process. When no compatible target is reachable, the launched process SHALL load that file and startup success SHALL not be reported until the normal session probe succeeds. The file path SHALL not become persistent Houbridge configuration.
+Session start MAY receive an invocation-local HIP file path for a newly launched Houdini process. The path SHALL be validated for existence/readability only after reuse probing determines that launch is required. When no compatible target is reachable, the launched process SHALL load that file and startup success SHALL not be reported until the normal session probe succeeds. The file path SHALL not become persistent Houbridge configuration.
 
 The existing reuse-first rule SHALL remain authoritative. When a target is already reachable, Session SHALL reuse that process and SHALL NOT load the launch-only file argument into the running scene.
 
