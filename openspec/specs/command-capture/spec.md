@@ -265,12 +265,15 @@ Supported options SHALL be:
 | `--fps INTEGER` | minimum `1`, default `30`. |
 | `--scale FLOAT` | greater than zero, default `1.0`; final frame dimensions use the shared screenshot maximums. |
 | `--pivot TEXT` | comma-separated world-space `x,y,z`, default `0,0,0`. |
+| `--distance FLOAT` | optional finite camera distance from the pivot; when supplied it SHALL be greater than zero. |
 | `--preset PATH` | existing readable screenshot-preset JSON file; turntable-compatible keys only. |
 | `--port INTEGER` | `1..65535`. |
 | `--root PATH` | common runtime option. |
 | `--hcommand TEXT` | common runtime option. |
 
 Turntable capture SHALL always encode the generated frames with `ffmpeg`. PNG frames are transient encoding intermediates only. After successful encoding, only the MP4 video SHALL be published; frame directories/patterns SHALL NOT be retained or exposed as supported output artifacts.
+
+The orbit radius SHALL be the camera distance from the requested pivot. When `--distance` is omitted, Houbridge SHALL preserve the source Perspective viewport camera's existing distance from the pivot. When `--distance` is supplied, Houbridge SHALL preserve the source camera's direction from the pivot and normalize that offset to exactly the requested distance before generating the orbit. `--distance` values that are non-finite or less than or equal to zero SHALL fail with `invalid_turntable_distance`. If the source camera is located at the pivot so that an orbit direction cannot be derived, turntable capture SHALL fail rather than inventing a direction.
 
 A successful turntable capture SHALL emit exactly:
 
@@ -282,6 +285,15 @@ A successful turntable capture SHALL emit exactly:
 - **WHEN** `houbridge capture turntable` is invoked
 - **THEN** 160 capture frames are used to produce the video at 30 FPS
 - **AND** success contains exactly the encoded video `path`
+
+#### Scenario: Explicit turntable distance is used
+- **WHEN** `--distance 5.0` is supplied and the source camera has a valid direction from the pivot
+- **THEN** every turntable camera position SHALL remain exactly `5.0` world units from the pivot
+- **AND** the starting orbit direction SHALL match the source camera direction from the pivot
+
+#### Scenario: Turntable distance is invalid
+- **WHEN** `--distance` is zero, negative, or non-finite
+- **THEN** the command fails with `invalid_turntable_distance`
 
 #### Scenario: FFmpeg is unavailable
 - **WHEN** turntable capture reaches encoding and no `ffmpeg` executable is available on `PATH`
