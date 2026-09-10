@@ -46,7 +46,7 @@ File execution SHALL support script arguments that become the executed file's `s
 
 ### Requirement: Carry optional purpose as execution context
 
-Execution SHALL accept optional caller-supplied purpose text as execution metadata. Purpose SHALL not alter caller source, `sys.argv`, or Python namespace semantics. When session Action History is enabled, purpose SHALL be supplied to History finalization together with file, args, origin root, source hash/embedding context, status, and Action Changes.
+Execution SHALL accept optional caller-supplied purpose text as execution metadata. Purpose SHALL not alter caller source, `sys.argv`, or Python namespace semantics. When session Action History is enabled, purpose SHALL be supplied to History finalization together with file, args, origin cwd, source hash/embedding context, status, and Action Changes.
 
 #### Scenario: Purpose is supplied
 - **WHEN** synchronous or asynchronous Exec receives purpose text
@@ -130,7 +130,7 @@ Synchronous execution state SHALL remain invocation-local. When `exec --async` i
 
 ### Requirement: Serialize managed execution per Houdini process
 
-All managed Python executions directed at the same probed Houdini PID/process-incarnation identity SHALL be serialized through one shared target-coordination boundary, regardless of whether the caller is synchronous Exec or Async Task or which operational `--root` it selected. Different process incarnations MAY proceed independently. The per-process concurrency limit SHALL always be one.
+All managed Python executions directed at the same probed Houdini PID/process-incarnation identity SHALL be serialized through one shared target-coordination boundary, regardless of whether the caller is synchronous Exec or Async Task. Different process incarnations MAY proceed independently. The per-process concurrency limit SHALL always be one.
 
 #### Scenario: Sync and async execution target the same PID
 - **WHEN** an Async Task is running against PID `1000` and a synchronous Exec targets the same PID

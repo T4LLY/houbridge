@@ -7,25 +7,20 @@ Define syntax, options, bounded inspection semantics, temporary dump behavior, a
 ## Requirements
 
 
-### Requirement: Select the global Resource store explicitly when requested
+### Requirement: Use the configured global Resource store
 
-`resource info`, `resource get`, `resource search`, `resource slice`, and `resource dump` SHALL all accept `--root ROOT` with the common operational-root meaning. When omitted, Resource lookup SHALL use the configured global operational root. When supplied, Resource lookup SHALL use `<ROOT>/resources.db` without changing process cwd.
+`resource info`, `resource get`, `resource search`, `resource slice`, and `resource dump` SHALL resolve the single global `resources.db` below `[storage].data_dir`. Current working directory SHALL NOT select a different Resource database, and the Resource command surface SHALL NOT expose a storage-path override.
 
 #### Scenario: Inspect a Resource from another working directory
-- **WHEN** a Resource was created by a command in another cwd using the same global operational root
-- **THEN** `houbridge resource get RESOURCE_ID` resolves it from the shared global `resources.db`
-
-#### Scenario: Explicit root is supplied
-- **WHEN** `houbridge resource get RESOURCE_ID --root E:/houbridge-state` is invoked
-- **THEN** Resource lookup uses `E:/houbridge-state/resources.db`
-- **AND** the caller's process working directory is unchanged
+- **WHEN** a Resource was created by a command in another cwd
+- **THEN** `houbridge resource get RESOURCE_ID` resolves it from the same configured global `resources.db`
 
 ### Requirement: Expose Resource metadata inspection
 
 The syntax SHALL be:
 
 ```text
-houbridge resource info RESOURCE_ID [--root ROOT]
+houbridge resource info RESOURCE_ID
 ```
 
 `RESOURCE_ID` is a required semantic alias or canonical SHA-256 Resource id.
@@ -67,7 +62,7 @@ A `binary` Resource SHALL use:
 The syntax SHALL be:
 
 ```text
-houbridge resource dump RESOURCE_ID [--root ROOT]
+houbridge resource dump RESOURCE_ID
 ```
 
 `RESOURCE_ID` is a required semantic alias or canonical SHA-256 Resource id. The command SHALL read the exact stored payload bytes, derive an extension from the stored MIME with `mimetypes.guess_extension()`, fall back to `.bin` when no extension is available, and publish the completed file through the shared temporary-artifact boundary.
@@ -98,7 +93,7 @@ Success SHALL contain exactly:
 The syntax SHALL be:
 
 ```text
-houbridge resource get RESOURCE_ID [--root ROOT] [--full]
+houbridge resource get RESOURCE_ID [--full]
 ```
 
 `--full` MAY bypass only the configured soft Resource inline-read threshold. It SHALL NOT bypass the fixed 65536-byte final serialized CLI JSON hard boundary.
@@ -142,7 +137,7 @@ A `binary` Resource SHALL use:
 The syntax SHALL be:
 
 ```text
-houbridge resource slice RESOURCE_ID [--root ROOT] --offset INTEGER --limit INTEGER
+houbridge resource slice RESOURCE_ID --offset INTEGER --limit INTEGER
 ```
 
 `--offset` is required and SHALL be at least `0`. `--limit` is required, SHALL be at least `1`, and SHALL NOT exceed `16384`.
@@ -178,7 +173,7 @@ When more characters remain after the returned chunk, success SHALL use:
 The syntax SHALL be:
 
 ```text
-houbridge resource search RESOURCE_ID QUERY [--root ROOT] [--offset INTEGER]
+houbridge resource search RESOURCE_ID QUERY [--offset INTEGER]
 ```
 
 `QUERY` is required and non-empty. `--offset` defaults to `0` and selects the zero-based hit offset. Search is case-insensitive literal substring search and one response SHALL expose no more than the configured bounded search limit and never more than 100 hits.

@@ -6,13 +6,13 @@ Define the minimal public command surface and JSON responses for observing and r
 
 ## Requirements
 
-### Requirement: Select Task operational persistence with the common root option
+### Requirement: Use the configured global Task store
 
-`task get`, `task list`, and `task reset` SHALL accept `--root ROOT`. When omitted, they SHALL use the configured global operational root. When supplied, they SHALL resolve `<ROOT>/tasks.db` and any Task completion Resource references against `<ROOT>/resources.db` without changing process cwd.
+`task get`, `task list`, and `task reset` SHALL resolve the single global `tasks.db` below `[storage].data_dir`. Current working directory SHALL NOT select a different Task database, and the Task command surface SHALL NOT expose a storage-path override.
 
-#### Scenario: Read Tasks from an explicit operational root
-- **WHEN** `houbridge task list --root E:/houbridge-state` is invoked
-- **THEN** Task lookup uses `E:/houbridge-state/tasks.db`
+#### Scenario: Read Tasks from another working directory
+- **WHEN** `houbridge task list` is invoked from a different cwd than the Task submitter
+- **THEN** Task lookup uses the same configured global `tasks.db`
 - **AND** the caller's current working directory is unchanged
 
 ### Requirement: Expose Task get
@@ -20,7 +20,7 @@ Define the minimal public command surface and JSON responses for observing and r
 The syntax SHALL be:
 
 ```text
-houbridge task get TASK_ID [--root ROOT]
+houbridge task get TASK_ID
 ```
 
 A queued Task SHALL return:
@@ -106,7 +106,7 @@ Retrieving an existing `failed` Task is itself a successful read operation and S
 #### Scenario: Read completed Resource reference
 - **WHEN** the Task is completed
 - **THEN** `resource` is returned
-- **AND** the Resource is resolved from the same effective global operational root when inspected later
+- **AND** the Resource is resolved from the configured global `resources.db` when inspected later
 
 #### Scenario: Read Task with runtime failure
 - **WHEN** a Task failed because of Houbridge runtime state rather than a Python exception
@@ -118,7 +118,7 @@ Retrieving an existing `failed` Task is itself a successful read operation and S
 The syntax SHALL be:
 
 ```text
-houbridge task list [--root ROOT]
+houbridge task list
 ```
 
 Success SHALL use:
@@ -136,7 +136,7 @@ Success SHALL use:
 }
 ```
 
-Each listed Task SHALL contain exactly `id`, `status`, `file`, and `args`. `file` SHALL be the normalized absolute path captured at submission. Entries SHALL be ordered by `created_at` descending, with a stable Task id tie-breaker when required. Internal PID, port, origin root, output chunks, runtime ownership, and semantic ordinal data SHALL not be included in list entries.
+Each listed Task SHALL contain exactly `id`, `status`, `file`, and `args`. `file` SHALL be the normalized absolute path captured at submission. Entries SHALL be ordered by `created_at` descending, with a stable Task id tie-breaker when required. Internal PID, port, origin cwd, output chunks, runtime ownership, and semantic ordinal data SHALL not be included in list entries.
 
 #### Scenario: No Task is retained
 - **WHEN** no non-expired Task exists
@@ -147,7 +147,7 @@ Each listed Task SHALL contain exactly `id`, `status`, `file`, and `args`. `file
 The syntax SHALL be:
 
 ```text
-houbridge task reset [--root ROOT]
+houbridge task reset
 ```
 
 A successful reset SHALL emit `{}`. Reset availability and state-clearing behavior SHALL follow the Task feature specification.

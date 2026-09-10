@@ -11,10 +11,10 @@ Define the public syntax, options, and JSON response contract for inspecting or 
 The syntax SHALL be:
 
 ```text
-houbridge session info [--port INTEGER] [--root PATH] [--hcommand TEXT]
+houbridge session info [--port INTEGER] [--hcommand TEXT]
 ```
 
-`--port` SHALL accept `1..65535`. `--root` and `--hcommand` follow the common runtime contract.
+`--port` SHALL accept `1..65535`. `--hcommand` follows the common target-option contract.
 
 A successful response SHALL contain exactly the public session fields:
 
@@ -46,7 +46,7 @@ A successful response SHALL contain exactly the public session fields:
 The syntax SHALL be:
 
 ```text
-houbridge session start [--file PATH] [--headless] [--executable TEXT] [--port INTEGER] [--root PATH] [--hcommand TEXT]
+houbridge session start [--file PATH] [--headless] [--executable TEXT] [--port INTEGER] [--hcommand TEXT]
 ```
 
 | Option | Constraint | Behavior |
@@ -55,7 +55,6 @@ houbridge session start [--file PATH] [--headless] [--executable TEXT] [--port I
 | `--headless` | boolean flag, default false | Launch a headless Houdini session when a new process must be started. |
 | `--executable TEXT` | optional | Explicit Houdini executable/tool selector for the selected launch mode; automatic discovery is used when omitted. |
 | `--port INTEGER` | `1..65535` | Target/open port override. |
-| `--root PATH` | optional | Common runtime option. |
 | `--hcommand TEXT` | optional | Common runtime option. |
 
 Session start SHALL retain its reuse-first behavior. `--file` and `--headless` are launch-only options. `--file` existence/readability validation SHALL occur only after the initial reuse probe determines that a new process must be launched. If a usable session is already reachable, it SHALL be reused and its probed `headless` value SHALL be returned; the requested launch mode SHALL NOT replace the running process. When no usable session exists on the selected port, Houbridge SHALL launch the selected mode and SHALL report success only after the selected openport is reachable and the session probe succeeds.

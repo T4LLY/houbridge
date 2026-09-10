@@ -8,14 +8,14 @@ Define minimal asynchronous execution state for long-running Houdini Python file
 
 ### Requirement: Persist Task operational state in one global database
 
-Task operational state SHALL be stored in one `tasks.db` below the configured global Houbridge operational storage root. The database SHALL be shared across working directories and Houdini processes rather than split by cwd, target port, or PID.
+Task operational state SHALL be stored in one `tasks.db` below the configured global Houbridge data directory. The database SHALL be shared across working directories and Houdini processes rather than split by cwd, target port, or PID.
 
-The Task store SHALL contain enough state to represent Task metadata, appendable stdout/stderr chunks, semantic ordinal allocation, frozen dispatch context, and runtime coordination. A Task SHALL retain at least its id, status, normalized absolute file path, args, optional purpose, absolute origin root, target port, target PID, target process-incarnation identity, resolved `hcommand` executable, the required resolved transport environment/settings, created/started/finished timestamps as applicable, completion Resource id when applicable, the submission-time History enablement decision, and runtime failure information when applicable. The origin root SHALL be the submission process current working directory resolved to an absolute path and SHALL preserve the execution's project/cwd context for later Action History finalization.
+The Task store SHALL contain enough state to represent Task metadata, appendable stdout/stderr chunks, semantic ordinal allocation, frozen dispatch context, and runtime coordination. A Task SHALL retain at least its id, status, normalized absolute file path, args, optional purpose, absolute origin cwd, target port, target PID, target process-incarnation identity, resolved `hcommand` executable, the required resolved transport environment/settings, created/started/finished timestamps as applicable, completion Resource id when applicable, the submission-time History enablement decision, and runtime failure information when applicable. The origin cwd SHALL be the submission process current working directory resolved to an absolute path and SHALL preserve the execution's project/cwd context for later Action History finalization.
 
 #### Scenario: Two workspaces submit Tasks
 - **WHEN** Async Tasks are submitted from different current working directories
 - **THEN** both Tasks are discoverable through the same global Task command surface
-- **AND** their origin roots remain distinct Task metadata
+- **AND** their origin cwd values remain distinct Task metadata
 
 #### Scenario: Different Houdini processes submit Tasks
 - **WHEN** Tasks target different Houdini PIDs
@@ -147,13 +147,13 @@ Task runtime ownership SHALL use recoverable lease/ownership state in `tasks.db`
 
 ### Requirement: Limit Async Task concurrency globally and per Houdini process
 
-Task Runtime SHALL enforce `[task].max_concurrency` as the maximum number of concurrently `running` Async Tasks sharing the same effective global operational root. The value SHALL be at least `1`; the generated default SHALL be `1`. This per-operational-root count SHALL apply to Async Tasks only. Slot/claim accounting SHALL be coordinated through that root's shared Task operational state so multiple runtime processes cannot each enforce only a process-local limit and collectively exceed the configured maximum for that Task store.
+Task Runtime SHALL enforce `[task].max_concurrency` as the maximum number of concurrently `running` Async Tasks in the configured global Task store. The value SHALL be at least `1`; the generated default SHALL be `1`. This global Task-store count SHALL apply to Async Tasks only. Slot/claim accounting SHALL be coordinated through the shared `tasks.db` operational state so multiple runtime processes cannot each enforce only a process-local limit and collectively exceed the configured maximum for that Task store.
 
 Regardless of the configured Task value, arbitrary managed Python execution concurrency per exact probed Houdini process incarnation SHALL always be `1`, using the shared target-coordination boundary also used by synchronous Exec. A synchronous Exec SHALL not consume an Async Task slot, but it SHALL still serialize against an Async Task targeting the same Houdini process incarnation.
 
 #### Scenario: Default concurrency is used
 - **WHEN** `[task].max_concurrency = 1`
-- **THEN** at most one Async Task is running for that effective global operational root
+- **THEN** at most one Async Task is running in the configured global Task store
 
 #### Scenario: Higher global concurrency uses different PIDs
 - **WHEN** `[task].max_concurrency = 3` and executable queued Tasks target PIDs `1000`, `2000`, and `3000`
@@ -243,13 +243,13 @@ If a replacement runtime observes a started Task without a completion marker whi
 
 ### Requirement: Carry History context through asynchronous execution
 
-Async submission SHALL capture the optional `purpose`, absolute origin root, file, args, source hash/source body, the effective `[history].enabled` decision, and the effective requested `[search.embedding].code_profile` needed to finalize the same Action History semantics as synchronous Execution. The captured profile is submission context for a History database that does not yet exist; if the bound process incarnation already has a History database with a pinned code profile when the Task later starts, that database-pinned profile SHALL take precedence. Task Runtime SHALL start Action Change recording only when the queued Python invocation actually starts and History was enabled for that submission. Queue wait and Task runtime bookkeeping SHALL not create History entries by themselves.
+Async submission SHALL capture the optional `purpose`, absolute origin cwd, file, args, source hash/source body, the effective `[history].enabled` decision, and the effective requested `[search.embedding].code_profile` needed to finalize the same Action History semantics as synchronous Execution. The captured profile is submission context for a History database that does not yet exist; if the bound process incarnation already has a History database with a pinned code profile when the Task later starts, that database-pinned profile SHALL take precedence. Task Runtime SHALL start Action Change recording only when the queued Python invocation actually starts and History was enabled for that submission. Queue wait and Task runtime bookkeeping SHALL not create History entries by themselves.
 
 When a started invocation reaches a normal Python terminal outcome, Task Runtime SHALL offer the finalized execution context and Action Change set to the History service. A Python exception SHALL produce a `failed` History action when the session History can be finalized. History persistence failure SHALL not cause the caller Python to be replayed or change a successfully determined Python outcome.
 
 #### Scenario: Async execution was submitted with purpose
 - **WHEN** `exec --async --purpose "build preview geometry"` later starts in Houdini
-- **THEN** Task Runtime supplies that purpose and the captured origin root to History finalization
+- **THEN** Task Runtime supplies that purpose and the captured origin cwd to History finalization
 
 #### Scenario: Embedding configuration changes while a Task is queued
 - **WHEN** a Task was submitted while the effective requested History code profile was A and local configuration later changes to B before that Task starts
@@ -272,13 +272,13 @@ When a started invocation reaches a normal Python terminal outcome, Task Runtime
 
 ### Requirement: Finalize successful Task output as one global Resource
 
-After successful Python completion and final stdout/stderr collection, Task SHALL create one immutable JSON Resource in `resources.db` under the same effective global operational root as its `tasks.db`. The Resource payload SHALL contain exactly:
+After successful Python completion and final stdout/stderr collection, Task SHALL create one immutable JSON Resource in the configured global `resources.db` beside the global `tasks.db`. The Resource payload SHALL contain exactly:
 
 ```json
 {"stdout":"...","stderr":"..."}
 ```
 
-Task file path, arguments, purpose, id, timestamps, PID, origin root, and other Task metadata SHALL NOT be duplicated into this completion Resource. Resource creation SHALL complete before Task status is committed as `completed`. The terminal Task SHALL retain the Resource id; Resource resolution uses the Task command's effective global operational root rather than the Task origin cwd.
+Task file path, arguments, purpose, id, timestamps, PID, origin cwd, and other Task metadata SHALL NOT be duplicated into this completion Resource. Resource creation SHALL complete before Task status is committed as `completed`. The terminal Task SHALL retain the Resource id; Resource resolution always uses the configured global `resources.db`; Task origin cwd is execution context only and does not select persistence.
 
 #### Scenario: Task completes successfully
 - **WHEN** Python exits successfully and stream collection is complete

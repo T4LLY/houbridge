@@ -8,10 +8,10 @@ Define a minimal, session-scoped Action History that lets AI callers recall mana
 
 ### Requirement: Scope one History database to one Houdini process incarnation
 
-History SHALL store one `history.db` per active Houdini process incarnation below the effective global operational root:
+History SHALL store one `history.db` per active Houdini process incarnation below the configured global data directory:
 
 ```text
-<global-root>/history/<session-key>/history.db
+<data-dir>/history/<session-key>/history.db
 ```
 
 `<session-key>` SHALL be derived from the probed Houdini operating-system PID together with an operating-system process-start identity or equivalent process-incarnation value. The session key SHALL not require a persistent scene identifier. History commands SHALL probe the selected Houdini target and resolve only the database belonging to that exact live process incarnation.
@@ -54,7 +54,7 @@ A finalized Action History entry SHALL contain:
 
 - session-local monotonic integer `id`,
 - execution start `time`,
-- absolute origin `root` representing the Exec submission cwd,
+- absolute `cwd` representing the Exec submission working directory,
 - terminal Python `status` of `completed` or `failed`,
 - normalized absolute executed `file` path,
 - script `args`,
@@ -161,7 +161,7 @@ A node created and deleted within the same execution SHALL produce no final Acti
 
 A `parm_changed` Action Change SHALL identify the node session id, final node path, parameter name, and string Before/After states obtained from Houdini raw parameter values without evaluating expressions or expanding variables. The recorder SHALL compare individual `hou.Parm` components so a changed tuple can be represented by the component parameter names that actually differ.
 
-Each Before/After raw string SHALL be encoded as UTF-8 for size accounting. Values of at most 4096 bytes SHALL be stored inline as strings. A value larger than 4096 bytes SHALL not be copied into History; instead the exact raw string SHALL be stored as a normal `text/plain` Resource in the effective global `resources.db`, and the History value SHALL be the object `{"omitted":true,"resource":"<resource-id>","tokens":<estimated-tokens>}`. `tokens` SHALL use the shared Resource/Output token estimator. The Resource obeys normal Resource retention; History does not extend that Resource's TTL.
+Each Before/After raw string SHALL be encoded as UTF-8 for size accounting. Values of at most 4096 bytes SHALL be stored inline as strings. A value larger than 4096 bytes SHALL not be copied into History; instead the exact raw string SHALL be stored as a normal `text/plain` Resource in the configured global `resources.db`, and the History value SHALL be the object `{"omitted":true,"resource":"<resource-id>","tokens":<estimated-tokens>}`. `tokens` SHALL use the shared Resource/Output token estimator. The Resource obeys normal Resource retention; History does not extend that Resource's TTL.
 
 #### Scenario: Expression parameter changes
 - **WHEN** a parameter raw value changes from `$HIP/a.$F.bgeo` to `$HIP/b.$F.bgeo`
@@ -184,11 +184,11 @@ Each session `history.db` SHALL contain the History entries, Action Changes, sou
 
 #### Scenario: Read one recorded action
 - **WHEN** `history get` resolves an id in the current session database
-- **THEN** file, args, purpose when present, root, status, time, and Action Changes are read from that session History database
+- **THEN** file, args, purpose when present, cwd, status, time, and Action Changes are read from that session History database
 
 ### Requirement: Search source semantics and lexical action context through shared primitives
 
-History search SHALL use the shared low-level search primitives. The dense branch SHALL compare the query embedding against stored executed-source embeddings only. The lexical branch SHALL use FTS5/BM25 over a deterministic textual projection of `purpose`, `file`, `args`, and Action Change context including change type, node path/type, parameter name, connection path, and serializable inline Before/After values. Omitted large parameter bodies SHALL not be copied back into History FTS from their Resource payload; the lexical projection may include only the omission marker and bounded metadata already stored in History. Action Change text SHALL not be embedded as an additional semantic document.
+History search SHALL use the shared low-level search primitives. The dense branch SHALL compare the query embedding against stored executed-source embeddings only. The lexical branch SHALL use FTS5/BM25 over a deterministic textual projection of `cwd`, `purpose`, `file`, `args`, and Action Change context including change type, node path/type, parameter name, connection path, and serializable inline Before/After values. Omitted large parameter bodies SHALL not be copied back into History FTS from their Resource payload; the lexical projection may include only the omission marker and bounded metadata already stored in History. Action Change text SHALL not be embedded as an additional semantic document.
 
 History SHALL combine the available dense and lexical candidate rankings with the configured reciprocal-rank-fusion primitive; an empty branch does not prevent the non-empty branch from contributing through the same RRF path. Public History search scores SHALL therefore use the shared RRF score formatter.
 

@@ -8,7 +8,7 @@ Define persistent Houbridge configuration, defaults, layering, validation, and f
 
 ### Requirement: Use global configuration with optional current-directory overrides
 
-Houbridge SHALL use a global `config.toml` as the base configuration and MAY apply `<cwd>/.houbridge.toml` as a deep current-directory override for settings permitted to vary by working directory. Missing local configuration SHALL be normal and SHALL NOT cause a local file to be created automatically. Settings explicitly defined as global-only SHALL be resolved from global configuration or supported invocation overrides rather than from the local override file.
+Houbridge SHALL use a global `config.toml` as the base configuration and MAY apply `<cwd>/.houbridge.toml` as a deep current-directory override for settings permitted to vary by working directory. Missing local configuration SHALL be normal and SHALL NOT cause a local file to be created automatically. Settings explicitly defined as global-only SHALL be resolved from global configuration rather than from the local override file or an invocation-local storage-path override.
 
 #### Scenario: Run without an existing global config file
 - **WHEN** the global Houbridge `config.toml` does not exist
@@ -40,24 +40,24 @@ Houbridge-specific persistent settings SHALL come from TOML configuration or exp
 - **WHEN** a command supplies a supported per-invocation override
 - **THEN** that invocation uses the explicit value without mutating persistent TOML configuration
 
-### Requirement: Configure the global operational storage root
+### Requirement: Configure the global operational data directory
 
-`[storage].root` SHALL select the global operational Houbridge data root. An empty generated value SHALL resolve to the platform-standard Houbridge user data location.
+`[storage].data_dir` SHALL select the single global Houbridge operational data directory. An empty generated value SHALL resolve to the platform-standard Houbridge user data location. Public commands SHALL NOT provide a per-invocation override for this directory.
 
-#### Scenario: Storage root is empty
-- **WHEN** `[storage].root` is the generated empty string
+#### Scenario: Data directory is empty
+- **WHEN** `[storage].data_dir` is the generated empty string
 - **THEN** the platform-standard Houbridge user data directory is used for global operational state
 
-#### Scenario: Storage root is configured
-- **WHEN** `[storage].root` contains a path
+#### Scenario: Data directory is configured
+- **WHEN** `[storage].data_dir` contains a path
 - **THEN** that path is expanded and used for global operational state
+- **AND** commands use that same directory regardless of their current working directory
 
 
 ### Requirement: Keep shared operational settings global-only
 
-`[storage].root`, `[resource].ttl_hours`, `[task].max_concurrency`, and `[screenshot].retention_hours` SHALL be global-only settings because they govern stores or coordination shared across working directories. `<cwd>/.houbridge.toml` SHALL NOT override these keys. If a local configuration contains one of these global-only keys, configuration loading SHALL fail as invalid rather than silently applying different policy to the same shared operational state.
+`[storage].data_dir`, `[resource].ttl_hours`, `[task].max_concurrency`, and `[screenshot].retention_hours` SHALL be global-only settings because they govern stores or coordination shared across working directories. `<cwd>/.houbridge.toml` SHALL NOT override these keys. If a local configuration contains one of these global-only keys, configuration loading SHALL fail as invalid rather than silently applying different policy to the same shared operational state.
 
-An explicit command `--root` remains an invocation-local override of the global operational root where that command contract permits it; it does not mutate `[storage].root`.
 
 #### Scenario: Local config attempts to change Resource TTL
 - **WHEN** `<cwd>/.houbridge.toml` contains `[resource].ttl_hours`
@@ -68,11 +68,6 @@ An explicit command `--root` remains an invocation-local override of the global 
 - **WHEN** `<cwd>/.houbridge.toml` contains `[screenshot].retention_hours`
 - **THEN** configuration loading fails as invalid
 - **AND** cleanup policy for the shared managed capture namespace does not vary by cwd
-
-#### Scenario: Invocation supplies root explicitly
-- **WHEN** a command accepts `--root` and supplies a different operational root
-- **THEN** only that invocation resolves global operational persistence below the supplied path
-- **AND** persistent global configuration is unchanged
 
 ### Requirement: Configure Houdini session target separately from process behavior
 
@@ -143,13 +138,13 @@ The inspection settings control bounded Resource reading/search. `ttl_hours` con
 
 ### Requirement: Configure Async Task concurrency only
 
-The generated configuration SHALL define `[task].max_concurrency = 1`. The value SHALL be an integer greater than or equal to `1` and SHALL be global-only. This setting SHALL limit concurrently running Async Tasks sharing one effective global operational root and SHALL NOT count synchronous `exec` invocations as Task slots. Exact Houdini process-incarnation serialization remains fixed at one independently of this setting.
+The generated configuration SHALL define `[task].max_concurrency = 1`. The value SHALL be an integer greater than or equal to `1` and SHALL be global-only. This setting SHALL limit concurrently running Async Tasks sharing the configured global Task store and SHALL NOT count synchronous `exec` invocations as Task slots. Exact Houdini process-incarnation serialization remains fixed at one independently of this setting.
 
 Task SHALL not define a separate TTL configuration; terminal Task retention SHALL use the effective `[resource].ttl_hours`.
 
 #### Scenario: Generated Task configuration is used
 - **WHEN** no Task concurrency override is configured
-- **THEN** at most one Async Task runs for that effective global operational root
+- **THEN** at most one Async Task runs for the configured global Task store
 
 #### Scenario: Task concurrency is increased
 - **WHEN** `[task].max_concurrency` is greater than `1`

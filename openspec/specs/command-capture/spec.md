@@ -31,7 +31,6 @@ Supported options SHALL be:
 | `--scale FLOAT` | Must be greater than zero; default `1.0`; final dimensions are constrained by the shared screenshot maximums. |
 | `--preset PATH` | Existing readable screenshot-preset JSON file. |
 | `--port INTEGER` | `1..65535`. |
-| `--root PATH` | Common runtime option. |
 | `--hcommand TEXT` | Common runtime option. |
 
 `--info` SHALL NOT be combined with capture directions, `--quad`, non-default `--scale`, or `--preset`. `--quad` SHALL NOT be combined with individual view flags.
@@ -168,7 +167,7 @@ For window crop, cropping SHALL occur before this scale-and-clamp step so the se
 The syntax SHALL be:
 
 ```text
-houbridge capture window [--scale FLOAT] [--crop TEXT] [--preset PATH] [--port INTEGER] [--root PATH] [--hcommand TEXT]
+houbridge capture window [--scale FLOAT] [--crop TEXT] [--preset PATH] [--port INTEGER] [--hcommand TEXT]
 ```
 
 `--scale` defaults to `1.0` and SHALL be greater than zero. `--crop` is optional. `--preset` SHALL identify an existing readable screenshot-preset JSON file and SHALL obey the window-preset restrictions above.
@@ -268,7 +267,6 @@ Supported options SHALL be:
 | `--distance FLOAT` | optional finite camera distance from the pivot; when supplied it SHALL be greater than zero. |
 | `--preset PATH` | existing readable screenshot-preset JSON file; turntable-compatible keys only. |
 | `--port INTEGER` | `1..65535`. |
-| `--root PATH` | common runtime option. |
 | `--hcommand TEXT` | common runtime option. |
 
 Turntable capture SHALL always encode the generated frames with `ffmpeg`. PNG frames are transient encoding intermediates only. After successful encoding, only the MP4 video SHALL be published; frame directories/patterns SHALL NOT be retained or exposed as supported output artifacts.

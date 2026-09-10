@@ -6,21 +6,21 @@ Define the minimal public command surface and JSON responses for recalling and s
 
 ## Requirements
 
-### Requirement: Select current-session History through common target and root options
+### Requirement: Select current-session History through common target options
 
-History commands SHALL accept the common `--port`, `--root`, and `--hcommand` options. `--port`/`--hcommand` select and probe the live Houdini session. `--root` selects the global operational root containing `history/`. History commands SHALL address only the database for the exact selected live process incarnation.
+History commands SHALL accept the common `--port` and `--hcommand` options. Those options select and probe the live Houdini session. History persistence SHALL always resolve from `<data-dir>/history/` below the configured `[storage].data_dir`, and commands SHALL address only the database for the exact selected live process incarnation.
 
-#### Scenario: Explicit operational root and port are supplied
-- **WHEN** `houbridge history list --port 20001 --root E:/houbridge-state` is invoked
+#### Scenario: Explicit port is supplied
+- **WHEN** `houbridge history list --port 20001` is invoked
 - **THEN** Houbridge probes local port `20001`
-- **AND** resolves that process incarnation's History below `E:/houbridge-state/history/`
+- **AND** resolves that process incarnation's History below the configured `<data-dir>/history/`
 
 ### Requirement: Expose History semantic/lexical search
 
 The syntax SHALL be:
 
 ```text
-houbridge history search QUERY [--top-k INTEGER] [--port INTEGER] [--root PATH] [--hcommand TEXT]
+houbridge history search QUERY [--top-k INTEGER] [--port INTEGER] [--hcommand TEXT]
 ```
 
 `QUERY` is required and non-empty. `--top-k` SHALL be `1..50` and default to `10`.
@@ -55,10 +55,10 @@ Success SHALL contain exactly one top-level field, `hits`. Each hit SHALL contai
 The syntax SHALL be:
 
 ```text
-houbridge history get HISTORY_ID [--port INTEGER] [--root PATH] [--hcommand TEXT]
+houbridge history get HISTORY_ID [--port INTEGER] [--hcommand TEXT]
 ```
 
-`HISTORY_ID` is a required positive session-local integer. Success SHALL return the complete public Action History entry. The returned `file` SHALL be the normalized absolute path of the executed Python file captured for the action. The returned `root` field is the absolute cwd/origin root captured for the execution and is independent of the command's `--root` operational-storage option. `purpose` SHALL be omitted when absent. Internal source hash, embedding vectors, embedding profile, FTS data, and session-key metadata SHALL not be emitted.
+`HISTORY_ID` is a required positive session-local integer. Success SHALL return the complete public Action History entry. The returned `file` SHALL be the normalized absolute path of the executed Python file captured for the action. The returned `cwd` field is the normalized absolute current working directory captured when the execution was submitted. `purpose` SHALL be omitted when absent. Internal source hash, embedding vectors, embedding profile, FTS data, and session-key metadata SHALL not be emitted.
 
 A parameter-change example is:
 
@@ -67,7 +67,7 @@ A parameter-change example is:
   "id":42,
   "time":"2026-09-09T13:24:10",
   "status":"completed",
-  "root":"E:/project",
+  "cwd":"E:/project",
   "file":"E:/project/.houbridge/python/build.py",
   "args":["--quality","high"],
   "purpose":"build preview geometry",
@@ -121,7 +121,7 @@ The `resource` may later expire under normal Resource retention; `omitted:true` 
 The syntax SHALL be:
 
 ```text
-houbridge history list [--limit INTEGER] [--port INTEGER] [--root PATH] [--hcommand TEXT]
+houbridge history list [--limit INTEGER] [--port INTEGER] [--hcommand TEXT]
 ```
 
 `--limit` SHALL be a positive integer and default to `20`. Entries SHALL be ordered by action time newest first; `history list` is chronological recall and SHALL NOT apply relevance ranking. Each list entry SHALL contain exactly `id`, `time`, `status`, and `file`, plus `purpose` only when non-empty.
@@ -146,7 +146,7 @@ houbridge history list [--limit INTEGER] [--port INTEGER] [--root PATH] [--hcomm
 
 ### Requirement: Apply the common Output Policy to History results
 
-History search, get, and list SHALL construct their complete logical JSON and pass it through the common Output Policy. When whole-result Resource fallback is required, the Resource SHALL be stored in the effective global `resources.db` and the emitted fallback SHALL follow the common minimal Resource response.
+History search, get, and list SHALL construct their complete logical JSON and pass it through the common Output Policy. When whole-result Resource fallback is required, the Resource SHALL be stored in the configured global `resources.db` and the emitted fallback SHALL follow the common minimal Resource response.
 
 #### Scenario: One History get contains many Action Changes
 - **WHEN** the complete logical entry exceeds the common inline budget

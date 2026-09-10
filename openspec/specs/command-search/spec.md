@@ -24,7 +24,6 @@ Exactly one of positional `QUERY` or `--like NODE_PATH` SHALL be supplied.
 | `--path TEXT` | Restrict capture/search to an exact node path or Houdini child-name glob. |
 | `--recursive` | Include descendants selected by `--path`. |
 | `--port INTEGER` | `1..65535`. |
-| `--root PATH` | Common runtime option. |
 | `--hcommand TEXT` | Common runtime option. |
 
 #### Scenario: Positional query search
@@ -111,7 +110,7 @@ Success SHALL contain exactly one top-level field, `hits`. Each script hit SHALL
 The syntax SHALL be:
 
 ```text
-houbridge search node QUERY [--top-k INTEGER] [--path TEXT] [--recursive] [--port INTEGER] [--root PATH] [--hcommand TEXT]
+houbridge search node QUERY [--top-k INTEGER] [--path TEXT] [--recursive] [--port INTEGER] [--hcommand TEXT]
 ```
 
 `QUERY` is required. `--top-k` SHALL be `1..100` and default to `20`. `--path` restricts selection to an exact Houdini node path or child-name glob. `--recursive` includes descendants of selected nodes.

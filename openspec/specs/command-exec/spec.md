@@ -11,7 +11,7 @@ Define the public syntax, options, and JSON response contract for executing a ca
 The command syntax SHALL be:
 
 ```text
-houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--root PATH] [--hcommand TEXT] [-- SCRIPT_ARGS...]
+houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--hcommand TEXT] [-- SCRIPT_ARGS...]
 ```
 
 `--file` is required. Houbridge SHALL read the file using Python source-encoding rules compatible with `tokenize.open()` before dispatch. After decoding, source containing an actual NUL character (`U+0000`) SHALL be rejected with BridgeError code `invalid_python_source` before synchronous dispatch or asynchronous Task creation. Arguments after `--` SHALL become the executed file's arguments. Async Task metadata SHALL store the normalized absolute file path even when the caller supplied a relative path.
@@ -22,7 +22,6 @@ houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--root P
 | `--purpose TEXT` | optional text | Human/AI-supplied purpose recorded with enabled session Action History. |
 | `--async` | boolean flag | Submit the file as an asynchronous Task instead of waiting for Python completion. |
 | `--port INTEGER` | `1..65535` | Common local target option. |
-| `--root PATH` | optional | Common runtime option. |
 | `--hcommand TEXT` | optional | Common runtime option. |
 
 #### Scenario: Execute a file synchronously

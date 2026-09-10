@@ -98,11 +98,11 @@ Synchronous Execution SHALL own caller source, invocation options, transient tra
 
 ### Requirement: Coordinate managed Python execution by exact Houdini process identity
 
-Managed arbitrary Python execution SHALL be serialized by probed Houdini PID/process-incarnation identity rather than by caller command type. Synchronous Exec and Async Task SHALL acquire the same target serialization boundary. This target coordination SHALL live in a fixed platform-standard per-user Houbridge coordination directory that is independent of `[storage].root` and overridable `--root`, so two invocations selecting different operational roots still cannot execute arbitrary Python concurrently in the same Houdini process. Task's configurable concurrency SHALL remain a separate concern scoped to each effective Task operational root.
+Managed arbitrary Python execution SHALL be serialized by probed Houdini PID/process-incarnation identity rather than by caller command type. Synchronous Exec and Async Task SHALL acquire the same target serialization boundary. This target coordination SHALL live in a fixed platform-standard per-user Houbridge coordination directory that is independent of `[storage].data_dir`, so changing the configured operational data directory cannot create a second execution lock universe for the same Houdini process. Task's configurable concurrency SHALL remain a separate concern scoped to the single configured global Task store.
 
 #### Scenario: Same process is reached by managed executions
 - **WHEN** synchronous and asynchronous callers resolve to the same Houdini process incarnation
-- **THEN** at most one managed arbitrary Python execution runs in that process at a time even when their `--root` values differ
+- **THEN** at most one managed arbitrary Python execution runs in that process at a time
 
 #### Scenario: Two Houdini processes are independent
 - **WHEN** callers resolve to different Houdini process incarnations
@@ -186,14 +186,14 @@ All command payloads SHALL pass through one common Output subsystem. Feature-spe
 
 ### Requirement: Keep Resource persistence database-complete and global
 
-The Resource subsystem SHALL store Resource payload bytes and Resource metadata in one `resources.db` below the effective global operational root. No sibling Resource payload directory is required. Content addressing and semantic aliasing SHALL operate across working directories that use the same effective global root.
+The Resource subsystem SHALL store Resource payload bytes and Resource metadata in one `resources.db` below the configured global data directory. No sibling Resource payload directory is required. Content addressing and semantic aliasing SHALL operate across all working directories using the same global configuration.
 
 #### Scenario: Store a Resource
 - **WHEN** a Resource is created
 - **THEN** its payload, MIME metadata, byte size, token count when applicable, canonical SHA-256 identity, semantic alias, retention metadata, and semantic tag registry are persisted through global `resources.db`
 
 #### Scenario: Two working directories store identical payloads
-- **WHEN** both invocations use the same effective global operational root
+- **WHEN** both invocations use the same configured global data directory
 - **THEN** identical Resource bytes resolve to the same canonical payload and semantic alias
 
 ### Requirement: Separate live, derived, session, and global operational state
@@ -212,7 +212,7 @@ Houbridge SHALL distinguish live Houdini state, workspace-derived script-search 
 
 #### Scenario: A Resource is materialized
 - **WHEN** a command needs an inspectable operational payload handle
-- **THEN** that payload belongs to `resources.db` below the effective global operational root
+- **THEN** that payload belongs to `resources.db` below the configured global data directory
 
 #### Scenario: Async Task owns global runtime state
 - **WHEN** `exec --async` creates a Task
@@ -224,18 +224,18 @@ Houbridge SHALL distinguish live Houdini state, workspace-derived script-search 
 - **THEN** its finalized action-recall entry belongs only to that Houdini process incarnation's History database
 - **AND** node identity inside that History uses Houdini session-local node ids
 
-### Requirement: Keep the global data root operational
+### Requirement: Keep the global data directory operational
 
-The effective global Houbridge data root SHALL own installation/user-level operational state including locks, transient command state, shared `tasks.db`, shared `resources.db`, and session-scoped History databases below `history/`. Workspace Python source and rebuildable `.houbridge/search.db` SHALL remain local to the working directory.
+The configured global Houbridge data directory SHALL own user-level operational state including shared `tasks.db`, shared `resources.db`, and session-scoped History databases below `history/`. Exact-Houdini-process coordination locks SHALL live in the fixed per-user coordination directory defined separately from this configurable data directory. Workspace Python source and rebuildable `.houbridge/search.db` SHALL remain local to the working directory.
 
-#### Scenario: Two working directories use one global root
-- **WHEN** independent workspaces use the same effective Houbridge global root
+#### Scenario: Two working directories use one global data directory
+- **WHEN** independent workspaces use the same configured Houbridge global data directory
 - **THEN** they share Resource and Task operational stores
 - **AND** each workspace keeps its own `.houbridge/python` source and `.houbridge/search.db` derived index
 
 #### Scenario: Different Houdini processes are active
 - **WHEN** two Houdini process incarnations are reachable
-- **THEN** their Action History databases occupy distinct session directories below `<global-root>/history/`
+- **THEN** their Action History databases occupy distinct session directories below `<data-dir>/history/`
 - **AND** they do not require persistent scene UUIDs
 
 ### Requirement: Keep Skill authoring policy separate from runtime ownership

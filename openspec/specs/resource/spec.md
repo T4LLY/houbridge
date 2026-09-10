@@ -8,21 +8,16 @@ Define global, content-addressed Resources used for large or inspectable operati
 
 ### Requirement: Keep Resources self-contained in global operational persistence
 
-Resource lookup, reading, slicing, search, semantic alias resolution, and dump SHALL depend only on Resource persistence, generic configuration, and the effective global operational root. The default operational root SHALL come from `[storage].root`; a command that accepts `--root` MAY select another global operational root for that invocation without changing process cwd.
+Resource lookup, reading, slicing, search, semantic alias resolution, and dump SHALL depend only on Resource persistence, generic configuration, and the configured global data directory from `[storage].data_dir`. Current working directory SHALL NOT select a different Resource database.
 
 #### Scenario: Reopen a Resource from another working directory
-- **WHEN** two commands run from different current working directories but use the same effective global operational root
+- **WHEN** two commands run from different current working directories under the same global configuration
 - **THEN** the later command can resolve a Resource id created by the earlier command
 - **AND** both commands resolve the same global Resource database
 
-#### Scenario: Select another operational root
-- **WHEN** a Resource command supplies `--root E:/houbridge-state`
-- **THEN** Resource persistence resolves from `E:/houbridge-state/resources.db`
-- **AND** process cwd remains unchanged
-
 ### Requirement: Store all Resource state in one global database
 
-Resource payload bytes, active metadata, canonical identities, semantic aliases, semantic tag/ordinal registry, and retention metadata SHALL be stored in `<global-root>/resources.db`. Resource persistence SHALL be database-complete for payload storage.
+Resource payload bytes, active metadata, canonical identities, semantic aliases, semantic tag/ordinal registry, and retention metadata SHALL be stored in `<data-dir>/resources.db`. Resource persistence SHALL be database-complete for payload storage.
 
 #### Scenario: Store a binary Resource
 - **WHEN** arbitrary bytes are stored

@@ -97,26 +97,23 @@ Argument-parser failures that occur before a Houbridge command handler is dispat
 - **THEN** the framework usage error may be plain text
 - **AND** it does not contain Rich box characters or ANSI color sequences
 
-### Requirement: Share target and operational-root options
+### Requirement: Share Houdini target options
 
-Commands that address Houdini directly or access global operational persistence MAY expose the following common options exactly where specified by their command contract. `--root` SHALL have one meaning throughout the CLI: override the global Houbridge operational state root for that invocation. It SHALL NOT change process cwd.
+Commands that address Houdini directly MAY expose the following common target options exactly where specified by their command contract. Global operational persistence SHALL NOT be selected by a command-line path option; it SHALL resolve from the configured global data directory.
 
 | Option | Value | Constraint | Meaning |
 | --- | --- | --- | --- |
 | `--port` | integer | `1..65535` | Override the configured local Houdini openport port. |
-| `--root` | path | optional | Override the global Houbridge operational state root used by that invocation. |
 | `--hcommand` | text/path | optional | Override the configured SideFX `hcommand` executable. |
-
 
 #### Scenario: Explicit port is supplied
 - **WHEN** a command accepts `--port 20001`
 - **THEN** that invocation targets local port `20001`
 
-#### Scenario: Explicit operational root is supplied
-- **WHEN** a command accepts `--root E:/houbridge-state`
-- **THEN** global Resource, Task, History, or overridable transient state used by that invocation resolves below `E:/houbridge-state` as defined by the owning feature
-- **AND** per-Houdini target coordination remains in the fixed per-user coordination scope rather than moving with `--root`
-- **AND** the caller's current working directory is unchanged
+#### Scenario: Command uses global operational persistence
+- **WHEN** a Resource, Task, History, or Output operation requires global operational storage
+- **THEN** it resolves storage from the configured global data directory
+- **AND** every command resolves that same configured global data directory
 
 ### Requirement: Format public date-time values through one shared formatter
 
