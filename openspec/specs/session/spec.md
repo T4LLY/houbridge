@@ -8,7 +8,7 @@ Define discovery, inspection, reuse, and local launch of Houdini sessions withou
 
 ### Requirement: Inspect a reachable Houdini session generically
 
-Session inspection SHALL use one Houdini-side probe for supported GUI and headless sessions. It SHALL obtain the actual Houdini application version, native license category, active Hip path when available, selected local port, whether the session is headless, and the current operating-system process id needed by internal target coordination, without inferring those values from executable name or launch path. Public `session info` SHALL project only the fields defined by its command contract; the probed PID MAY remain internal. `headless` SHALL be derived from Houdini UI availability and SHALL be `true` when the UI is unavailable.
+Session inspection SHALL use one Houdini-side probe for supported GUI and headless sessions. It SHALL obtain the actual Houdini application version, native license category, active Hip path when available, selected local port, whether the session is headless, and the current operating-system process id needed by internal target coordination, without inferring those values from executable name or launch path. Host-side session resolution SHALL combine that PID with an operating-system process-start identity or equivalent incarnation value when a subsystem such as History needs to distinguish PID reuse. Public `session info` SHALL project only the fields defined by its command contract; PID/incarnation identity MAY remain internal. `headless` SHALL be derived from Houdini UI availability and SHALL be `true` when the UI is unavailable.
 
 #### Scenario: Inspect a Commercial session
 - **WHEN** the configured local Houdini openport is reachable
@@ -32,6 +32,11 @@ Session inspection SHALL use one Houdini-side probe for supported GUI and headle
 - **WHEN** Execution or Task needs to serialize or bind work to the reachable Houdini process
 - **THEN** the same session/target probe provides the current operating-system PID internally
 - **AND** public `session info` does not add PID unless its command contract explicitly requires it
+
+#### Scenario: History needs process-incarnation identity
+- **WHEN** History resolves the session database for a reachable Houdini process
+- **THEN** host-side session resolution provides PID plus process-start/incarnation identity
+- **AND** a later process reusing the same PID resolves to a different History session key
 
 ### Requirement: Reuse an already reachable target when starting a session
 

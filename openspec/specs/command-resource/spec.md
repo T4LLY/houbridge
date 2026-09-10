@@ -7,20 +7,18 @@ Define syntax, options, bounded inspection semantics, temporary dump behavior, a
 ## Requirements
 
 
-### Requirement: Select the Resource workspace explicitly when requested
+### Requirement: Select the global Resource store explicitly when requested
 
-`resource info`, `resource get`, `resource search`, `resource slice`, and `resource dump` SHALL all accept `--root ROOT`. When omitted, Resource lookup SHALL use the current working directory as the workspace root. When supplied, Resource lookup SHALL use `<ROOT>/.houbridge/resources.db` without changing the process working directory.
+`resource info`, `resource get`, `resource search`, `resource slice`, and `resource dump` SHALL all accept `--root ROOT` with the common operational-root meaning. When omitted, Resource lookup SHALL use the configured global operational root. When supplied, Resource lookup SHALL use `<ROOT>/resources.db` without changing process cwd.
 
-The same Resource id MAY therefore be resolved from a Task's returned `resource` and `root` values by passing that root to any Resource inspection command.
+#### Scenario: Inspect a Resource from another working directory
+- **WHEN** a Resource was created by a command in another cwd using the same global operational root
+- **THEN** `houbridge resource get RESOURCE_ID` resolves it from the shared global `resources.db`
 
-#### Scenario: Inspect a Resource from another workspace
-- **WHEN** `houbridge resource get RESOURCE_ID --root E:/project` is invoked from another current directory
-- **THEN** Resource lookup uses `E:/project/.houbridge/resources.db`
-- **AND** the caller's process working directory is not changed as a side effect
-
-#### Scenario: Root is omitted
-- **WHEN** a Resource inspection command does not supply `--root`
-- **THEN** the current working directory is used as the Resource workspace root
+#### Scenario: Explicit root is supplied
+- **WHEN** `houbridge resource get RESOURCE_ID --root E:/houbridge-state` is invoked
+- **THEN** Resource lookup uses `E:/houbridge-state/resources.db`
+- **AND** the caller's process working directory is unchanged
 
 ### Requirement: Expose Resource metadata inspection
 

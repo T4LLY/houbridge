@@ -5,14 +5,14 @@ context: |
   Runtime: Python >=3.11 external CLI plus Houdini's bundled Python for injected scripts.
   Houbridge controls an already-running or locally launched Houdini GUI session through Houdini openport and SideFX hcommand.
   The Houdini-side operation language is raw hou Python. Reusable injected source lives under houbridge/houdini/scripts/ and is dispatched per invocation.
-  The top-level feature subsystems are Resource, Output, Session, Capture, Search, and Execution. Shared infrastructure includes configuration, Houdini transport, target coordination, temporary-workspace management, and low-level search primitives.
-  Execution is invocation-local: it executes caller-provided Python and returns produced output without requiring project-scoped execution persistence.
-  Houbridge persistent workspace data is external to the Houdini scene. Resource state is stored in <cwd>/.houbridge/resources.db and workspace script-search derived state is stored in <cwd>/.houbridge/search.db.
-  Resource payloads, metadata, SHA-256 canonical identities, semantic aliases, and semantic tags are stored together in <cwd>/.houbridge/resources.db. Do not create a Resource payload directory.
+  The top-level feature subsystems are Resource, Output, Session, Capture, Search, Execution, Task, and History. Shared infrastructure includes configuration, Houdini transport, target coordination, temporary-workspace management, temporary-artifact publication, and low-level search primitives.
+  Synchronous Execution is invocation-local. Async Task owns queued/running operational state. Session Action History stores only finalized AI action-recall entries for executions that actually start in Houdini.
+  Houbridge persistence is external to the Houdini scene. Global operational state lives below the configured operational root; workspace script-search derived state remains in <cwd>/.houbridge/search.db.
+  Resource payload storage is database-complete in <global-root>/resources.db together with metadata, SHA-256 canonical identities, semantic aliases, and semantic tags. Task state is stored in <global-root>/tasks.db. Session Action History is stored below <global-root>/history/<session>/history.db.
   Workspace Python scripts live below <cwd>/.houbridge/python. Their files are authoritative; search.db contains derived indexing state.
   Live Python/VEX and node search operate on current Houdini state. Live code indexing is transient rather than a persistent workspace index.
   All public command payloads pass through one common Output subsystem. Feature modules do not implement their own token thresholds, Resource fallback, or hard-output limiting.
-  The global Houbridge data root is operational: locks and transient command state may live there, while workspace Resource and script-search data remain local to the working directory.
+  The global Houbridge data root owns operational locks, transient command state, tasks.db, resources.db, and session-scoped History databases. Workspace script source and its rebuildable search index remain local to the working directory.
 
 rules:
   specs:
@@ -22,6 +22,6 @@ rules:
     - Implement only capabilities and persistence explicitly defined by the current specification set.
   design:
     - Keep feature ownership and dependency direction explicit.
-    - Distinguish live Houdini state, workspace-derived search state, Resource state, configuration state, and operational transient state.
+    - Distinguish live Houdini state, workspace-derived search state, global Resource/Task state, session-scoped History state, configuration state, and invocation-local transient state.
     - Construct only the subsystems required by the selected command.
     - Keep Houdini-injected implementation separate from host orchestration.

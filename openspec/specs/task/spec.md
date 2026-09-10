@@ -10,7 +10,7 @@ Define minimal asynchronous execution state for long-running Houdini Python file
 
 Task operational state SHALL be stored in one `tasks.db` below the configured global Houbridge operational storage root. The database SHALL be shared across working directories and Houdini processes rather than split by cwd, target port, or PID.
 
-The Task store SHALL contain enough state to represent Task metadata, appendable stdout/stderr chunks, semantic ordinal allocation, and runtime coordination. A Task SHALL retain at least its id, status, file, args, absolute origin root, target port, target PID, created/started/finished timestamps as applicable, completion Resource id when applicable, and runtime failure information when applicable. The origin root SHALL be the submission process current working directory resolved to an absolute path and SHALL identify the workspace Resource store used for successful Task completion.
+The Task store SHALL contain enough state to represent Task metadata, appendable stdout/stderr chunks, semantic ordinal allocation, and runtime coordination. A Task SHALL retain at least its id, status, file, args, optional purpose, absolute origin root, target port, target PID, created/started/finished timestamps as applicable, completion Resource id when applicable, the submission-time History enablement decision, and runtime failure information when applicable. The origin root SHALL be the submission process current working directory resolved to an absolute path and SHALL preserve the execution's project/cwd context for later Action History finalization.
 
 #### Scenario: Two workspaces submit Tasks
 - **WHEN** Async Tasks are submitted from different current working directories
@@ -219,19 +219,43 @@ If a replacement runtime observes a started Task without a completion marker whi
 - **THEN** replacement runtime finalizes that same Task as `failed`
 - **AND** it does not execute the source again
 
-### Requirement: Finalize successful Task output as one origin-root Resource
+### Requirement: Carry History context through asynchronous execution
 
-After successful Python completion and final stdout/stderr collection, Task SHALL create one immutable JSON Resource in the Resource store belonging to the Task's captured absolute origin root. The Resource payload SHALL contain exactly:
+Async submission SHALL capture the optional `purpose`, absolute origin root, file, args, source hash/source body, and the effective `[history].enabled` decision needed to finalize the same Action History semantics as synchronous Execution. Task Runtime SHALL start Action Change recording only when the queued Python invocation actually starts and History was enabled for that submission. Queue wait and Task runtime bookkeeping SHALL not create History entries by themselves.
+
+When a started invocation reaches a normal Python terminal outcome, Task Runtime SHALL offer the finalized execution context and Action Change set to the History service. A Python exception SHALL produce a `failed` History action when the session History can be finalized. History persistence failure SHALL not cause the caller Python to be replayed or change a successfully determined Python outcome.
+
+#### Scenario: Async execution was submitted with purpose
+- **WHEN** `exec --async --purpose "build preview geometry"` later starts in Houdini
+- **THEN** Task Runtime supplies that purpose and the captured origin root to History finalization
+
+#### Scenario: Task remains queued
+- **WHEN** a Task has not yet started caller Python
+- **THEN** no Action History entry exists solely for its queued state
+
+#### Scenario: Enabled History preflight fails before Task start
+- **WHEN** Task Runtime cannot prepare the required session History store, source embedding, or Action baseline
+- **THEN** caller Python does not start
+- **AND** the Task becomes `failed` through its runtime-failure contract
+
+#### Scenario: Python raises after starting
+- **WHEN** caller Python starts with History enabled and later raises while the Houdini session remains finalizable
+- **THEN** History receives a `failed` action entry with the observed Action Changes
+- **AND** Task stderr retains the Python traceback according to the Task stream contract
+
+### Requirement: Finalize successful Task output as one global Resource
+
+After successful Python completion and final stdout/stderr collection, Task SHALL create one immutable JSON Resource in `resources.db` under the same effective global operational root as its `tasks.db`. The Resource payload SHALL contain exactly:
 
 ```json
 {"stdout":"...","stderr":"..."}
 ```
 
-Task file path, arguments, id, timestamps, PID, and other Task metadata SHALL NOT be duplicated into this completion Resource. Resource creation SHALL complete before Task status is committed as `completed`. The terminal Task SHALL retain the Resource id and origin root required to resolve it.
+Task file path, arguments, purpose, id, timestamps, PID, origin root, and other Task metadata SHALL NOT be duplicated into this completion Resource. Resource creation SHALL complete before Task status is committed as `completed`. The terminal Task SHALL retain the Resource id; Resource resolution uses the Task command's effective global operational root rather than the Task origin cwd.
 
 #### Scenario: Task completes successfully
 - **WHEN** Python exits successfully and stream collection is complete
-- **THEN** the stdout/stderr JSON Resource is created under `<origin-root>/.houbridge/resources.db`
+- **THEN** the stdout/stderr JSON Resource is created in global `resources.db`
 - **AND** only after successful Resource creation does Task become `completed`
 
 #### Scenario: Resource finalization fails

@@ -11,7 +11,7 @@ Define the public syntax, options, and JSON response contract for executing a ca
 The command syntax SHALL be:
 
 ```text
-houbridge exec --file PATH [--async] [--port INTEGER] [--root PATH] [--hcommand TEXT] [-- SCRIPT_ARGS...]
+houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--root PATH] [--hcommand TEXT] [-- SCRIPT_ARGS...]
 ```
 
 `--file` is required. The file SHALL be read as UTF-8 by Houbridge before dispatch. Arguments after `--` SHALL become the executed file's arguments.
@@ -19,6 +19,7 @@ houbridge exec --file PATH [--async] [--port INTEGER] [--root PATH] [--hcommand 
 | Option | Constraint | Default / behavior |
 | --- | --- | --- |
 | `--file PATH` | required readable file path | Python source read on the Houbridge side. |
+| `--purpose TEXT` | optional text | Human/AI-supplied purpose recorded with enabled session Action History. |
 | `--async` | boolean flag | Submit the file as an asynchronous Task instead of waiting for Python completion. |
 | `--port INTEGER` | `1..65535` | Common local target option. |
 | `--root PATH` | optional | Common runtime option. |
@@ -38,9 +39,14 @@ houbridge exec --file PATH [--async] [--port INTEGER] [--root PATH] [--hcommand 
 - **THEN** the exact source read for submission is used to create the Task
 - **AND** `--quality` and `high` are stored as Task arguments
 
+#### Scenario: Supply execution purpose
+- **WHEN** `houbridge exec --file tool.py --purpose "build preview geometry"` is invoked
+- **THEN** the purpose is available to enabled Action History for that execution
+- **AND** it is not injected into the caller script's `sys.argv`
+
 ### Requirement: Return only the Task reference for successful asynchronous submission
 
-When `--async` is supplied, successful submission SHALL persist the queued Task and ensure that the on-demand Task Runtime is active or awakened before returning. Success SHALL contain exactly:
+When `--async` is supplied, successful submission SHALL persist the queued Task, including optional purpose and submission-time History context, and ensure that the on-demand Task Runtime is active or awakened before returning. Success SHALL contain exactly:
 
 ```json
 {"task":"geometry-build-cache-000"}

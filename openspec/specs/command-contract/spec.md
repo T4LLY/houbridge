@@ -16,6 +16,7 @@ The Houbridge CLI SHALL expose the following command families in this specificat
 - `houbridge search ...`
 - `houbridge resource ...`
 - `houbridge task ...`
+- `houbridge history ...`
 
 #### Scenario: Show top-level help
 - **WHEN** the user requests top-level help
@@ -87,20 +88,25 @@ Argument-parser failures that occur before a Houbridge command handler is dispat
 - **THEN** the framework usage error may be plain text
 - **AND** it does not contain Rich box characters or ANSI color sequences
 
-### Requirement: Share runtime target options
+### Requirement: Share target and operational-root options
 
-Commands that address Houdini directly MAY expose the following common options exactly where specified by their command contract. Resource commands define their own `--root` workspace-selection semantics in the Resource command specification.
+Commands that address Houdini directly or access global operational persistence MAY expose the following common options exactly where specified by their command contract. `--root` SHALL have one meaning throughout the CLI: override the global Houbridge operational state root for that invocation. It SHALL NOT change process cwd.
 
 | Option | Value | Constraint | Meaning |
 | --- | --- | --- | --- |
 | `--port` | integer | `1..65535` | Override the configured local Houdini openport port. |
-| `--root` | path | optional | Override the Houbridge operational state root used by that invocation. |
+| `--root` | path | optional | Override the global Houbridge operational state root used by that invocation. |
 | `--hcommand` | text/path | optional | Override the configured SideFX `hcommand` executable. |
 
 
 #### Scenario: Explicit port is supplied
 - **WHEN** a command accepts `--port 20001`
 - **THEN** that invocation targets local port `20001`
+
+#### Scenario: Explicit operational root is supplied
+- **WHEN** a command accepts `--root E:/houbridge-state`
+- **THEN** global Resource, Task, History, lock, or transient state used by that invocation resolves below `E:/houbridge-state` as defined by the owning feature
+- **AND** the caller's current working directory is unchanged
 
 ### Requirement: Format public date-time values through one shared formatter
 

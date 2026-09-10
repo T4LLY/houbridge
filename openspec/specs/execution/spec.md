@@ -35,6 +35,30 @@ File execution SHALL support script arguments that become the executed file's `s
 - **WHEN** execution temporarily changes `sys.argv` and the user source raises
 - **THEN** Houdini's prior `sys.argv` is restored in the execution cleanup path
 
+### Requirement: Carry optional purpose as execution context
+
+Execution SHALL accept optional caller-supplied purpose text as execution metadata. Purpose SHALL not alter caller source, `sys.argv`, or Python namespace semantics. When session Action History is enabled, purpose SHALL be supplied to History finalization together with file, args, origin root, source hash/embedding context, status, and Action Changes.
+
+#### Scenario: Purpose is supplied
+- **WHEN** synchronous or asynchronous Exec receives purpose text
+- **THEN** caller Python observes the same source and argv it would observe without purpose
+- **AND** enabled History can associate the purpose with the finalized action entry
+
+### Requirement: Integrate Action Change capture through the History boundary
+
+When the effective History setting is enabled, managed Execution SHALL initialize the History Action Change recorder immediately before caller Python starts and SHALL finalize it after caller Python reaches a success or Python-exception outcome. The recorder SHALL be owned by History/Houdini-side History instrumentation rather than by Resource or Task persistence. A queued Async Task SHALL not initialize Action Change capture until its caller Python actually starts.
+
+When History is enabled, its pre-start source embedding/session-store/baseline setup SHALL complete before caller Python starts. A setup failure SHALL stop dispatch before caller source executes. After caller Python has started, a History finalization failure SHALL not cause the source to be replayed or redefine its Python success/failure outcome.
+
+#### Scenario: Synchronous Python starts with History enabled
+- **WHEN** caller Python starts inside Houdini
+- **THEN** Action Change capture covers that execution window
+- **AND** History may finalize one session action entry after the Python outcome is known
+
+#### Scenario: Python never starts
+- **WHEN** file validation, target probing, or dispatch establishment fails before the caller source starts
+- **THEN** no Action History entry is created for that attempted execution
+
 ### Requirement: Capture stdout, stderr, result, and Python failure diagnostics
 
 The low-level execution boundary SHALL be able to capture stdout, stderr, a declared `result` value, and Python exception traceback without streaming unbounded bodies directly through the public CLI response. Synchronous Exec MAY expose all of these according to its command contract. Async Task SHALL persist its defined stdout/stderr Task streams and terminal state according to the Task specification.
@@ -86,11 +110,12 @@ Synchronous execution state SHALL remain invocation-local. When `exec --async` i
 
 #### Scenario: Synchronous execution completes
 - **WHEN** result collection and final output construction finish
-- **THEN** no persistent execution record is required for a later command
+- **THEN** Execution retains no persistent operational execution record of its own
+- **AND** any enabled Action History entry remains owned by the History subsystem
 
 #### Scenario: Async execution is submitted
 - **WHEN** Exec accepts a file for asynchronous execution
-- **THEN** Execution does not create a second persistent execution record
+- **THEN** Execution does not duplicate Task operational persistence
 - **AND** Task owns the operational state needed after the submitting CLI exits
 
 ### Requirement: Serialize managed execution per Houdini process

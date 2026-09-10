@@ -209,6 +209,10 @@ The shared search layer SHALL support Model2Vec-compatible embeddings, sqlite-ve
 - **WHEN** a live-code operation requests both lexical and dense rankings
 - **THEN** rankings are fused by reciprocal-rank fusion rather than by combining incomparable raw score magnitudes
 
+#### Scenario: Session Action History performs hybrid recall
+- **WHEN** History supplies lexical and executed-source dense rankings
+- **THEN** it may reuse the same low-level RRF primitive without becoming part of workspace script-search persistence
+
 #### Scenario: Dense vectors already exist for a content/profile pair
 - **WHEN** the same embedding is required again inside a persistence scope that permits caching
 - **THEN** the reusable embedding cache may avoid recomputation
@@ -224,7 +228,7 @@ Derived search storage SHALL distinguish embedding profile identity so vectors c
 
 ### Requirement: Normalize every public Search score through one shared formatter
 
-All public Search `score` values SHALL be produced by one shared Search score-formatting function. Feature-specific result builders SHALL NOT directly multiply or round public scores.
+All public retrieval `score` values produced by Search features or History search SHALL be produced by one shared Search score-formatting function. Feature-specific result builders SHALL NOT directly multiply or round public scores.
 
 The shared formatter SHALL apply metric-specific public scaling before rounding:
 
@@ -241,8 +245,8 @@ The public serialized score SHALL remain a JSON number and SHALL contain exactly
 - **WHEN** the internal RRF score is approximately `0.0317540323`
 - **THEN** the public score is serialized as `317.540323`
 
-#### Scenario: A Search feature emits results
-- **WHEN** live node search, live code search, or workspace script search exposes a public score
+#### Scenario: A retrieval feature emits results
+- **WHEN** live node search, live code search, workspace script search, or History search exposes a public score
 - **THEN** the score passes through the shared formatter
 - **AND** the feature does not implement a local public multiplier or rounding rule
 

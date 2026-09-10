@@ -8,14 +8,14 @@ Define persistent Houbridge configuration, defaults, layering, validation, and f
 
 ### Requirement: Use global configuration with optional current-directory overrides
 
-Houbridge SHALL use a global `config.toml` as the base configuration and MAY apply `<cwd>/.houbridge.toml` as a deep current-directory override. Missing local configuration SHALL be normal and SHALL NOT cause a local file to be created automatically.
+Houbridge SHALL use a global `config.toml` as the base configuration and MAY apply `<cwd>/.houbridge.toml` as a deep current-directory override for settings permitted to vary by working directory. Missing local configuration SHALL be normal and SHALL NOT cause a local file to be created automatically. Settings explicitly defined as global-only SHALL be resolved from global configuration or supported invocation overrides rather than from the local override file.
 
 #### Scenario: Run without an existing global config file
 - **WHEN** the global Houbridge `config.toml` does not exist
 - **THEN** Houbridge creates it with all required tables and generated defaults before loading configuration
 
-#### Scenario: Override one setting for the current directory
-- **WHEN** `.houbridge.toml` supplies one nested setting
+#### Scenario: Override one permitted setting for the current directory
+- **WHEN** `.houbridge.toml` supplies one nested setting that is permitted to vary locally
 - **THEN** that setting overrides the corresponding global value
 - **AND** unspecified settings continue to come from the global configuration
 
@@ -46,6 +46,23 @@ Houbridge-specific persistent settings SHALL come from TOML configuration or exp
 #### Scenario: Storage root is configured
 - **WHEN** `[storage].root` contains a path
 - **THEN** that path is expanded and used for global operational state
+
+
+### Requirement: Keep shared operational settings global-only
+
+`[storage].root`, `[resource].ttl_hours`, and `[task].max_concurrency` SHALL be global-only settings because they govern stores or coordination shared across working directories. `<cwd>/.houbridge.toml` SHALL NOT override these keys. If a local configuration contains one of these global-only keys, configuration loading SHALL fail as invalid rather than silently applying different policy to the same shared operational state.
+
+An explicit command `--root` remains an invocation-local override of the global operational root where that command contract permits it; it does not mutate `[storage].root`.
+
+#### Scenario: Local config attempts to change Resource TTL
+- **WHEN** `<cwd>/.houbridge.toml` contains `[resource].ttl_hours`
+- **THEN** configuration loading fails as invalid
+- **AND** the shared `resources.db` is not subject to cwd-dependent retention rules
+
+#### Scenario: Invocation supplies root explicitly
+- **WHEN** a command accepts `--root` and supplies a different operational root
+- **THEN** only that invocation resolves global operational persistence below the supplied path
+- **AND** persistent global configuration is unchanged
 
 ### Requirement: Configure Houdini session target separately from process behavior
 
@@ -102,7 +119,7 @@ Generated Resource defaults SHALL be:
 - `[resource].search_limit = 10`
 - `[resource].ttl_hours = 72`
 
-The inspection settings control bounded Resource reading/search. `ttl_hours` controls operational Resource retention. These settings SHALL NOT change where Resource payloads are persisted.
+The inspection settings control bounded Resource reading/search. `ttl_hours` controls operational Resource retention and is global-only. These settings SHALL NOT change where Resource payloads are persisted.
 
 #### Scenario: Resource reading uses configured limits
 - **WHEN** a text Resource is inspected
@@ -116,7 +133,7 @@ The inspection settings control bounded Resource reading/search. `ttl_hours` con
 
 ### Requirement: Configure Async Task concurrency only
 
-The generated configuration SHALL define `[task].max_concurrency = 1`. The value SHALL be an integer greater than or equal to `1`. This setting SHALL limit concurrently running Async Tasks across Houbridge and SHALL NOT count synchronous `exec` invocations as global Task slots. Per-Houdini-PID serialization remains fixed at one independently of this setting.
+The generated configuration SHALL define `[task].max_concurrency = 1`. The value SHALL be an integer greater than or equal to `1` and SHALL be global-only. This setting SHALL limit concurrently running Async Tasks across Houbridge and SHALL NOT count synchronous `exec` invocations as global Task slots. Per-Houdini-PID serialization remains fixed at one independently of this setting.
 
 Task SHALL not define a separate TTL configuration; terminal Task retention SHALL use the effective `[resource].ttl_hours`.
 
@@ -127,6 +144,19 @@ Task SHALL not define a separate TTL configuration; terminal Task retention SHAL
 #### Scenario: Task concurrency is increased
 - **WHEN** `[task].max_concurrency` is greater than `1`
 - **THEN** additional Async Tasks may run only when the Task and per-PID concurrency rules permit them
+
+
+### Requirement: Configure session Action History enablement
+
+The generated configuration SHALL define `[history].enabled = true`. This setting MAY be overridden by `<cwd>/.houbridge.toml` because it controls whether executions originating from that working directory contribute Action History. When the effective value is `false`, Execution and Task Runtime SHALL skip History recorder initialization, History entry creation, and source embedding work for that invocation.
+
+#### Scenario: History uses the generated default
+- **WHEN** no History enablement override is supplied
+- **THEN** managed Python executions that actually start in Houdini are eligible for session Action History recording
+
+#### Scenario: Local History is disabled
+- **WHEN** effective `[history].enabled` is `false`
+- **THEN** the invocation does not initialize Action Change capture or write History data
 
 ### Requirement: Configure screenshot limits and retention
 

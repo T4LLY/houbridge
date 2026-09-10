@@ -2,40 +2,36 @@
 
 ## Purpose
 
-Define workspace-local, content-addressed Resources used for large or inspectable payloads. Command JSON schemas are specified separately.
+Define global, content-addressed Resources used for large or inspectable operational payloads. Command JSON schemas are specified separately.
 
 ## Requirements
 
-### Requirement: Keep Resources self-contained
+### Requirement: Keep Resources self-contained in global operational persistence
 
-Resources SHALL be self-contained workspace inspection artifacts. Resource lookup, reading, slicing, search, and semantic alias resolution SHALL depend only on Resource persistence and generic configuration. The default workspace root SHALL be the current working directory; a caller MAY explicitly select another workspace root, in which case Resource persistence SHALL resolve below that root without changing process cwd.
+Resource lookup, reading, slicing, search, semantic alias resolution, and dump SHALL depend only on Resource persistence, generic configuration, and the effective global operational root. The default operational root SHALL come from `[storage].root`; a command that accepts `--root` MAY select another global operational root for that invocation without changing process cwd.
 
-#### Scenario: Reopen a workspace Resource
-- **WHEN** a Resource id from `<cwd>/.houbridge/resources.db` is inspected later
-- **THEN** Resource resolves it from the Resource database without requiring another feature database
+#### Scenario: Reopen a Resource from another working directory
+- **WHEN** two commands run from different current working directories but use the same effective global operational root
+- **THEN** the later command can resolve a Resource id created by the earlier command
+- **AND** both commands resolve the same global Resource database
 
-#### Scenario: Open an explicitly selected workspace Resource
-- **WHEN** a caller selects workspace root `E:/project`
-- **THEN** Resource persistence resolves from `E:/project/.houbridge/resources.db`
-- **AND** the Resource subsystem does not require the process cwd to become `E:/project`
+#### Scenario: Select another operational root
+- **WHEN** a Resource command supplies `--root E:/houbridge-state`
+- **THEN** Resource persistence resolves from `E:/houbridge-state/resources.db`
+- **AND** process cwd remains unchanged
 
-### Requirement: Store all Resource state in one workspace database
+### Requirement: Store all Resource state in one global database
 
-Resource payload bytes, metadata, canonical identities, semantic aliases, and semantic tag registry SHALL be stored in `<workspace-root>/.houbridge/resources.db`, where the workspace root defaults to the current working directory and may be explicitly selected by the caller. The implementation SHALL NOT create `.houbridge/resources/` or another Resource payload-file tree.
+Resource payload bytes, active metadata, canonical identities, semantic aliases, semantic tag/ordinal registry, and retention metadata SHALL be stored in `<global-root>/resources.db`. Resource persistence SHALL be database-complete for payload storage.
 
 #### Scenario: Store a binary Resource
 - **WHEN** arbitrary bytes are stored
-- **THEN** the exact bytes are persisted as database payload data
+- **THEN** the exact bytes are persisted as database payload data in global `resources.db`
 - **AND** the Resource can be read without resolving a filesystem payload path
 
 #### Scenario: Store a text or JSON Resource
 - **WHEN** content is classified as UTF-8 text or JSON
-- **THEN** the exact payload bytes, content class, MIME type, byte size, and estimated token count are persisted in the same Resource database
-
-#### Scenario: Delete local Resource storage
-- **WHEN** `.houbridge/resources.db` is deleted
-- **THEN** previously returned local Resource references from that database may stop resolving
-- **AND** other feature stores remain independent
+- **THEN** the exact payload bytes, content class, MIME type, byte size, estimated token count, and retention metadata are persisted in the same global Resource database
 
 ### Requirement: Classify Resource content from exact payload bytes
 
@@ -142,7 +138,7 @@ Semantic tags SHALL exclude tokenizer continuations, empty tokens, numeric-only 
 
 ### Requirement: Keep Resource metadata minimal
 
-Resource persistence SHALL contain content-inspection metadata needed by the Resource feature: canonical identity, content class, MIME type, byte size, estimated token count when applicable, creation metadata, payload, semantic alias, and semantic tag/ordinal registry. Feature-specific caller context SHALL remain with the caller rather than being copied into generic Resource metadata.
+Resource persistence SHALL contain content-inspection metadata needed by the Resource feature: canonical identity, content class, MIME type, byte size, estimated token count when applicable, creation/retention metadata, payload, semantic alias, and semantic tag/ordinal registry. Feature-specific caller context SHALL remain with the caller rather than being copied into generic Resource metadata.
 
 #### Scenario: Execution stores a result Resource
 - **WHEN** Execution materializes a result
@@ -162,22 +158,32 @@ Execution result, stdout, stderr, and exception/traceback payloads SHALL be stor
 
 #### Scenario: Async Task completes successfully
 - **WHEN** Task finalizes successful stdout/stderr into its completion Resource
-- **THEN** Resource stores the exact Task-defined JSON payload under the Task's captured origin workspace root
+- **THEN** Resource stores the exact Task-defined JSON payload in global `resources.db`
 - **AND** Task-specific metadata is not added to generic Resource metadata
 
-### Requirement: Retain Resources for the configured Resource TTL
+### Requirement: Retain active Resources for 72 hours from the latest write
 
-Resource retention SHALL use `[resource].ttl_hours`. The generated default SHALL be `72` hours. A Resource older than the effective retention duration is eligible for lazy cleanup and SHALL not be treated as a long-term archival store solely because it is content-addressed. Resource reads SHALL NOT extend the configured retention duration.
+Resource retention SHALL use the global-only `[resource].ttl_hours`; the generated default SHALL be `72` hours. Storing payload bytes SHALL establish or refresh the active Resource retention deadline from that write time. Re-storing identical bytes SHALL continue to deduplicate to the same canonical Resource while refreshing its active retention window. Resource reads SHALL NOT extend retention.
 
-Long-term preservation outside the operational Resource retention window SHALL use explicit file materialization such as `resource dump`.
+Lazy cleanup MAY remove expired payload bytes and active inspection metadata. Semantic alias/canonical mapping and prefix ordinal reservation needed to preserve alias stability and prevent ordinal reuse SHALL survive ordinary TTL cleanup. Long-term preservation outside operational retention SHALL use explicit file materialization such as `resource dump`.
 
-#### Scenario: Resource passes its retention window
-- **WHEN** a Resource is older than the effective `[resource].ttl_hours` duration
-- **THEN** Resource cleanup may remove its operational payload/metadata according to the Resource persistence implementation
+#### Scenario: Identical payload is written again
+- **WHEN** an active canonical Resource is written again before expiry
+- **THEN** no duplicate payload is required
+- **AND** its active retention deadline is refreshed from the new write time
+
+#### Scenario: Expired payload is stored again
+- **WHEN** payload bytes were removed by TTL cleanup and the exact canonical bytes are later stored again
+- **THEN** the existing canonical-to-semantic alias mapping is reused
+- **AND** the payload becomes active for a new retention window
 
 #### Scenario: Resource is read repeatedly
 - **WHEN** `resource get` or another inspection command reads an existing Resource
 - **THEN** the read does not extend its configured retention duration
+
+#### Scenario: Resource alias expires from active storage
+- **WHEN** ordinary TTL cleanup removes an expired payload
+- **THEN** its semantic ordinal is not made available for a different canonical Resource
 
 ### Requirement: Materialize Resource payloads as temporary files
 

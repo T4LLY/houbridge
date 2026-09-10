@@ -21,7 +21,7 @@ The system SHALL estimate serialized text/JSON payload token cost through the co
 
 ### Requirement: Provide Resource fallback for oversized command payloads
 
-Every public command SHALL use the common Resource fallback path for result content that would otherwise exceed its inline output budget. Feature implementations SHALL hand the complete logical result to the Output subsystem rather than truncating or inventing feature-specific fallback rules, except for bounded Resource inspection operations whose slicing/search semantics are themselves the requested feature.
+Every public command SHALL use the common Resource fallback path for result content that would otherwise exceed its inline output budget. The fallback Resource SHALL be stored in `resources.db` below the invocation's effective global operational root. Feature implementations SHALL hand the complete logical result to the Output subsystem rather than truncating or inventing feature-specific fallback rules, except for bounded Resource inspection operations whose slicing/search semantics are themselves the requested feature.
 
 #### Scenario: A large Search result is produced
 - **WHEN** the command-specific result exceeds the inline budget
