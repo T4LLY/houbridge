@@ -76,25 +76,31 @@ houbridge search script QUERY [--top-k INTEGER]
 
 `QUERY` is required. `--top-k` SHALL be `1..50` and default to `10`.
 
-Success SHALL contain exactly one top-level field, `hits`. Each script hit SHALL contain exactly `path` and `score`:
+Success SHALL contain exactly one top-level field, `hits`. Each script hit SHALL contain `path` and `score`. When the indexed Python file has a non-empty module description, the hit SHALL also contain `description`:
 
 ```json
 {
   "hits": [
     {
       "path": ".houbridge/python/build.py",
-      "score": 301.278910
+      "score": 301.278910,
+      "description": "Creates preview geometry and configures the material network."
     }
   ]
 }
 ```
 
-Internal semantic-unit metadata such as symbol kind, symbol name, qualified name, line range, namespace, entry id, and content hash SHALL NOT be emitted by this command.
+`description` SHALL be omitted rather than emitted as `null` when the file has no module description. Internal semantic-unit metadata such as symbol kind, symbol name, qualified name, line range, namespace, entry id, and content hash SHALL NOT be emitted by this command.
 
-#### Scenario: Search local scripts
-- **WHEN** a query produces one or more semantic matches
+#### Scenario: Search a described local script
+- **WHEN** a query produces a semantic match from a Python file with a non-empty module description
 - **THEN** the result contains only `hits`
-- **AND** each hit contains exactly `path` and `score`
+- **AND** the hit contains exactly `path`, `score`, and `description`
+
+#### Scenario: Search an undescribed local script
+- **WHEN** a query produces a semantic match from a Python file without a module description
+- **THEN** the hit contains exactly `path` and `score`
+- **AND** no `description` field is emitted
 
 #### Scenario: No script hit exists
 - **WHEN** the script query has no result

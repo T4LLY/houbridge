@@ -9,8 +9,9 @@ context: |
   Synchronous Execution is invocation-local. Async Task owns queued/running operational state. Session Action History stores only finalized AI action-recall entries for executions that actually start in Houdini.
   Houbridge persistence is external to the Houdini scene. Global operational state lives below the configured operational root; workspace script-search derived state remains in <cwd>/.houbridge/search.db.
   Resource payload storage is database-complete in <global-root>/resources.db together with metadata, SHA-256 canonical identities, semantic aliases, and semantic tags. Task state is stored in <global-root>/tasks.db. Session Action History is stored below <global-root>/history/<session>/history.db.
-  Workspace Python scripts live below <cwd>/.houbridge/python. Their files are authoritative; search.db contains derived indexing state.
+  Workspace Python scripts live below <cwd>/.houbridge/python. Their files are authoritative; search.db contains derived indexing state. A Python module docstring is the file-level script description used by local script search.
   Live Python/VEX and node search operate on current Houdini state. Live code indexing is transient rather than a persistent workspace index.
+  The Houbridge Skill is an authoring contract rather than a runtime subsystem; when it creates reusable scripts below .houbridge/python, it follows the Skill specification.
   All public command payloads pass through one common Output subsystem. Feature modules do not implement their own token thresholds, Resource fallback, or hard-output limiting.
   The global Houbridge data root owns operational locks, transient command state, tasks.db, resources.db, and session-scoped History databases. Workspace script source and its rebuildable search index remain local to the working directory.
 

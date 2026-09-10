@@ -131,6 +131,27 @@ Workspace script search SHALL recursively index Python files below `<cwd>/.houbr
 - **WHEN** the current directory changes to another workspace
 - **THEN** script search uses that workspace's `.houbridge/python` tree and `.houbridge/search.db`
 
+### Requirement: Use the Python module docstring as the script description
+
+For valid Python source, workspace script search SHALL statically extract the module docstring without executing the file. A non-empty module docstring SHALL be treated as file-level `description` metadata and SHALL participate in semantic script ranking together with the file's searchable Python units. The original Python file SHALL remain authoritative for the description.
+
+A file without a module docstring SHALL remain fully searchable and SHALL have no fabricated description. A Python file that cannot be parsed as an AST SHALL likewise receive no inferred description.
+
+#### Scenario: Script declares a module docstring
+- **WHEN** a valid Python file has a non-empty module docstring
+- **THEN** the normalized module docstring is retained as that file's `description` metadata
+- **AND** the description contributes to dense script search for semantic units from that file
+- **AND** the file is not executed to obtain the description
+
+#### Scenario: Script has no module docstring
+- **WHEN** a valid Python file has no non-empty module docstring
+- **THEN** its normal semantic units remain searchable
+- **AND** no description is fabricated
+
+#### Scenario: Script is temporarily invalid Python
+- **WHEN** AST parsing fails but the file remains searchable as a fallback module document
+- **THEN** no module description is inferred from comments or arbitrary string literals
+
 ### Requirement: Keep searchable script source authoritative in files
 
 Workspace script search SHALL persist metadata, content hashes, contentless lexical structures when used, embedding vectors/cache, and other derived indexing state without treating database text as the authoritative source body.

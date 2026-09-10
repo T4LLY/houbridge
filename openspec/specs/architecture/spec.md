@@ -229,6 +229,15 @@ The effective global Houbridge data root SHALL own installation/user-level opera
 - **THEN** their Action History databases occupy distinct session directories below `<global-root>/history/`
 - **AND** they do not require persistent scene UUIDs
 
+### Requirement: Keep Skill authoring policy separate from runtime ownership
+
+The Houbridge Skill MAY define mandatory authoring rules for AI-generated workspace scripts, but those rules SHALL not introduce a separate metadata store or runtime persistence boundary. Script descriptions SHALL remain ordinary Python module docstrings in the authoritative `.houbridge/python` files.
+
+#### Scenario: Skill creates a described workspace script
+- **WHEN** the Houbridge Skill creates a reusable Python file below `.houbridge/python`
+- **THEN** its required description is represented by the file's Python module docstring
+- **AND** Search consumes that same docstring without a sidecar description database or custom metadata file
+
 ### Requirement: Implement only the current specification set
 
 Implementation behavior SHALL be derived from the requirements present in the current specification set. Unspecified feature persistence, command families, metadata fields, and cross-subsystem dependencies SHALL not be inferred from older implementations.
