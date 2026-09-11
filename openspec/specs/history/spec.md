@@ -25,6 +25,37 @@ History SHALL store one `history.db` per active Houdini process incarnation belo
 - **THEN** its process-start identity produces a different session key
 - **AND** the earlier History database is not treated as the new process's History
 
+### Requirement: Destroy current History when Houdini replaces the scene
+
+Within one live Houdini process incarnation, a successful scene replacement SHALL terminate the current Action History lifetime. Houbridge SHALL destroy the current process-incarnation History database after Houdini reports `hou.hipFileEventType.AfterLoad` or `hou.hipFileEventType.AfterClear`. History reads SHALL then observe an empty current History until new entries are recorded, and the next History-enabled execution SHALL initialize a fresh History database as needed. This reset SHALL NOT require or persist a scene UUID or other persistent scene identifier.
+
+`AfterMerge`, Save, and Save As SHALL NOT reset History because they do not replace the current scene. A load attempt that does not reach `AfterLoad` SHALL NOT destroy the existing History solely because a load was attempted.
+
+If `AfterLoad` or `AfterClear` occurs while a managed Python invocation is recording History, that invocation's in-memory Action baseline and pending History entry SHALL be discarded. Houbridge SHALL NOT compare state captured before the scene replacement with the replacement scene or commit that invocation's History entry after the boundary.
+
+#### Scenario: Another HIP file is opened successfully
+- **WHEN** Houdini reports `AfterLoad` for a successfully loaded scene
+- **THEN** the previous scene's History database is destroyed
+- **AND** History list/search for that live process observes an empty current History until new actions are recorded
+
+#### Scenario: File New clears the current scene
+- **WHEN** Houdini reports `AfterClear` after the current scene is cleared
+- **THEN** the previous scene's History database is destroyed
+- **AND** subsequent recorded actions belong only to the new empty scene
+
+#### Scenario: Another HIP file is merged
+- **WHEN** Houdini reports `AfterMerge`
+- **THEN** the current History remains intact
+
+#### Scenario: The current HIP file is saved
+- **WHEN** the current scene is saved or saved under another path
+- **THEN** the current History remains intact
+
+#### Scenario: Scene replacement occurs during managed Python
+- **WHEN** an invocation with History enabled causes or observes `AfterLoad` or `AfterClear` after caller Python has started
+- **THEN** its pre-replacement Action baseline and pending History entry are discarded
+- **AND** no Action Changes are finalized across the scene boundary
+
 ### Requirement: Use Houdini node session ids inside one session History
 
 Action History SHALL identify tracked Houdini nodes with the integer `hou.Node.sessionId()` value obtained in the owning Houdini process. Node session ids SHALL be interpreted only within the History database selected for that process incarnation. Stored paths SHALL provide human-readable context but SHALL not replace session-local node identity.
