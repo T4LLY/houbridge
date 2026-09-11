@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the public syntax, options, and JSON response contract for inspecting or starting a local Houdini session.
+Define the public syntax, options, and JSON response contract for creating, inspecting, and selecting registered local Houdini sessions.
 
 ## Requirements
 
@@ -11,116 +11,149 @@ Define the public syntax, options, and JSON response contract for inspecting or 
 The syntax SHALL be:
 
 ```text
-houbridge session info [--port INTEGER] [--hcommand TEXT]
+houbridge session info [--session INTEGER]
 ```
 
-`--port` SHALL accept `1..65535`. `--hcommand` follows the common target-option contract.
+`--session` SHALL be a positive registered session number.
 
-A successful response SHALL contain exactly the public session fields:
+When `--session` is omitted, `session info` SHALL inspect all registered sessions and return the registry primary selection plus one public info object per session:
 
 ```json
 {
-  "port": 18888,
+  "primary": 3,
+  "sessions": [
+    {
+      "session": 1,
+      "port": 49152,
+      "pid": 12340,
+      "version": "22.0.429",
+      "license": "Commercial",
+      "file": "C:/project/a.hip",
+      "headless": false
+    },
+    {
+      "session": 3,
+      "port": 49154,
+      "pid": 18744,
+      "version": "22.0.429",
+      "license": "Commercial",
+      "file": "C:/project/b.hip",
+      "headless": false
+    }
+  ]
+}
+```
+
+`primary` SHALL be `null` when no primary session is selected.
+
+When `--session N` is supplied, success SHALL contain exactly the selected session's public fields plus whether it is primary:
+
+```json
+{
+  "session": 3,
+  "primary": true,
+  "port": 49154,
+  "pid": 18744,
   "version": "22.0.429",
   "license": "Commercial",
-  "file": "C:/project/test.hip",
+  "file": "C:/project/b.hip",
   "headless": false
 }
 ```
 
-`file` MAY be `null`. `headless` SHALL be a boolean describing the probed session and SHALL be `true` when Houdini reports that its UI is unavailable. Internal target identity SHALL NOT be emitted.
+`file` MAY be `null`. `headless` SHALL be a boolean describing the probed session and SHALL be `true` when Houdini reports that its UI is unavailable. `pid` is a public `session info` field. Process-incarnation identity remains internal.
 
-#### Scenario: Read an active GUI session
-- **WHEN** the local Houdini target responds to the session probe with UI available
-- **THEN** `port`, `version`, `license`, `file`, and `headless` are emitted
-- **AND** `headless` is `false`
-- **AND** `target_id` is not emitted
+#### Scenario: Read all registered sessions
+- **WHEN** `houbridge session info` is invoked without `--session`
+- **THEN** every registered session is inspected
+- **AND** the response contains `primary` and `sessions`
+- **AND** each session entry contains `session`, `port`, `pid`, `version`, `license`, `file`, and `headless`
+
+#### Scenario: Read one registered session
+- **WHEN** `houbridge session info --session 3` is invoked
+- **THEN** only session `3` is inspected
+- **AND** the response additionally reports whether session `3` is the current primary
 
 #### Scenario: Read an active headless session
-- **WHEN** the local Houdini target responds to the session probe with UI unavailable
+- **WHEN** the selected Houdini target reports that its UI is unavailable
 - **THEN** `headless` is `true`
 - **AND** the remaining public fields use the same schema as a GUI session
 
-### Requirement: Expose session start
+### Requirement: Expose session new
 
 The syntax SHALL be:
 
 ```text
-houbridge session start [--file PATH] [--headless] [--executable TEXT] [--port INTEGER] [--hcommand TEXT]
+houbridge session new [--file PATH] [--headless] [--hcommand PATH]
 ```
 
 | Option | Constraint | Behavior |
 | --- | --- | --- |
-| `--file PATH` | optional path | HIP file validated and loaded only when a new Houdini process must be launched. |
-| `--headless` | boolean flag, default false | Launch a headless Houdini session when a new process must be started. |
-| `--executable TEXT` | optional | Explicit Houdini executable/tool selector for the selected launch mode; automatic discovery is used when omitted. |
-| `--port INTEGER` | `1..65535` | Target/open port override. |
-| `--hcommand TEXT` | optional | Common runtime option. |
+| `--file PATH` | optional readable path | Launch the new Houdini process with this HIP file. |
+| `--headless` | boolean flag, default false | Launch a new headless Houdini session. |
+| `--hcommand PATH` | optional executable path | Override the Houdini launch executable for this invocation. It SHALL identify an executable only and SHALL NOT contain launch arguments. |
 
-Session start SHALL retain its reuse-first behavior. `--file` and `--headless` are launch-only options. `--file` existence/readability validation SHALL occur only after the initial reuse probe determines that a new process must be launched. If a usable session is already reachable, it SHALL be reused and its probed `headless` value SHALL be returned; the requested launch mode SHALL NOT replace the running process. When no usable session exists on the selected port, Houbridge SHALL launch the selected mode and SHALL report success only after the selected openport is reachable and the session probe succeeds.
+`session new` SHALL always create a new Houdini process. It SHALL NOT probe for or reuse an already-running Houdini process before launch.
 
-If a usable session already exists, success SHALL be:
+Before allocating the new session number, Houbridge SHALL remove stale registry entries whose recorded PID is no longer alive. It SHALL then allocate the smallest unused positive session number. Houdini SHALL choose the TCP port by executing `openport -a`; Houbridge SHALL NOT choose or probe candidate free ports itself.
 
-```json
-{
-  "launched": false,
-  "session": {
-    "port": 18888,
-    "version": "22.0.429",
-    "license": "Commercial",
-    "file": "C:/project/test.hip",
-    "headless": false
-  }
-}
-```
-
-If Houbridge launches Houdini, success SHALL additionally include `pid` and set `launched` true:
+Successful creation SHALL return exactly:
 
 ```json
 {
-  "launched": true,
-  "pid": 12345,
-  "session": {
-    "port": 18888,
-    "version": "22.0.429",
-    "license": "Commercial",
-    "file": "C:/project/test.hip",
-    "headless": false
-  }
+  "session": 2,
+  "port": 49153,
+  "pid": 18744
 }
 ```
 
-#### Scenario: Existing session is reused
-- **WHEN** session probing succeeds before a new process is launched
-- **THEN** `launched` is `false`
-- **AND** `pid` is omitted
-- **AND** `session.headless` reflects the existing process rather than the requested launch mode
+#### Scenario: Create the first session
+- **WHEN** no Session registry has previously been created and `session new` succeeds
+- **THEN** the new session number is `1`
+- **AND** session `1` is automatically recorded as `primary`
 
-#### Scenario: New GUI process is launched
-- **WHEN** no usable session exists and startup succeeds without `--headless`
-- **THEN** `launched` is `true`
-- **AND** `pid` contains the launched process id
-- **AND** `session.headless` is `false`
-- **AND** `session` contains the same public fields as `session info`
+#### Scenario: Create an additional session
+- **WHEN** a Session registry already exists and `session new` succeeds
+- **THEN** the smallest unused positive session number is assigned
+- **AND** the existing primary selection is not changed
 
-#### Scenario: New headless process is launched
-- **WHEN** no usable session exists and startup succeeds with `--headless`
-- **THEN** `launched` is `true`
-- **AND** `pid` contains the launched process id
-- **AND** `session.headless` is `true`
-- **AND** `session` contains the same public fields as `session info`
+#### Scenario: Reuse a stale session number
+- **WHEN** session `2` is stale and sessions `1` and `3` are live when `session new` begins
+- **THEN** the stale entry is removed
+- **AND** the new process is registered as session `2`
 
-#### Scenario: New Houdini process is launched with a HIP file
-- **WHEN** no usable session exists and `--file C:/project/test.hip` is supplied
-- **THEN** the launched Houdini process opens that file
-- **AND** the successful session probe reports the loaded HIP through `session.file`
+#### Scenario: Previous primary is stale
+- **WHEN** stale cleanup removes the session named by `primary`
+- **THEN** `primary` is unset
+- **AND** the newly created session is not automatically promoted merely because no primary remains
 
-#### Scenario: Invalid launch file is supplied while a session is already reachable
-- **WHEN** `--file` names a missing/unreadable path but the selected session probe succeeds
-- **THEN** the existing session is reused
-- **AND** launch-file validation is not performed because no launch is required
+#### Scenario: Explicit launch executable is supplied
+- **WHEN** `session new --hcommand PATH` is invoked
+- **THEN** that executable is used for this launch
+- **AND** persistent configuration is not mutated
 
-#### Scenario: Launch-only options are supplied while a session is already reachable
-- **WHEN** `--file` or `--headless` is supplied and session probing succeeds before launch
-- **THEN** the existing Houdini process is reused
-- **AND** the running scene and process mode are not replaced by the launch-only options
+### Requirement: Expose session promote
+
+The syntax SHALL be:
+
+```text
+houbridge session promote SESSION
+```
+
+`SESSION` SHALL be a positive registered live session number. Promotion SHALL set that session as the sole primary session and replace any previous primary selection.
+
+Successful promotion SHALL return exactly:
+
+```json
+{"primary":3}
+```
+
+#### Scenario: Promote another live session
+- **WHEN** session `3` is registered and live and `houbridge session promote 3` is invoked
+- **THEN** registry `primary` becomes `3`
+- **AND** any previous primary selection is replaced
+
+#### Scenario: Promotion target is unavailable
+- **WHEN** the requested session does not resolve to a registered live process
+- **THEN** promotion fails through the common BridgeError envelope
+- **AND** the previous primary selection is unchanged

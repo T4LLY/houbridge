@@ -97,18 +97,22 @@ Argument-parser failures that occur before a Houbridge command handler is dispat
 - **THEN** the framework usage error may be plain text
 - **AND** it does not contain Rich box characters or ANSI color sequences
 
-### Requirement: Share Houdini target options
+### Requirement: Share Houdini session selection
 
-Commands that address Houdini directly MAY expose the following common target options exactly where specified by their command contract. Global operational persistence SHALL NOT be selected by a command-line path option; it SHALL resolve from the configured global data directory.
+Commands that address an existing Houdini process MAY expose the common `--session` option exactly where specified by their command contract. The option SHALL select a positive registered session number. When such a command omits `--session`, it SHALL use the registry primary session unless its command contract explicitly defines different behavior, as `session info` does for all-session inspection. Port numbers and transport executable overrides SHALL NOT be public target-selection options. Global operational persistence SHALL NOT be selected by a command-line path option; it SHALL resolve from the configured global data directory.
 
 | Option | Value | Constraint | Meaning |
 | --- | --- | --- | --- |
-| `--port` | integer | `1..65535` | Override the configured local Houdini openport port. |
-| `--hcommand` | text/path | optional | Override the configured SideFX `hcommand` executable. |
+| `--session` | integer | positive registered session number | Select a registered Houdini session instead of the current primary. |
 
-#### Scenario: Explicit port is supplied
-- **WHEN** a command accepts `--port 20001`
-- **THEN** that invocation targets local port `20001`
+#### Scenario: Explicit session is supplied
+- **WHEN** a command accepts `--session 3`
+- **THEN** that invocation resolves registered session `3`
+
+#### Scenario: Session is omitted
+- **WHEN** a Houdini-facing command using the common target contract omits `--session`
+- **THEN** it resolves the registry primary session
+- **AND** fails without dispatch if no primary is selected
 
 #### Scenario: Command uses global operational persistence
 - **WHEN** a Resource, Task, History, or Output operation requires global operational storage

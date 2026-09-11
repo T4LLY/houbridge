@@ -26,7 +26,7 @@ Houbridge SHALL control Houdini through Houdini openport and SideFX `hcommand` o
 
 #### Scenario: Execute a Houdini operation
 - **WHEN** Houbridge needs to run injected Python
-- **THEN** it sends an invocation-local script through the selected local Houdini openport
+- **THEN** it resolves the selected registered Session and sends an invocation-local script through that Session's recorded local Houdini openport
 - **AND** the operation does not require a persistent Houbridge process inside Houdini
 
 #### Scenario: A non-loopback target is supplied internally

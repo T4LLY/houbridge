@@ -11,7 +11,7 @@ Define the public syntax, options, and JSON response contract for executing a ca
 The command syntax SHALL be:
 
 ```text
-houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--hcommand TEXT] [-- SCRIPT_ARGS...]
+houbridge exec --file PATH [--purpose TEXT] [--async] [--session INTEGER] [-- SCRIPT_ARGS...]
 ```
 
 `--file` is required. Houbridge SHALL read the file using Python source-encoding rules compatible with `tokenize.open()` before dispatch. After decoding, source containing an actual NUL character (`U+0000`) SHALL be rejected with BridgeError code `invalid_python_source` before synchronous dispatch or asynchronous Task creation. Arguments after `--` SHALL become the executed file's arguments. Async Task metadata SHALL store the normalized absolute file path even when the caller supplied a relative path.
@@ -21,8 +21,7 @@ houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--hcomma
 | `--file PATH` | required readable file path | Python source read on the Houbridge side. |
 | `--purpose TEXT` | optional text | Human/AI-supplied purpose recorded with enabled session Action History. |
 | `--async` | boolean flag | Submit the file as an asynchronous Task instead of waiting for Python completion. |
-| `--port INTEGER` | `1..65535` | Common local target option. |
-| `--hcommand TEXT` | optional | Common runtime option. |
+| `--session INTEGER` | positive registered session number | Select this session instead of the registry primary. |
 
 #### Scenario: Execute a file synchronously
 - **WHEN** `houbridge exec --file tool.py` is invoked without `--async`
@@ -38,7 +37,7 @@ houbridge exec --file PATH [--purpose TEXT] [--async] [--port INTEGER] [--hcomma
 - **THEN** the exact source read for submission is used to create the Task
 - **AND** the Task stores the normalized absolute path of `tool.py`
 - **AND** `--quality` and `high` are stored as Task arguments
-- **AND** submission freezes the resolved dispatch context required for later Task Runtime execution, including the resolved `hcommand`, target port, PID/process incarnation, and required transport environment/settings
+- **AND** submission freezes the resolved dispatch context required for later Task Runtime execution, including the selected session number, resolved target port, PID/process incarnation, and required transport executable/environment/settings
 
 #### Scenario: Supply execution purpose
 - **WHEN** `houbridge exec --file tool.py --purpose "build preview geometry"` is invoked

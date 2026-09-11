@@ -254,7 +254,7 @@ Once caller Python has started, a later failure to finalize or persist History S
 
 ### Requirement: Retire History with the owning Houdini process incarnation
 
-A session History database SHALL be considered valid for recall only while its exact Houdini process incarnation is the selected live session. When that process is no longer valid, its History directory SHALL be treated as stale. Houbridge SHALL perform lazy stale-session cleanup during later startup/session-probe opportunities; normal Session-managed shutdown MAY also request best-effort cleanup.
+A session History database SHALL be considered valid for recall only while its exact Houdini process incarnation is the selected live session. When that process is no longer valid, its History directory SHALL be treated as stale. Houbridge SHALL perform lazy stale-session cleanup when a later `session new` scans the global Session registry; normal Session-managed shutdown MAY also request best-effort cleanup.
 
 #### Scenario: Houdini process exits unexpectedly
 - **WHEN** its History directory remains on disk

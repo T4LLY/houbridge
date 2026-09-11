@@ -23,8 +23,7 @@ Exactly one of positional `QUERY` or `--like NODE_PATH` SHALL be supplied.
 | `--like NODE_PATH` | Use code from the exact source node path as the dense embedding query. |
 | `--path TEXT` | Restrict capture/search to an exact node path or Houdini child-name glob. |
 | `--recursive` | Include descendants selected by `--path`. |
-| `--port INTEGER` | `1..65535`. |
-| `--hcommand TEXT` | Common runtime option. |
+| `--session INTEGER` | Positive registered session number; uses primary when omitted. |
 
 #### Scenario: Positional query search
 - **WHEN** `houbridge search python "create geometry"` is invoked
@@ -110,7 +109,7 @@ Success SHALL contain exactly one top-level field, `hits`. Each script hit SHALL
 The syntax SHALL be:
 
 ```text
-houbridge search node QUERY [--top-k INTEGER] [--path TEXT] [--recursive] [--port INTEGER] [--hcommand TEXT]
+houbridge search node QUERY [--top-k INTEGER] [--path TEXT] [--recursive] [--session INTEGER]
 ```
 
 `QUERY` is required. `--top-k` SHALL be `1..100` and default to `20`. `--path` restricts selection to an exact Houdini node path or child-name glob. `--recursive` includes descendants of selected nodes.

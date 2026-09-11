@@ -56,7 +56,7 @@ Houbridge-specific persistent settings SHALL come from TOML configuration or exp
 
 ### Requirement: Keep shared operational settings global-only
 
-`[storage].data_dir`, `[resource].ttl_hours`, `[task].max_concurrency`, and `[screenshot].retention_hours` SHALL be global-only settings because they govern stores or coordination shared across working directories. `<cwd>/.houbridge.toml` SHALL NOT override these keys. If a local configuration contains one of these global-only keys, configuration loading SHALL fail as invalid rather than silently applying different policy to the same shared operational state.
+`[storage].data_dir`, `[resource].ttl_hours`, `[task].max_concurrency`, `[screenshot].retention_hours`, and `[houdini].hcommand` SHALL be global-only settings because their operational meaning must not vary by working directory. `<cwd>/.houbridge.toml` SHALL NOT override these keys. If a local configuration contains one of these global-only keys, configuration loading SHALL fail as invalid rather than silently applying different policy to the same shared operational state.
 
 
 #### Scenario: Local config attempts to change Resource TTL
@@ -69,27 +69,31 @@ Houbridge-specific persistent settings SHALL come from TOML configuration or exp
 - **THEN** configuration loading fails as invalid
 - **AND** cleanup policy for the shared managed capture namespace does not vary by cwd
 
-### Requirement: Configure Houdini session target separately from process behavior
+### Requirement: Configure Houdini launch and transport behavior without a bridge-port setting
 
-`[session].port` SHALL define the default local Houdini openport. `[houdini]` SHALL independently configure explicit `hcommand`/GUI executable overrides and transport, lock, startup, and polling timeouts.
+Houdini bridge ports SHALL NOT be persistent configuration. Session ports are selected by Houdini through `openport -a` and stored only in the global Session registry. `[houdini]` SHALL configure the global default Houdini launch executable and transport, lock, startup, and polling timeouts.
 
 Generated defaults SHALL be:
 
-- `[session].port = 18888`
 - `[houdini].hcommand = ""`
-- `[houdini].executable = ""`
 - `[houdini].transport_timeout_seconds = 120`
 - `[houdini].lock_timeout_seconds = 120`
 - `[houdini].startup_timeout_seconds = 60`
 - `[houdini].startup_poll_interval_seconds = 0.25`
 
-#### Scenario: Current directory selects a Houdini port
-- **WHEN** local configuration overrides `[session].port`
-- **THEN** Houdini-facing commands in that working directory use the overridden port unless the invocation explicitly selects another permitted port
+An empty global `[houdini].hcommand` SHALL mean that `session new` falls back to the executable name `houdini`. The setting identifies an executable only and SHALL NOT contain launch arguments. It SHALL be global-only and SHALL NOT be overridden by `<cwd>/.houbridge.toml`.
 
-#### Scenario: Session start explicitly selects a port
-- **WHEN** Session start receives an explicit port override
-- **THEN** it uses that port for that invocation without mutating persistent configuration
+#### Scenario: Session new uses the configured launch executable
+- **WHEN** `session new` has no invocation `--hcommand` and global `[houdini].hcommand` is non-empty
+- **THEN** that executable is used for the new Houdini process
+
+#### Scenario: No launch executable is configured
+- **WHEN** `session new` has no invocation `--hcommand` and global `[houdini].hcommand` is empty
+- **THEN** the executable name `houdini` is used
+
+#### Scenario: Configuration attempts to select a bridge port
+- **WHEN** generated or user configuration is evaluated
+- **THEN** no `[session].port` or equivalent user-selectable bridge-port setting is part of the supported configuration
 
 ### Requirement: Configure workspace script-search persistence
 

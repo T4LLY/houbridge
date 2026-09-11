@@ -6,13 +6,13 @@ Define the minimal public command surface and JSON responses for recalling and s
 
 ## Requirements
 
-### Requirement: Select current-session History through common target options
+### Requirement: Select current-session History through registered session selection
 
-History commands SHALL accept the common `--port` and `--hcommand` options. Those options select and probe the live Houdini session. History persistence SHALL always resolve from `<data-dir>/history/` below the configured `[storage].data_dir`, and commands SHALL address only the database for the exact selected live process incarnation.
+History commands SHALL accept the common `--session` option. An explicit session number selects that registered live Houdini session; when omitted, the registry primary is used. History persistence SHALL always resolve from `<data-dir>/history/` below the configured `[storage].data_dir`, and commands SHALL address only the database for the exact selected live process incarnation.
 
-#### Scenario: Explicit port is supplied
-- **WHEN** `houbridge history list --port 20001` is invoked
-- **THEN** Houbridge probes local port `20001`
+#### Scenario: Explicit session is supplied
+- **WHEN** `houbridge history list --session 3` is invoked
+- **THEN** Houbridge resolves and probes registered session `3`
 - **AND** resolves that process incarnation's History below the configured `<data-dir>/history/`
 
 ### Requirement: Expose History semantic/lexical search
@@ -20,7 +20,7 @@ History commands SHALL accept the common `--port` and `--hcommand` options. Thos
 The syntax SHALL be:
 
 ```text
-houbridge history search QUERY [--top-k INTEGER] [--port INTEGER] [--hcommand TEXT]
+houbridge history search QUERY [--top-k INTEGER] [--session INTEGER]
 ```
 
 `QUERY` is required and non-empty. `--top-k` SHALL be `1..50` and default to `10`.
@@ -55,7 +55,7 @@ Success SHALL contain exactly one top-level field, `hits`. Each hit SHALL contai
 The syntax SHALL be:
 
 ```text
-houbridge history get HISTORY_ID [--port INTEGER] [--hcommand TEXT]
+houbridge history get HISTORY_ID [--session INTEGER]
 ```
 
 `HISTORY_ID` is a required positive session-local integer. Success SHALL return the complete public Action History entry. The returned `file` SHALL be the normalized absolute path of the executed Python file captured for the action. The returned `cwd` field is the normalized absolute current working directory captured when the execution was submitted. `purpose` SHALL be omitted when absent. Internal source hash, embedding vectors, embedding profile, FTS data, and session-key metadata SHALL not be emitted.
@@ -121,7 +121,7 @@ The `resource` may later expire under normal Resource retention; `omitted:true` 
 The syntax SHALL be:
 
 ```text
-houbridge history list [--limit INTEGER] [--port INTEGER] [--hcommand TEXT]
+houbridge history list [--limit INTEGER] [--session INTEGER]
 ```
 
 `--limit` SHALL be a positive integer and default to `20`. Entries SHALL be ordered by action time newest first; `history list` is chronological recall and SHALL NOT apply relevance ranking. Each list entry SHALL contain exactly `id`, `time`, `status`, and `file`, plus `purpose` only when non-empty.

@@ -154,16 +154,16 @@ Execution SHALL use the shared Temporary Workspace boundary when it needs a uniq
 - **THEN** Task may use isolated invocation-local transport files through the shared temporary-workspace mechanism
 - **AND** those files are not the authoritative Task output store
 
-### Requirement: Use the selected existing Houdini openport session
+### Requirement: Use the selected registered Houdini session
 
-Managed Execution SHALL target the selected reachable local Houdini openport through SideFX `hcommand`.
+Managed Execution SHALL resolve the selected registered session through the common Session boundary, validate its recorded process identity, and then target that session's recorded local openport through SideFX transport.
 
 #### Scenario: Selected target is reachable
-- **WHEN** the configured local openport responds
+- **WHEN** the selected registered session resolves to its live recorded process and openport
 - **THEN** Execution dispatches the invocation-local Houdini script to that session
 
 #### Scenario: Selected target is unreachable
-- **WHEN** SideFX transport cannot reach the selected local openport
+- **WHEN** the selected registered process is stale or SideFX transport cannot reach its recorded local openport
 - **THEN** Execution reports a connection or transport failure to the owning caller
 
 ### Requirement: Separate asynchronous dispatch establishment timeout from Python run duration

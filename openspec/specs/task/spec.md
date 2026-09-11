@@ -10,7 +10,7 @@ Define minimal asynchronous execution state for long-running Houdini Python file
 
 Task operational state SHALL be stored in one `tasks.db` below the configured global Houbridge data directory. The database SHALL be shared across working directories and Houdini processes rather than split by cwd, target port, or PID.
 
-The Task store SHALL contain enough state to represent Task metadata, appendable stdout/stderr chunks, semantic ordinal allocation, frozen dispatch context, and runtime coordination. A Task SHALL retain at least its id, status, normalized absolute file path, args, optional purpose, absolute origin cwd, target port, target PID, target process-incarnation identity, resolved `hcommand` executable, the required resolved transport environment/settings, created/started/finished timestamps as applicable, completion Resource id when applicable, the submission-time History enablement decision, and runtime failure information when applicable. The origin cwd SHALL be the submission process current working directory resolved to an absolute path and SHALL preserve the execution's project/cwd context for later Action History finalization.
+The Task store SHALL contain enough state to represent Task metadata, appendable stdout/stderr chunks, semantic ordinal allocation, frozen dispatch context, and runtime coordination. A Task SHALL retain at least its id, status, normalized absolute file path, args, optional purpose, absolute origin cwd, target session number, target port, target PID, target process-incarnation identity, the required resolved transport executable/environment/settings, created/started/finished timestamps as applicable, completion Resource id when applicable, the submission-time History enablement decision, and runtime failure information when applicable. The origin cwd SHALL be the submission process current working directory resolved to an absolute path and SHALL preserve the execution's project/cwd context for later Action History finalization.
 
 #### Scenario: Two workspaces submit Tasks
 - **WHEN** Async Tasks are submitted from different current working directories
@@ -105,10 +105,10 @@ Only a successful Task reset SHALL clear Task semantic ordinal state so that all
 
 ### Requirement: Freeze asynchronous dispatch context at submission
 
-Async submission SHALL resolve and persist the dispatch context required after the submitting CLI process exits. At minimum this context SHALL include the resolved `hcommand` executable, selected target port, target PID/process-incarnation identity, and the resolved transport environment/settings required to invoke SideFX tooling. Task Runtime SHALL use this frozen context rather than re-resolving cwd-local configuration that may have changed after submission.
+Async submission SHALL resolve and persist the dispatch context required after the submitting CLI process exits. At minimum this context SHALL include the selected session number, selected target port, target PID/process-incarnation identity, and the resolved transport executable/environment/settings required to invoke SideFX tooling. Task Runtime SHALL use this frozen context rather than re-resolving cwd-local configuration that may have changed after submission.
 
 #### Scenario: Local configuration changes while Task is queued
-- **WHEN** a queued Task was submitted with one resolved `hcommand`/transport context and local configuration later changes
+- **WHEN** a queued Task was submitted with one resolved session/transport context and local configuration later changes
 - **THEN** Task Runtime continues with the frozen submission context
 - **AND** the queued Task does not silently switch to newly resolved tooling or target settings
 
@@ -169,7 +169,7 @@ Regardless of the configured Task value, arbitrary managed Python execution conc
 
 ### Requirement: Bind each Task to the exact Houdini process incarnation selected at submission
 
-Async submission SHALL probe the selected local Houdini target and record its target port, operating-system PID, and process-start/incarnation identity. Before dispatch, Task Runtime SHALL probe the bound port again and SHALL execute only if both PID and process-incarnation identity still match the submission target. A changed or PID-reused process SHALL not receive source submitted for the previous process.
+Async submission SHALL resolve the selected registered Houdini session and record its session number, target port, operating-system PID, and process-start/incarnation identity. Before dispatch, Task Runtime SHALL probe the bound port again and SHALL execute only if both PID and process-incarnation identity still match the submission target. A changed or PID-reused process SHALL not receive source submitted for the previous process.
 
 Target PID, process-incarnation identity, and port are internal Task execution metadata and need not be exposed by the public Task JSON contract.
 
