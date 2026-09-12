@@ -125,6 +125,7 @@ def test_history_schema_keeps_entries_changes_search_and_metadata_in_one_databas
         "history_entries",
         "history_changes",
         "history_source_embeddings",
+        "history_vector_profiles",
         "history_lexical_entries",
         "history_lexical_fts",
     } <= tables

@@ -1,3 +1,5 @@
+from .reader import HistoryEntryRecord, HistoryReader, HistoryReadService
+from .search import HistorySearchService
 from .changes import (
     ActionChange,
     ConnectionState,
@@ -18,6 +20,10 @@ from .service import HistorySessionStorage, HistoryStorageService
 from .store import HistorySourceEmbedding, HistoryStore
 
 __all__ = [
+    "HistorySearchService",
+    "HistoryReadService",
+    "HistoryReader",
+    "HistoryEntryRecord",
     "ActionChange",
     "ConnectionState",
     "FlagChangedChange",

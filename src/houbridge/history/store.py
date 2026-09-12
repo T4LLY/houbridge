@@ -19,19 +19,17 @@ from houbridge.search.embedding import (
     Model2VecEmbeddingProvider,
     SQLiteEmbeddingCache,
 )
-from houbridge.search.lexical import LexicalIndexSchema, SQLiteFtsIndex
+from houbridge.search.dense import SQLiteVecIndex
+from houbridge.search.lexical import SQLiteFtsIndex
 
 from .changes import ActionChange
 from .schema import initialize_history_schema
+from .search_schema import DENSE_SCHEMA, LEXICAL_SCHEMA, SOURCE_EMBEDDING_TABLE
 
 
 ConnectionFactory = Callable[[], AbstractContextManager[sqlite3.Connection]]
 _CODE_PROFILE_KEY = "code_embedding_profile"
-_SOURCE_EMBEDDING_TABLE = "history_source_embeddings"
-_LEXICAL_SCHEMA = LexicalIndexSchema(
-    entry_table="history_lexical_entries",
-    fts_table="history_lexical_fts",
-)
+
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,8 +87,9 @@ class HistoryStore:
 
         # These are History-owned derived search structures. They live in the
         # same session database and never make workspace search.db authoritative.
-        SQLiteEmbeddingCache(self._connect, table_name=_SOURCE_EMBEDDING_TABLE)
-        SQLiteFtsIndex(self._connect, schema=_LEXICAL_SCHEMA)
+        SQLiteEmbeddingCache(self._connect, table_name=SOURCE_EMBEDDING_TABLE)
+        SQLiteVecIndex(self._connect, schema=DENSE_SCHEMA)
+        SQLiteFtsIndex(self._connect, schema=LEXICAL_SCHEMA)
         return profile
 
     def code_profile(self) -> str | None:
@@ -132,7 +131,7 @@ class HistoryStore:
     ) -> HistorySourceEmbedding:
         profile = self.initialize(requested_code_profile)
         source_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
-        cache = SQLiteEmbeddingCache(self._connect, table_name=_SOURCE_EMBEDDING_TABLE)
+        cache = SQLiteEmbeddingCache(self._connect, table_name=SOURCE_EMBEDDING_TABLE)
         vector = EmbeddingCoordinator(self._provider, cache).encode(
             [EmbeddingItem(content_hash=source_hash, text=source)],
             profile=profile,
@@ -194,7 +193,7 @@ class HistoryStore:
             embedding_row = connection.execute(
                 f"""
                 SELECT 1
-                FROM {_SOURCE_EMBEDDING_TABLE}
+                FROM {SOURCE_EMBEDDING_TABLE}
                 WHERE embedding_profile_id = ? AND content_hash = ?
                 """,
                 (expected_code_profile, source_hash),

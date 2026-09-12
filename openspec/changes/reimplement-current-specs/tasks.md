@@ -12,13 +12,13 @@
 - [x] 1.3 Implement the common `BridgeError` JSON envelope and route expected command failures through it.
 - [x] 1.4 Wrap unexpected internal failures into the shared internal-error envelope without converting CLI usage errors.
 - [x] 1.5 Preserve Typer/framework usage errors as CLI text rather than dispatched JSON failures.
-- [ ] 1.6 Implement shared registered-session selection for every Houdini-facing command.
+- [x] 1.6 Implement shared registered-session selection for every Houdini-facing command.
 - [x] 1.7 Implement the shared public date-time formatter.
-- [ ] 1.8 Implement canonical public numeric lexical formatting, including fixed Search score formatting.
-- [ ] 1.9 Route completed logical command payloads through one common `emit_result`/Output boundary.
-- [ ] 1.10 Enforce the final hard serialized-JSON boundary after payload construction and Output fallback.
-- [ ] 1.11 Keep feature command modules free of private output-limit/fallback implementations.
-- [ ] 1.12 Add regression tests for root command installation, command surface, JSON/error envelopes, usage errors, session selection, and shared formatting.
+- [x] 1.8 Implement canonical public numeric lexical formatting, including fixed Search score formatting.
+- [x] 1.9 Route completed logical command payloads through one common `emit_result`/Output boundary.
+- [x] 1.10 Enforce the final hard serialized-JSON boundary after payload construction and Output fallback.
+- [x] 1.11 Keep feature command modules free of private output-limit/fallback implementations.
+- [x] 1.12 Add regression tests for root command installation, command surface, JSON/error envelopes, usage errors, session selection, and shared formatting.
 
 ## 2. Configuration and state-path resolution
 
@@ -115,7 +115,7 @@
 - [x] 7.3 Store Output fallback Resources in the configured global Resource store and return only the bounded fallback envelope.
 - [x] 7.4 Enforce fixed absolute token/serialized-byte limits even after fallback/serialization.
 - [x] 7.5 Keep Resource inspection bounded by its own requested inspection semantics rather than recursively applying generic fallback.
-- [ ] 7.6 Remove feature-specific token thresholds, truncation rules, cursor workarounds, and duplicate Output Policy implementations.
+- [x] 7.6 Remove feature-specific token thresholds, truncation rules, cursor workarounds, and duplicate Output Policy implementations.
 - [x] 7.7 Add Output tests covering inline success, Resource fallback, hard boundaries, canonical JSON serialization, and Search/OCR/Task fallback reuse.
 
 ## 8. Synchronous Execution
@@ -240,10 +240,10 @@
 - [x] 14.12 Hash exact executed source, store/reuse embeddings by source-hash/profile, pin one profile per History DB, and never persist source bodies.
 - [x] 14.13 Fail closed on enabled-History preflight before Python starts; after Python starts never replay caller Python solely because History finalization failed.
 - [x] 14.14 Carry the same History finalization boundary through Async Task using frozen submission context.
-- [ ] 14.15 Implement History search using source semantic embeddings plus lexical purpose/file/args/Action context without Action Change embeddings.
-- [ ] 14.16 Implement History reader/get and chronological newest-first list independently from search ranking.
-- [ ] 14.17 Wire `history search`, `history get`, and `history list` to registered live Session selection, shared formatting, Output Policy, and error handling.
-- [ ] 14.18 Add History lifecycle, schema, identity, change-compaction, large-parameter spill, sync/async integration, embedding reuse/profile pinning, search/read/list, stale-retirement, and CLI tests.
+- [x] 14.15 Implement History search using source semantic embeddings plus lexical purpose/file/args/Action context without Action Change embeddings.
+- [x] 14.16 Implement History reader/get and chronological newest-first list independently from search ranking.
+- [x] 14.17 Wire `history search`, `history get`, and `history list` to registered live Session selection, shared formatting, Output Policy, and error handling.
+- [x] 14.18 Add History lifecycle, schema, identity, change-compaction, large-parameter spill, sync/async integration, embedding reuse/profile pinning, search/read/list, stale-retirement, and CLI tests.
 
 ## 15. Houbridge Skill authoring contract
 

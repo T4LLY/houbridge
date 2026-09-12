@@ -8,6 +8,7 @@ from houbridge.cli.common import (
 from houbridge.errors import BridgeError
 from houbridge.cli.capture_cmd import capture_app
 from houbridge.cli.exec_cmd import exec_command
+from houbridge.cli.history_cmd import history_app
 from houbridge.cli.resource_cmd import resource_app
 from houbridge.cli.search_cmd import search_app
 from houbridge.cli.session_cmd import session_app
@@ -25,6 +26,7 @@ app.add_typer(capture_app, name="capture", help="Capture Houdini viewports and w
 app.add_typer(resource_app, name="resource", help="Inspect and materialize stored Resources.")
 app.add_typer(search_app, name="search", help="Search local scripts and current Houdini state.")
 app.add_typer(task_app, name="task", help="Inspect and reset asynchronous Tasks.")
+app.add_typer(history_app, name="history", help="Recall and search current-session Action History.")
 app.command("exec", context_settings={"allow_extra_args": True})(exec_command)
 
 

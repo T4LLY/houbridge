@@ -65,3 +65,11 @@ def test_compact_json_preserves_non_ascii_and_canonical_number_lexeme() -> None:
 
     assert serialized == '{"name":"日本語","score":301.278910}'
     assert json.loads(serialized) == {"name": "日本語", "score": 301.27891}
+
+
+def test_root_help_exposes_all_seven_public_command_families() -> None:
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    for command in ("session", "capture", "resource", "search", "exec", "task", "history"):
+        assert command in result.stdout
