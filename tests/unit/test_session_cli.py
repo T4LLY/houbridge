@@ -12,13 +12,13 @@ def test_root_help_exposes_implemented_session_family() -> None:
     assert "session" in result.stdout
 
 
-def test_session_help_exposes_info_and_new_without_future_promote_stub() -> None:
+def test_session_help_exposes_info_new_and_promote() -> None:
     result = CliRunner().invoke(app, ["session", "--help"])
 
     assert result.exit_code == 0
     assert "info" in result.stdout
     assert "new" in result.stdout
-    assert "promote" not in result.stdout
+    assert "promote" in result.stdout
 
 
 def test_session_new_help_exposes_only_current_options() -> None:
@@ -54,3 +54,28 @@ def test_session_new_emits_exact_public_success_shape(monkeypatch, tmp_path) -> 
 
     assert result.exit_code == 0
     assert result.stdout == '{"session":2,"port":49153,"pid":18744}\n'
+
+
+def test_session_promote_emits_exact_public_success_shape(monkeypatch, tmp_path) -> None:
+    from types import SimpleNamespace
+
+    from houbridge.cli import session_cmd
+
+    monkeypatch.setattr(
+        session_cmd,
+        "load_config",
+        lambda: SimpleNamespace(
+            storage=SimpleNamespace(data_dir=tmp_path),
+            houdini=SimpleNamespace(transport_timeout_seconds=120.0),
+        ),
+    )
+    monkeypatch.setattr(
+        session_cmd.SessionPromoteService,
+        "promote",
+        lambda self, session: {"primary": session},
+    )
+
+    result = CliRunner().invoke(app, ["session", "promote", "3"])
+
+    assert result.exit_code == 0
+    assert result.stdout == '{"primary":3}\n'

@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from houbridge.errors import BridgeError
 from houbridge.process_coordination import ProcessIdentity, process_identity_for_pid
 
-from .launcher import HoudiniSessionLauncher, SessionLaunchResult
+from .launcher import HoudiniSessionLauncher
 from .registry import SessionRecord, SessionRegistry, SessionRegistryState
+from .stale import SessionStaleCleanupService
 
 
 class SessionNewService:
@@ -22,7 +22,10 @@ class SessionNewService:
     ) -> None:
         self._registry = registry
         self._launcher = launcher
-        self._identity_reader = identity_reader
+        self._stale_cleanup = SessionStaleCleanupService(
+            registry,
+            identity_reader=identity_reader,
+        )
 
     def create(
         self,
@@ -38,8 +41,7 @@ class SessionNewService:
         )
         try:
             registry_existed = self._registry.path.exists()
-            state = self._registry.load()
-            state = self._without_stale_records(state)
+            state = self._stale_cleanup.cleanup()
             number = _smallest_unused_session(state)
             sessions = dict(state.sessions)
             sessions[number] = SessionRecord(
@@ -57,28 +59,6 @@ class SessionNewService:
             raise
 
         return {"session": number, "port": launch.port, "pid": launch.pid}
-
-    def _without_stale_records(self, state: SessionRegistryState) -> SessionRegistryState:
-        live: dict[int, SessionRecord] = {}
-        for number, record in state.sessions.items():
-            if self._record_is_live(record):
-                live[number] = record
-        primary = state.primary if state.primary in live else None
-        return SessionRegistryState(primary=primary, sessions=live)
-
-    def _record_is_live(self, record: SessionRecord) -> bool:
-        try:
-            identity = self._identity_reader(record.pid)
-        except (ProcessLookupError, PermissionError, OSError):
-            return False
-        if identity.pid != record.pid:
-            return False
-        if (
-            record.process_start_identity is not None
-            and identity.process_start_identity != record.process_start_identity
-        ):
-            return False
-        return True
 
 
 def _smallest_unused_session(state: SessionRegistryState) -> int:

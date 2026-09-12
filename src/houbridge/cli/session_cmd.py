@@ -13,6 +13,7 @@ from houbridge.session.info import SessionInfoService
 from houbridge.session.launcher import HoudiniSessionLauncher
 from houbridge.session.new import SessionNewService
 from houbridge.session.probe import SessionProbe
+from houbridge.session.promote import SessionPromoteService
 from houbridge.session.registry import SessionRegistry
 from houbridge.session.resolver import SessionResolver
 
@@ -57,4 +58,17 @@ def new_command(
         headless=headless,
         hcommand=hcommand,
     )
+    emit_result(payload)
+
+
+@session_app.command("promote")
+def promote_command(
+    session_number: int = typer.Argument(..., metavar="SESSION"),
+) -> None:
+    settings = load_config()
+    paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
+    registry = SessionRegistry(paths.sessions_registry)
+    probe = SessionProbe(lambda: HoudiniTransport.from_config(settings.houdini))
+    resolver = SessionResolver(registry, probe)
+    payload = SessionPromoteService(registry, resolver).promote(session_number)
     emit_result(payload)

@@ -65,11 +65,11 @@
 - [x] 4.9 Support the specified GUI/headless process modes without choosing a license edition.
 - [x] 4.10 Bound startup polling with configured timeout/interval and terminate failed launches that never establish a usable bridge port.
 - [x] 4.11 On Windows, isolate an intentionally launched Houdini GUI process from unrelated later console Ctrl+C handling.
-- [ ] 4.12 Implement stale Session cleanup without automatically promoting another Session when the primary disappears.
-- [ ] 4.13 Implement explicit `session promote` and require the target Session to be registered and live.
+- [x] 4.12 Implement stale Session cleanup without automatically promoting another Session when the primary disappears.
+- [x] 4.13 Implement explicit `session promote` and require the target Session to be registered and live.
 - [x] 4.14 Keep Session bootstrap/probe injected helpers under `houbridge/houdini/scripts/session/`.
-- [ ] 4.15 Wire `session info`, `session new`, and `session promote` to the Session services and shared error/output boundaries.
-- [ ] 4.16 Add Session registry, info, new, stale-cleanup, promotion, bootstrap, and CLI tests.
+- [x] 4.15 Wire `session info`, `session new`, and `session promote` to the Session services and shared error/output boundaries.
+- [x] 4.16 Add Session registry, info, new, stale-cleanup, promotion, bootstrap, and CLI tests.
 
 ## 5. Temporary Workspace and Temporary Artifact boundaries
 
