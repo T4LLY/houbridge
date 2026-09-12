@@ -173,19 +173,19 @@
 
 ## 11. Workspace Script Search
 
-- [ ] 11.1 Resolve Script Search exclusively from `<cwd>/.houbridge/python` and `<cwd>/.houbridge/search.db`.
-- [ ] 11.2 Treat Python files as authoritative source and `search.db` only as rebuildable derived index/cache state.
-- [ ] 11.3 Index exactly one semantic retrieval document per Python file rather than function/class fragments.
-- [ ] 11.4 Extract an optional Python module docstring as the file-level script description without inventing a description when absent.
-- [ ] 11.5 Read Python files with declared source-encoding support.
-- [ ] 11.6 Keep syntax-error files searchable without fabricating semantic structure or description metadata.
-- [ ] 11.7 Reconcile unindexed, changed, and deleted files automatically before returning search results.
-- [ ] 11.8 Re-index file-level embeddings when the configured embedding profile changes.
-- [ ] 11.9 Allow workspace Script Search indexing to be disabled as one feature unit.
-- [ ] 11.10 Return the minimal script-search result envelope with path, score, and description only when present.
-- [ ] 11.11 Remove execution-usage/count coupling and fragment-search concepts from Script Search.
-- [ ] 11.12 Wire `search script` to workspace Script Search without requiring Houdini or Session selection.
-- [ ] 11.13 Add Script Search tests for cwd isolation, file authority, one-file documents, docstrings, encodings, syntax errors, reconciliation, profile changes, disablement, and CLI output.
+- [x] 11.1 Resolve Script Search exclusively from `<cwd>/.houbridge/python` and `<cwd>/.houbridge/search.db`.
+- [x] 11.2 Treat Python files as authoritative source and `search.db` only as rebuildable derived index/cache state.
+- [x] 11.3 Index exactly one semantic retrieval document per Python file rather than function/class fragments.
+- [x] 11.4 Extract an optional Python module docstring as the file-level script description without inventing a description when absent.
+- [x] 11.5 Read Python files with declared source-encoding support.
+- [x] 11.6 Keep syntax-error files searchable without fabricating semantic structure or description metadata.
+- [x] 11.7 Reconcile unindexed, changed, and deleted files automatically before returning search results.
+- [x] 11.8 Re-index file-level embeddings when the configured embedding profile changes.
+- [x] 11.9 Allow workspace Script Search indexing to be disabled as one feature unit.
+- [x] 11.10 Return the minimal script-search result envelope with path, score, and description only when present.
+- [x] 11.11 Remove execution-usage/count coupling and fragment-search concepts from Script Search.
+- [x] 11.12 Wire `search script` to workspace Script Search without requiring Houdini or Session selection.
+- [x] 11.13 Add Script Search tests for cwd isolation, file authority, one-file documents, docstrings, encodings, syntax errors, reconciliation, profile changes, disablement, and CLI output.
 
 ## 12. Live Houdini Search
 
@@ -249,7 +249,7 @@
 
 - [ ] 15.1 Update the actual Houbridge Skill so every newly created `.houbridge/python/*.py` script receives a non-empty valid module docstring describing its purpose.
 - [ ] 15.2 Keep that module docstring as the only authoritative description metadata and do not create sidecar JSON/YAML/TOML or custom description-comment metadata.
-- [ ] 15.3 Do not make module docstrings a runtime prerequisite for existing or user-authored workspace scripts.
+- [x] 15.3 Do not make module docstrings a runtime prerequisite for existing or user-authored workspace scripts.
 - [ ] 15.4 Verify Local Script Search exposes the Skill-created module docstring as `description` while still accepting scripts with no description.
 - [ ] 15.5 Add or update Skill-level verification for new-script authoring and compatibility with existing scripts.
 

@@ -8,6 +8,7 @@ from houbridge.cli.common import (
 from houbridge.errors import BridgeError
 from houbridge.cli.exec_cmd import exec_command
 from houbridge.cli.resource_cmd import resource_app
+from houbridge.cli.search_cmd import search_app
 from houbridge.cli.session_cmd import session_app
 from houbridge.cli.task_cmd import task_app
 
@@ -20,6 +21,7 @@ app = create_cli_app(
 
 app.add_typer(session_app, name="session", help="Create and inspect registered Houdini sessions.")
 app.add_typer(resource_app, name="resource", help="Inspect and materialize stored Resources.")
+app.add_typer(search_app, name="search", help="Search local scripts and current Houdini state.")
 app.add_typer(task_app, name="task", help="Inspect and reset asynchronous Tasks.")
 app.command("exec", context_settings={"allow_extra_args": True})(exec_command)
 
