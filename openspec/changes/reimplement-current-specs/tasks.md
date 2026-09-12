@@ -120,20 +120,20 @@
 
 ## 8. Synchronous Execution
 
-- [ ] 8.1 Read caller Python with Python source-encoding semantics, normalize the absolute file path, and reject real NUL characters before Houdini dispatch.
-- [ ] 8.2 Model one synchronous invocation with file, argv, purpose, cwd, selected Session, and exact source/hash as invocation-local state.
-- [ ] 8.3 Build injected execution source under `houbridge/houdini/scripts/execution/` and preserve the defined execution namespace.
-- [ ] 8.4 Save/replace/restore Houdini-side `sys.argv` around caller execution while preserving `--` script argument order and duplicates.
-- [ ] 8.5 Capture stdout, stderr, declared result, and Python exception/traceback without mixing them into transport noise.
+- [x] 8.1 Read caller Python with Python source-encoding semantics, normalize the absolute file path, and reject real NUL characters before Houdini dispatch.
+- [x] 8.2 Model one synchronous invocation with file, argv, purpose, cwd, selected Session, and exact source/hash as invocation-local state.
+- [x] 8.3 Build injected execution source under `houbridge/houdini/scripts/execution/` and preserve the defined execution namespace.
+- [x] 8.4 Save/replace/restore Houdini-side `sys.argv` around caller execution while preserving `--` script argument order and duplicates.
+- [x] 8.5 Capture stdout, stderr, declared result, and Python exception/traceback without mixing them into transport noise.
 - [ ] 8.6 Classify declared synchronous results deterministically as public JSON or bounded representation according to the execution contract.
-- [ ] 8.7 Use a private Temporary Workspace for execution transport files and markers.
+- [x] 8.7 Use a private Temporary Workspace for execution transport files and markers.
 - [ ] 8.8 Resolve and probe the selected registered Houdini Session before dispatch.
 - [ ] 8.9 Acquire the exact-process managed-execution lock around caller Python dispatch.
 - [ ] 8.10 Expose a History preflight/finalization boundary without letting Execution directly own History tables.
 - [ ] 8.11 Materialize required execution artifacts as Resources and pass the logical synchronous result through the common Output Policy.
 - [ ] 8.12 Implement public `exec --file PATH [--purpose TEXT] [--async] [--session N] [-- SCRIPT_ARGS...]` parsing with no `--code` source path.
 - [ ] 8.13 Keep Async operational persistence out of Execution and hand asynchronous submission to Task.
-- [ ] 8.14 Separate finite dispatch-establishment timeout from unbounded caller-Python run duration.
+- [x] 8.14 Separate finite dispatch-establishment timeout from unbounded caller-Python run duration.
 - [ ] 8.15 Add Execution source, injected-runtime, presentation, service, CLI, transport-failure, locking, argv, and result-classification tests.
 
 ## 9. Async Task subsystem
