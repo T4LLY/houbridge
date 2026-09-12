@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from typing import Callable
+from dataclasses import dataclass
+from typing import Callable, Iterable
 
 from houbridge.process_coordination import ProcessIdentity, process_identity_for_pid
 
 from .registry import SessionRecord, SessionRegistry, SessionRegistryState
+
+
+@dataclass(frozen=True, slots=True)
+class StaleCleanupResult:
+    state: SessionRegistryState
+    stale_records: tuple[SessionRecord, ...]
 
 
 class SessionStaleCleanupService:
@@ -23,24 +30,43 @@ class SessionStaleCleanupService:
 
     def cleanup(self) -> SessionRegistryState:
         with self._registry.locked():
-            return self.cleanup_locked()
+            result = self.cleanup_locked()
+        self.retire_best_effort(result.stale_records)
+        return result.state
 
-    def cleanup_locked(self) -> SessionRegistryState:
-        """Clean stale entries while the caller holds the registry mutation lock."""
+    def cleanup_locked(self) -> StaleCleanupResult:
+        """Commit stale registry removal while the caller holds the mutation lock."""
 
         state = self._registry.load()
         live: dict[int, SessionRecord] = {}
+        stale_records: list[SessionRecord] = []
         for number, record in state.sessions.items():
             if self._record_is_live(record):
                 live[number] = record
-            elif self._on_stale is not None:
-                self._on_stale(record)
+            else:
+                stale_records.append(record)
 
         primary = state.primary if state.primary in live else None
         cleaned = SessionRegistryState(primary=primary, sessions=live)
         if primary != state.primary or len(live) != len(state.sessions):
             self._registry.save(cleaned)
-        return cleaned
+        return StaleCleanupResult(
+            state=cleaned,
+            stale_records=tuple(stale_records),
+        )
+
+    def retire_best_effort(self, records: Iterable[SessionRecord]) -> None:
+        """Run optional stale side effects only after registry state is committed."""
+
+        if self._on_stale is None:
+            return
+        for record in records:
+            try:
+                self._on_stale(record)
+            except OSError:
+                # History retirement is optional cleanup. Files can remain locked
+                # temporarily on Windows without making Session state invalid.
+                continue
 
     def _record_is_live(self, record: SessionRecord) -> bool:
         try:

@@ -44,7 +44,8 @@ class SessionNewService:
         try:
             with self._registry.locked():
                 registry_existed = self._registry.path.exists()
-                state = self._stale_cleanup.cleanup_locked()
+                cleanup = self._stale_cleanup.cleanup_locked()
+                state = cleanup.state
                 number = _smallest_unused_session(state)
                 sessions = dict(state.sessions)
                 sessions[number] = SessionRecord(
@@ -63,6 +64,7 @@ class SessionNewService:
             self._launcher.terminate(launch)
             raise
 
+        self._stale_cleanup.retire_best_effort(cleanup.stale_records)
         return {"session": number, "port": launch.port, "pid": launch.pid}
 
 

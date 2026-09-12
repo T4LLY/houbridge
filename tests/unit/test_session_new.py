@@ -441,3 +441,29 @@ def test_session_new_forwards_stale_records_to_cleanup_hook(tmp_path: Path) -> N
     ).create()
 
     assert retired == [stale]
+
+
+def test_session_new_survives_stale_retirement_failure(tmp_path: Path) -> None:
+    registry = SessionRegistry(tmp_path / "sessions.json")
+    stale = SessionRecord(1, 49151, 1001, "old-start")
+    registry.save(SessionRegistryState(primary=1, sessions={1: stale}))
+    launcher = FakeLauncher(_launch_result(pid=2002, port=49154))
+
+    def identity(pid: int) -> ProcessIdentity:
+        raise ProcessLookupError(pid)
+
+    def failing_retirement(_record: SessionRecord) -> None:
+        raise PermissionError("simulated locked History directory")
+
+    payload = SessionNewService(
+        registry,
+        launcher,  # type: ignore[arg-type]
+        identity_reader=identity,
+        on_stale=failing_retirement,
+    ).create()
+
+    assert payload == {"session": 1, "port": 49154, "pid": 2002}
+    state = registry.load()
+    assert state.primary is None
+    assert state.sessions[1].pid == 2002
+    assert launcher.terminated == []

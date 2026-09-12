@@ -24,13 +24,15 @@ class SessionPromoteService:
     def promote(self, session: int) -> dict[str, int]:
         _require_positive_session(session)
         with self._registry.locked():
-            state = self._stale_cleanup.cleanup_locked()
-            record = state.sessions.get(session)
-            if record is None:
-                raise BridgeError(
-                    "session_not_found",
-                    f"Registered Houdini session {session} does not exist.",
-                )
+            cleanup = self._stale_cleanup.cleanup_locked()
+            record = cleanup.state.sessions.get(session)
+
+        self._stale_cleanup.retire_best_effort(cleanup.stale_records)
+        if record is None:
+            raise BridgeError(
+                "session_not_found",
+                f"Registered Houdini session {session} does not exist.",
+            )
 
         self._resolver.resolve_record(record)
 

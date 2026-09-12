@@ -54,3 +54,49 @@ def test_stale_session_cleanup_retires_only_exact_stale_history(tmp_path: Path) 
     assert live_dir.exists()
     assert not stale_dir.exists()
     assert not paths.history_session(history_session_key(reused_identity)).session_directory.exists()
+
+
+def test_stale_cleanup_commits_registry_before_retirement_failure(tmp_path: Path) -> None:
+    paths = GlobalDataPaths.from_data_dir(tmp_path / "data")
+    registry = SessionRegistry(paths.sessions_registry)
+    stale = SessionRecord(1, 49151, 1001, "old-start")
+    registry.save(SessionRegistryState(primary=1, sessions={1: stale}))
+    observed_states: list[SessionRegistryState] = []
+
+    def identity_reader(pid: int) -> ProcessIdentity:
+        raise ProcessLookupError(pid)
+
+    def failing_retirement(record: SessionRecord) -> None:
+        observed_states.append(registry.load())
+        raise PermissionError(f"locked History for session {record.session}")
+
+    cleanup = SessionStaleCleanupService(
+        registry,
+        identity_reader=identity_reader,
+        on_stale=failing_retirement,
+    )
+
+    state = cleanup.cleanup()
+
+    assert state == SessionRegistryState.empty()
+    assert registry.load() == SessionRegistryState.empty()
+    assert observed_states == [SessionRegistryState.empty()]
+
+
+def test_history_retirement_is_best_effort_when_directory_is_locked(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    paths = GlobalDataPaths.from_data_dir(tmp_path / "data")
+    identity = ProcessIdentity(1002, "old-start")
+    session_dir = paths.history_session(history_session_key(identity)).session_directory
+    session_dir.mkdir(parents=True)
+    (session_dir / "history.db").write_bytes(b"stale")
+
+    def fail_remove(_path: Path) -> None:
+        raise PermissionError("simulated locked History directory")
+
+    monkeypatch.setattr("houbridge.history.retirement.shutil.rmtree", fail_remove)
+
+    assert HistoryRetirementService(paths).retire(identity) is False
+    assert session_dir.exists()
