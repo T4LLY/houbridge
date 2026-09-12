@@ -47,9 +47,8 @@ def test_root_help_exposes_search_and_phase22_exposes_live_code_subcommands() ->
     assert root.exit_code == 0
     assert "search" in root.stdout
     assert search.exit_code == 0
-    for command in ("script", "python", "vex"):
+    for command in ("script", "python", "vex", "node"):
         assert command in search.stdout
-    assert "node" not in search.stdout
 
 
 def test_search_script_emits_exact_minimal_hit_shape(monkeypatch) -> None:
@@ -225,3 +224,113 @@ def test_live_code_help_exposes_only_current_options() -> None:
             assert option in output
         for forbidden in ("--root", "--port", "--hcommand"):
             assert forbidden not in output
+
+
+class _NodeService:
+    def __init__(self, result):
+        self.result = result
+        self.calls = []
+
+    def search(self, query, **kwargs):
+        self.calls.append((query, kwargs))
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
+
+def _install_node(monkeypatch, service: _NodeService, policy=None) -> None:
+    settings = SimpleNamespace()
+    monkeypatch.setattr(search_cmd, "load_config", lambda: settings)
+    monkeypatch.setattr(search_cmd, "_live_node_service", lambda _settings: service)
+    monkeypatch.setattr(
+        search_cmd.OutputPolicy,
+        "from_config",
+        lambda _settings: policy if policy is not None else _Policy(),
+    )
+
+
+def test_search_node_exposes_current_contract_and_exact_public_shape(monkeypatch) -> None:
+    service = _NodeService(
+        {
+            "hits": [
+                {
+                    "path": "/obj/geo1",
+                    "name": "geo1",
+                    "type": "geo",
+                    "category": "Object",
+                }
+            ]
+        }
+    )
+    _install_node(monkeypatch, service)
+
+    result = runner.invoke(
+        app,
+        [
+            "search", "node", "geo", "--top-k", "7",
+            "--path", "/obj/geo*", "--recursive", "--session", "2",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout == (
+        '{"hits":[{"path":"/obj/geo1","name":"geo1",'
+        '"type":"geo","category":"Object"}]}\n'
+    )
+    assert service.calls == [
+        (
+            "geo",
+            {
+                "top_k": 7,
+                "path": "/obj/geo*",
+                "recursive": True,
+                "session": 2,
+            },
+        )
+    ]
+
+
+def test_search_node_options_and_bounds_match_openspec() -> None:
+    help_result = runner.invoke(app, ["search", "node", "--help"])
+    low = runner.invoke(app, ["search", "node", "geo", "--top-k", "0"])
+    high = runner.invoke(app, ["search", "node", "geo", "--top-k", "101"])
+
+    assert help_result.exit_code == 0
+    for option in ("--top-k", "--path", "--recursive", "--session"):
+        assert option in help_result.stdout
+    for forbidden in ("--root", "--port", "--hcommand", "--like"):
+        assert forbidden not in help_result.stdout
+    assert low.exit_code == 2
+    assert high.exit_code == 2
+
+
+class _FallbackPolicy:
+    def __init__(self) -> None:
+        self.payloads = []
+
+    def render(self, payload, *, allow_resource_fallback=True):
+        self.payloads.append((payload, allow_resource_fallback))
+        return '{"resource":"resource-node-result-001"}'
+
+
+def test_search_node_routes_complete_logical_payload_through_common_output(monkeypatch) -> None:
+    logical = {
+        "hits": [
+            {
+                "path": f"/obj/node{index}",
+                "name": f"node{index}",
+                "type": "null",
+                "category": "Sop",
+            }
+            for index in range(100)
+        ]
+    }
+    service = _NodeService(logical)
+    policy = _FallbackPolicy()
+    _install_node(monkeypatch, service, policy)
+
+    result = runner.invoke(app, ["search", "node", "node", "--top-k", "100"])
+
+    assert result.exit_code == 0
+    assert result.stdout == '{"resource":"resource-node-result-001"}\n'
+    assert policy.payloads == [(logical, True)]

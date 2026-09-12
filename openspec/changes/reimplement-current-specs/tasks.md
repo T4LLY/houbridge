@@ -195,11 +195,11 @@
 - [x] 12.4 Build live Python/VEX semantic indexes transiently from current Houdini state and never persist them as workspace/session search state.
 - [x] 12.5 Support path scoping and mutually exclusive positional query vs `--like NODE_PATH` live-code similarity search.
 - [x] 12.6 Store matched live source bodies as Resources and return Resource-backed hits without inline source bodies.
-- [ ] 12.7 Capture current Houdini node instances for live Node Search without persistent indexing.
-- [ ] 12.8 Rank Node Search by case-insensitive exact → prefix → substring match class with stable path tie-break and no numeric public score.
-- [ ] 12.9 Apply common Output fallback to oversized live-code/node result envelopes.
-- [ ] 12.10 Expose matching `search python`, `search vex`, and `search node` CLI contracts with shared Session selection.
-- [ ] 12.11 Add live-code/live-node tests for extractor matching, namespaces, raw source, transient indexing, path scope, like-node search, Resource-backed code hits, node ranking, deduplication, CLI syntax, and Output fallback.
+- [x] 12.7 Capture current Houdini node instances for live Node Search without persistent indexing.
+- [x] 12.8 Rank Node Search by case-insensitive exact → prefix → substring match class with stable path tie-break and no numeric public score.
+- [x] 12.9 Apply common Output fallback to oversized live-code/node result envelopes.
+- [x] 12.10 Expose matching `search python`, `search vex`, and `search node` CLI contracts with shared Session selection.
+- [x] 12.11 Add live-code/live-node tests for extractor matching, namespaces, raw source, transient indexing, path scope, like-node search, Resource-backed code hits, node ranking, deduplication, CLI syntax, and Output fallback.
 
 ## 13. Capture subsystem
 
