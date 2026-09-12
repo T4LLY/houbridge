@@ -43,13 +43,13 @@
 
 ## 3. Houdini transport and exact-process coordination
 
-- [ ] 3.1 Resolve SideFX/Houdini installations and derive a subprocess environment sufficient for SideFX command-line tools.
-- [ ] 3.2 Implement local serverless transport through Houdini openport and SideFX `hcommand` without adding an HTTP/RPC/MCP daemon.
+- [x] 3.1 Resolve SideFX/Houdini installations and derive a subprocess environment sufficient for SideFX command-line tools.
+- [x] 3.2 Implement local serverless transport through Houdini openport and SideFX `hcommand` without adding an HTTP/RPC/MCP daemon.
 - [ ] 3.3 Keep reusable injected Houdini source under feature-specific `houbridge/houdini/scripts/` modules instead of embedding full reusable bodies in host orchestration.
 - [ ] 3.4 Probe and represent Houdini process identity as PID plus process-start/incarnation identity.
 - [ ] 3.5 Place managed-execution coordination locks in a fixed platform-standard per-user Houbridge directory independent of `[storage].data_dir`.
 - [ ] 3.6 Implement one exact-process managed-execution lock shared by synchronous Exec and Async Task.
-- [ ] 3.7 Surface SideFX transport establishment/execution failures without fabricating Python success.
+- [x] 3.7 Surface SideFX transport establishment/execution failures without fabricating Python success.
 - [ ] 3.8 Add transport, installation-resolution, process-identity, and shared-lock tests.
 
 ## 4. Session runtime and CLI
