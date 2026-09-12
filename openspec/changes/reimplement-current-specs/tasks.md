@@ -37,9 +37,9 @@
 - [x] 2.13 Resolve screenshot size limits and Capture retention independently from Resource TTL.
 - [x] 2.14 Resolve the shared `[output].inline_max_tokens` threshold and reject configuration above absolute Output limits.
 - [x] 2.15 Cache unchanged TOML parsing while detecting actual config file changes.
-- [ ] 2.16 Implement `GlobalDataPaths` for shared Session/Task/Resource/History operational state.
-- [ ] 2.17 Implement `WorkspaceSearchPaths` for `<cwd>/.houbridge/python` and `<cwd>/.houbridge/search.db` only.
-- [ ] 2.18 Add configuration and path-resolution tests covering global/local precedence, invalid local overrides, defaults, hard limits, and cwd separation.
+- [x] 2.16 Implement `GlobalDataPaths` for shared Session/Task/Resource/History operational state.
+- [x] 2.17 Implement `WorkspaceSearchPaths` for `<cwd>/.houbridge/python` and `<cwd>/.houbridge/search.db` only.
+- [x] 2.18 Add configuration and path-resolution tests covering global/local precedence, invalid local overrides, defaults, hard limits, and cwd separation.
 
 ## 3. Houdini transport and exact-process coordination
 
