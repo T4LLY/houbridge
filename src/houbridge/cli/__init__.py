@@ -1,0 +1,1 @@
+"""Houbridge command-line interface."""

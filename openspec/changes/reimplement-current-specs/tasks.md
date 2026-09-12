@@ -7,13 +7,13 @@
 
 ## 1. CLI foundation and public contract
 
-- [ ] 1.1 Install exactly one `houbridge` root console entry point and keep the public top-level command groups explicit.
-- [ ] 1.2 Implement one compact public JSON serializer used by dispatched command results.
-- [ ] 1.3 Implement the common `BridgeError` JSON envelope and route expected command failures through it.
-- [ ] 1.4 Wrap unexpected internal failures into the shared internal-error envelope without converting CLI usage errors.
-- [ ] 1.5 Preserve Typer/framework usage errors as CLI text rather than dispatched JSON failures.
+- [x] 1.1 Install exactly one `houbridge` root console entry point and keep the public top-level command groups explicit.
+- [x] 1.2 Implement one compact public JSON serializer used by dispatched command results.
+- [x] 1.3 Implement the common `BridgeError` JSON envelope and route expected command failures through it.
+- [x] 1.4 Wrap unexpected internal failures into the shared internal-error envelope without converting CLI usage errors.
+- [x] 1.5 Preserve Typer/framework usage errors as CLI text rather than dispatched JSON failures.
 - [ ] 1.6 Implement shared registered-session selection for every Houdini-facing command.
-- [ ] 1.7 Implement the shared public date-time formatter.
+- [x] 1.7 Implement the shared public date-time formatter.
 - [ ] 1.8 Implement canonical public numeric lexical formatting, including fixed Search score formatting.
 - [ ] 1.9 Route completed logical command payloads through one common `emit_result`/Output boundary.
 - [ ] 1.10 Enforce the final hard serialized-JSON boundary after payload construction and Output fallback.
