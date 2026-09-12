@@ -59,6 +59,8 @@ When the effective History setting is enabled, managed Execution SHALL initializ
 
 When History is enabled, its pre-start source embedding/session-store/baseline setup SHALL complete before caller Python starts. A setup failure SHALL stop dispatch before caller source executes. After caller Python has started, a History finalization failure SHALL not cause the source to be replayed or redefine its Python success/failure outcome.
 
+For synchronous Execution with History enabled, the injected wrapper SHALL atomically publish the terminal caller-Python status only after stdout/stderr/result artifacts are stable and before post-Python History finalization begins. If synchronous hcommand transport reaches its timeout after that terminal status is present, Execution SHALL preserve and return the published Python outcome rather than convert post-Python History bookkeeping latency into a transport failure. A timeout before the terminal status, or a timeout for an execution without enabled History post-processing, SHALL remain a transport failure.
+
 #### Scenario: Synchronous Python starts with History enabled
 - **WHEN** caller Python starts inside Houdini
 - **THEN** Action Change capture covers that execution window

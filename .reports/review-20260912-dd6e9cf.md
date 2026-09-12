@@ -95,7 +95,7 @@ The finding combines intended behavior with a verified defect. OpenSpec explicit
 
 Verified the unbounded waits in both `history_connection_scope` and `SessionRegistry.locked`, and reproduced contention with a held History/registry lock. History and Session coordination now use the configured `[houdini].lock_timeout_seconds`; host-side History timeout reports `history_lock_timeout` and Session registry timeout reports `session_registry_lock_timeout`. The Houdini `AfterLoad`/`AfterClear` callback now uses a bounded lock wait. To preserve the scene-reset contract when that wait expires, it publishes a coordination-only pending-reset marker before waiting; the next History connection that acquires the database lock destroys the old DB/WAL/SHM/journal before any read or recreation. Async Task workers receive the same lock timeout when launched. Regression coverage verifies bounded Session/History waits and that a timed-out hip-event reset returns promptly while the pending reset is consumed before the next History connection. The unit suite passed with the existing external `filetype` test stub.
 
-### [ ] C6. Sync exec writes the status file after in-Houdini history finalize — a history-DB lock hang converts a successful execution into a transport timeout
+### [Fixed] C6. Sync exec writes the status file after in-Houdini history finalize — a history-DB lock hang converts a successful execution into a transport timeout
 
 - **Severity:** Medium
 - **Confidence:** Plausible candidate
@@ -106,6 +106,10 @@ Verified the unbounded waits in both `history_connection_scope` and `SessionRegi
 - **Expected impact:** Intermittent false transport failures whenever history finalize stalls past `transport_timeout_seconds`.
 - **Trigger conditions:** History enabled; another process holds the per-DB history lock longer than the remaining transport timeout while a sync exec finishes.
 - **Suggested verification direction:** Hold history lock, run timed `houbridge exec 'print(1)'`; expect timeout despite completed side effects. Consider writing status before history finalize, or bounding the in-Houdini lock wait.
+
+#### Update — 2026-09-12 13:47 — Base 0c89605
+
+Verified the ordering defect after C5: the synchronous wrapper still published `execution.json` only after in-Houdini History finalization, while the host-side transport timeout covered the entire hcommand call. A caller that had already reached a terminal Python outcome could therefore still be reported as `hcommand_timeout` when only post-Python History bookkeeping consumed the remaining transport budget. The wrapper now atomically publishes the terminal caller status after stdout/stderr/result files are stable and before History finalization. `ExecutionRuntime` preserves that outcome only when History was enabled, `hcommand_timeout` occurs, and the terminal status marker already exists; timeouts before the marker and no-History timeouts still propagate normally. Regression tests verify marker-before-History ordering, preservation of the completed Python outcome in the History-enabled timeout case, and unchanged timeout behavior without History.
 
 ### [ ] C7. SQLite connections rely on the default 5s busy timeout under multi-process `BEGIN IMMEDIATE` contention
 

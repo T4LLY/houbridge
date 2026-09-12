@@ -60,6 +60,12 @@ class LocalPythonTransport:
         return TransportResult(completed.stdout, completed.stderr, completed.returncode)
 
 
+class TimeoutAfterScriptTransport(LocalPythonTransport):
+    def execute_script(self, target: HoudiniTarget, script_path: Path) -> TransportResult:
+        super().execute_script(target, script_path)
+        raise BridgeError("hcommand_timeout", "transport timed out after caller completion")
+
+
 class FailingTransport:
     def execute_script(self, target: HoudiniTarget, script_path: Path) -> TransportResult:
         raise BridgeError("houdini_transport_failed", "transport failed")
@@ -143,6 +149,85 @@ def test_transport_failure_propagates_and_workspace_is_removed(tmp_path: Path) -
         runtime.execute(_resolved_session(), _invocation("result = 1\n"))
 
     assert caught.value.code == "houdini_transport_failed"
+    assert list(workspaces.root.iterdir()) == []
+
+
+def test_history_enabled_timeout_after_terminal_status_preserves_python_outcome(
+    tmp_path: Path,
+) -> None:
+    fake_hou_root = tmp_path / "fake"
+    fake_hou_root.mkdir()
+    (fake_hou_root / "hou.py").write_text("VALUE = 7\n", encoding="utf-8")
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+    lock = RecordingLock()
+    transport = TimeoutAfterScriptTransport(fake_hou_root, lock)
+
+    class History:
+        def __init__(self) -> None:
+            self.finalize_calls = 0
+
+        def prepare(self, invocation, session, workspace):
+            runtime_script = workspace.path_for("history-runtime.py")
+            runtime_script.write_text(
+                "def prepare(_request_file):\n"
+                "    return object()\n"
+                "def finalize(_context):\n"
+                "    return None\n",
+                encoding="utf-8",
+            )
+            request_path = workspace.path_for("history-request.json")
+            request_path.write_text("{}", encoding="utf-8")
+            return type(
+                "Preparation",
+                (),
+                {"runtime_script": runtime_script, "request_path": request_path},
+            )()
+
+        def finalize(self, preparation, invocation, session, outcome, workspace):
+            self.finalize_calls += 1
+
+    history = History()
+    runtime = ExecutionRuntime(
+        transport=transport,  # type: ignore[arg-type]
+        workspaces=workspaces,
+        execution_lock=lock,  # type: ignore[arg-type]
+        lock_timeout_seconds=1,
+        history=history,  # type: ignore[arg-type]
+    )
+
+    outcome = runtime.execute(
+        _resolved_session(),
+        _invocation("print('done')\nresult = {'value': hou.VALUE}\n"),
+    )
+
+    assert outcome.python_ok is True
+    assert outcome.stdout == "done\n"
+    assert outcome.result is not None
+    assert outcome.result.inline_value() == {"value": 7}
+    assert history.finalize_calls == 1
+    assert list(workspaces.root.iterdir()) == []
+
+
+def test_timeout_after_terminal_status_without_history_remains_transport_failure(
+    tmp_path: Path,
+) -> None:
+    fake_hou_root = tmp_path / "fake-no-history"
+    fake_hou_root.mkdir()
+    (fake_hou_root / "hou.py").write_text("VALUE = 7\n", encoding="utf-8")
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp-no-history")
+    lock = RecordingLock()
+    runtime = ExecutionRuntime(
+        transport=TimeoutAfterScriptTransport(fake_hou_root, lock),  # type: ignore[arg-type]
+        workspaces=workspaces,
+        execution_lock=lock,  # type: ignore[arg-type]
+        lock_timeout_seconds=1,
+        history=None,
+    )
+
+    with pytest.raises(BridgeError) as caught:
+        runtime.execute(_resolved_session(), _invocation("result = hou.VALUE\n"))
+
+    assert caught.value.code == "hcommand_timeout"
     assert list(workspaces.root.iterdir()) == []
 
 

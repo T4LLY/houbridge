@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from houbridge.errors import BridgeError
 from houbridge.houdini.transport import HoudiniTransport
 from houbridge.process_coordination import ManagedExecutionLock
 from houbridge.session.resolver import ResolvedSession
@@ -55,10 +56,21 @@ class ExecutionRuntime:
                     history=history_preparation,
                 )
                 staged = self._script_builder.stage(workspace, request_path)
-                # Transport BridgeError is intentionally allowed to propagate. A
-                # failed hcommand invocation must never be reinterpreted as a
-                # successful Python outcome.
-                self._transport.execute_script(session.target, staged.script_path)
+                try:
+                    self._transport.execute_script(session.target, staged.script_path)
+                except BridgeError as exc:
+                    if not (
+                        exc.code == "hcommand_timeout"
+                        and history_preparation is not None
+                        and workspace.path_for("execution.json").is_file()
+                    ):
+                        # A transport failure before the terminal caller marker, or
+                        # without enabled History, remains a transport failure.
+                        raise
+                    # The injected wrapper publishes execution.json only after
+                    # caller Python and its output files are terminal, and before
+                    # best-effort History finalization. A timeout after that marker
+                    # therefore must not redefine the caller's Python outcome.
                 outcome = collect_outcome(workspace)
                 if self._history is not None and history_preparation is not None:
                     try:

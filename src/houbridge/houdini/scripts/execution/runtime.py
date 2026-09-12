@@ -76,6 +76,11 @@ def run(request_path_value: str) -> None:
         finally:
             sys.argv = previous_argv
 
+    # Publish the caller Python outcome before best-effort History finalization.
+    # The host can then distinguish a terminal caller outcome from a transport
+    # timeout caused only by post-Python History bookkeeping.
+    _atomic_write_json(status_path, status)
+
     if history_runtime is not None and history_context is not None:
         try:
             history_runtime["finalize"](history_context)
@@ -83,8 +88,6 @@ def run(request_path_value: str) -> None:
             # Caller Python has already reached a terminal outcome. History is
             # best-effort after start and must not redefine that outcome.
             pass
-
-    _atomic_write_json(status_path, status)
 
 
 def _write_declared_result(

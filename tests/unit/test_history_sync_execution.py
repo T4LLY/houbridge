@@ -397,6 +397,48 @@ def test_history_finalization_failure_does_not_replay_or_redefine_success(
     assert transport.calls == 1
     assert history.finalize_calls == 1
 
+def test_sync_status_is_published_before_in_houdini_history_finalize(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_hou(monkeypatch, root=FakeNode())
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path / "temp").allocate(prefix="exec")
+    status_path = workspace.path_for("execution.json")
+    marker_path = workspace.path_for("history-finalize-observed.txt")
+    history_request = workspace.path_for("history-request.json")
+    history_request.write_text(
+        json.dumps({"status_file": str(status_path), "marker_file": str(marker_path)}),
+        encoding="utf-8",
+    )
+    history_runtime = workspace.path_for("history-runtime.py")
+    history_runtime.write_text(
+        "import json\n"
+        "from pathlib import Path\n"
+        "def prepare(request_file):\n"
+        "    return json.loads(Path(request_file).read_text(encoding='utf-8'))\n"
+        "def finalize(context):\n"
+        "    status = Path(context['status_file'])\n"
+        "    if not status.is_file():\n"
+        "        raise RuntimeError('execution status was not published before History finalize')\n"
+        "    Path(context['marker_file']).write_text(status.read_text(encoding='utf-8'), encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    invocation = _invocation(tmp_path, "result = 7\n")
+    preparation = SimpleNamespace(runtime_script=history_runtime, request_path=history_request)
+    request = stage_invocation(workspace, invocation, history=preparation)
+
+    run_execution_script(str(request))
+
+    assert json.loads(status_path.read_text(encoding="utf-8")) == {
+        "python_ok": True,
+        "result_kind": "json",
+    }
+    assert json.loads(marker_path.read_text(encoding="utf-8")) == {
+        "python_ok": True,
+        "result_kind": "json",
+    }
+
+
 def test_history_disabled_runs_without_history_storage_or_embedding(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
