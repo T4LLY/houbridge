@@ -95,6 +95,7 @@ class HistoryInvocationRecorder:
                     "database_lock_path": str(
                         history_database_lock_path(storage.store.database).resolve()
                     ),
+                    "lock_timeout_seconds": storage.store.lock_timeout_seconds,
                     "capture_file": str(capture_path.resolve()),
                 },
                 ensure_ascii=False,

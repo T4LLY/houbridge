@@ -60,7 +60,10 @@ class HistorySearchService:
                 "history_store_invalid",
                 "History database is missing its code embedding profile.",
             )
-        reader = HistoryReader(self._store.database)
+        reader = HistoryReader(
+            self._store.database,
+            lock_timeout_seconds=self._store.lock_timeout_seconds,
+        )
         entries = reader.all_for_search()
         if not entries:
             return {"hits": []}
@@ -147,7 +150,11 @@ class HistorySearchService:
         profile: str,
     ) -> tuple[SQLiteVecIndex, SQLiteFtsIndex]:
         assert self._store is not None
-        factory = lambda: history_connection_scope(self._store.database, require_existing=True)
+        factory = lambda: history_connection_scope(
+            self._store.database,
+            require_existing=True,
+            lock_timeout_seconds=self._store.lock_timeout_seconds,
+        )
         cache = SQLiteEmbeddingCache(factory, table_name=SOURCE_EMBEDDING_TABLE)
         dense = SQLiteVecIndex(factory, schema=DENSE_SCHEMA)
         lexical = SQLiteFtsIndex(factory, schema=LEXICAL_SCHEMA)

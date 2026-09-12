@@ -41,7 +41,10 @@ def test_session_new_emits_exact_public_success_shape(monkeypatch, tmp_path) -> 
         "load_config",
         lambda: SimpleNamespace(
             storage=SimpleNamespace(data_dir=tmp_path),
-            houdini=SimpleNamespace(transport_timeout_seconds=120.0),
+            houdini=SimpleNamespace(
+                transport_timeout_seconds=120.0,
+                lock_timeout_seconds=120.0,
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -66,7 +69,10 @@ def test_session_promote_emits_exact_public_success_shape(monkeypatch, tmp_path)
         "load_config",
         lambda: SimpleNamespace(
             storage=SimpleNamespace(data_dir=tmp_path),
-            houdini=SimpleNamespace(transport_timeout_seconds=120.0),
+            houdini=SimpleNamespace(
+                transport_timeout_seconds=120.0,
+                lock_timeout_seconds=120.0,
+            ),
         ),
     )
     monkeypatch.setattr(

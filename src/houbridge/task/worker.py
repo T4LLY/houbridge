@@ -24,6 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--resources-db", type=Path, required=True)
     parser.add_argument("--resource-ttl-hours", type=int, required=True)
     parser.add_argument("--max-concurrency", type=int, required=True)
+    parser.add_argument("--lock-timeout-seconds", type=float, required=True)
     args = parser.parse_args(argv)
 
     task_store = TaskStore(args.tasks_db)
@@ -36,7 +37,10 @@ def main(argv: list[str] | None = None) -> int:
     finalizer = TaskCompletionResourceFinalizer(task_store, resource_store)
     paths = GlobalDataPaths.from_data_dir(args.tasks_db.resolve().parent)
     history = AsyncTaskHistory(
-        HistoryStorageService(paths),
+        HistoryStorageService(
+            paths,
+            lock_timeout_seconds=args.lock_timeout_seconds,
+        ),
         resource_store=resource_store,
     )
     runner = TaskInvocationRunner(

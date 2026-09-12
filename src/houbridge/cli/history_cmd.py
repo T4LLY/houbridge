@@ -62,7 +62,11 @@ def search_command(
         settings = load_config()
         paths, session = _resolve(settings, session_number)
         provider = Model2VecEmbeddingProvider()
-        storage = HistoryStorageService(paths, embedding_provider=provider).existing(session.identity)
+        storage = HistoryStorageService(
+            paths,
+            embedding_provider=provider,
+            lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+        ).existing(session.identity)
         payload = HistorySearchService(
             storage,
             provider=provider,
@@ -82,8 +86,18 @@ def get_command(
         parsed_history_id = _parse_history_id(history_id)
         settings = load_config()
         paths, session = _resolve(settings, session_number)
-        storage = HistoryStorageService(paths).existing(session.identity)
-        reader = None if storage is None else HistoryReader(storage.database)
+        storage = HistoryStorageService(
+            paths,
+            lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+        ).existing(session.identity)
+        reader = (
+            None
+            if storage is None
+            else HistoryReader(
+                storage.database,
+                lock_timeout_seconds=storage.lock_timeout_seconds,
+            )
+        )
         payload = HistoryReadService(reader).get(parsed_history_id)
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:
@@ -99,8 +113,18 @@ def list_command(
         parsed_limit = _parse_positive_integer(limit, option="limit")
         settings = load_config()
         paths, session = _resolve(settings, session_number)
-        storage = HistoryStorageService(paths).existing(session.identity)
-        reader = None if storage is None else HistoryReader(storage.database)
+        storage = HistoryStorageService(
+            paths,
+            lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+        ).existing(session.identity)
+        reader = (
+            None
+            if storage is None
+            else HistoryReader(
+                storage.database,
+                lock_timeout_seconds=storage.lock_timeout_seconds,
+            )
+        )
         payload = HistoryReadService(reader).list(parsed_limit)
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:

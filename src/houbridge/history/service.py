@@ -27,9 +27,11 @@ class HistoryStorageService:
         paths: GlobalDataPaths,
         *,
         embedding_provider: EmbeddingProvider | None = None,
+        lock_timeout_seconds: float = 120.0,
     ) -> None:
         self._paths = paths
         self._embedding_provider = embedding_provider
+        self._lock_timeout_seconds = float(lock_timeout_seconds)
 
     def database_for(self, identity: ProcessIdentity) -> Path:
         key = history_session_key(identity)
@@ -49,6 +51,7 @@ class HistoryStorageService:
         store = HistoryStore(
             self._paths.history_session(key).database,
             embedding_provider=self._embedding_provider,
+            lock_timeout_seconds=self._lock_timeout_seconds,
         )
         profile = store.initialize(requested_code_profile)
         return HistorySessionStorage(
@@ -62,7 +65,11 @@ class HistoryStorageService:
         database = self.database_for(identity)
         if not database.is_file():
             return None
-        return HistoryStore(database, embedding_provider=self._embedding_provider)
+        return HistoryStore(
+            database,
+            embedding_provider=self._embedding_provider,
+            lock_timeout_seconds=self._lock_timeout_seconds,
+        )
 
     def existing_storage(self, identity: ProcessIdentity) -> HistorySessionStorage | None:
         store = self.existing(identity)

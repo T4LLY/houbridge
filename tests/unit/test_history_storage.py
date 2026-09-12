@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+import threading
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+from houbridge.errors import BridgeError
 from houbridge.history import HistoryStorageService, HistoryStore, history_session_key
 from houbridge.history.reader import HistoryReader
 from houbridge.paths import GlobalDataPaths
@@ -146,3 +149,39 @@ def test_history_reader_does_not_recreate_database_after_scene_reset(tmp_path: P
     assert reader.all_for_search() == []
     assert not database.exists()
 
+
+
+def test_history_connection_wait_is_bounded_by_configured_lock_timeout(tmp_path: Path) -> None:
+    database = tmp_path / "history.db"
+    holder = HistoryStore(
+        database,
+        embedding_provider=FakeEmbeddingProvider(),
+        lock_timeout_seconds=1.0,
+    )
+    contender = HistoryStore(
+        database,
+        embedding_provider=FakeEmbeddingProvider(),
+        lock_timeout_seconds=0.05,
+    )
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def hold() -> None:
+        with holder._connect() as connection:
+            connection.execute("CREATE TABLE held(value INTEGER)")
+            entered.set()
+            assert release.wait(timeout=2)
+
+    thread = threading.Thread(target=hold)
+    thread.start()
+    assert entered.wait(timeout=2)
+
+    try:
+        with pytest.raises(BridgeError) as caught:
+            contender.initialize("profile-a")
+        assert caught.value.code == "history_lock_timeout"
+    finally:
+        release.set()
+        thread.join(timeout=2)
+    assert not thread.is_alive()

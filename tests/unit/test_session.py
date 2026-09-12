@@ -5,6 +5,7 @@ import os
 import runpy
 import shutil
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -483,3 +484,30 @@ def test_process_identity_reader_is_stable_for_current_process() -> None:
 
     assert first.pid == os.getpid()
     assert first == second
+
+
+def test_session_registry_lock_wait_is_bounded(tmp_path: Path) -> None:
+    path = tmp_path / "sessions.json"
+    holder = SessionRegistry(path, lock_timeout_seconds=1.0)
+    contender = SessionRegistry(path, lock_timeout_seconds=0.05)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def hold() -> None:
+        with holder.locked():
+            entered.set()
+            assert release.wait(timeout=2)
+
+    thread = threading.Thread(target=hold)
+    thread.start()
+    assert entered.wait(timeout=2)
+
+    try:
+        with pytest.raises(BridgeError) as caught:
+            with contender.locked():
+                raise AssertionError("contended registry lock must not be acquired")
+        assert caught.value.code == "session_registry_lock_timeout"
+    finally:
+        release.set()
+        thread.join(timeout=2)
+    assert not thread.is_alive()

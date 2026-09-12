@@ -84,6 +84,8 @@ Generated defaults SHALL be:
 
 All numeric `[houdini]` timeout and polling values SHALL be finite and strictly greater than zero. NaN and positive or negative infinity SHALL be rejected as `invalid_config`.
 
+`[houdini].lock_timeout_seconds` SHALL bound Houbridge process-coordination waits that can otherwise block a command or Houdini callback indefinitely, including managed-execution ownership, Session registry mutation, and History database scene-reset/read/write coordination.
+
 An empty global `[houdini].hcommand` SHALL mean that `session new` falls back to the executable name `houdini`. The setting identifies an executable only and SHALL NOT contain launch arguments. A configured bare executable name SHALL retain normal executable discovery semantics; a configured relative executable path SHALL resolve relative to the global `config.toml` directory so its meaning does not vary by current working directory. It SHALL be global-only and SHALL NOT be overridden by `<cwd>/.houbridge.toml`.
 
 #### Scenario: Session new uses the configured launch executable

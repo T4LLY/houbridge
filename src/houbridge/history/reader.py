@@ -56,12 +56,17 @@ class HistoryEntryRecord:
 class HistoryReader:
     """Read complete Action History records from one exact session database."""
 
-    def __init__(self, database: Path) -> None:
+    def __init__(self, database: Path, *, lock_timeout_seconds: float = 120.0) -> None:
         self._database = database
+        self._lock_timeout_seconds = float(lock_timeout_seconds)
 
     def get(self, history_id: int) -> HistoryEntryRecord | None:
         try:
-            with history_connection_scope(self._database, require_existing=True) as connection:
+            with history_connection_scope(
+                self._database,
+                require_existing=True,
+                lock_timeout_seconds=self._lock_timeout_seconds,
+            ) as connection:
                 row = connection.execute(
                     "SELECT * FROM history_entries WHERE id = ?",
                     (history_id,),
@@ -85,7 +90,11 @@ class HistoryReader:
 
     def list(self, limit: int) -> list[HistoryEntryRecord]:
         try:
-            with history_connection_scope(self._database, require_existing=True) as connection:
+            with history_connection_scope(
+                self._database,
+                require_existing=True,
+                lock_timeout_seconds=self._lock_timeout_seconds,
+            ) as connection:
                 rows = connection.execute(
                     """
                     SELECT *
@@ -103,7 +112,11 @@ class HistoryReader:
 
     def all_for_search(self) -> list[HistoryEntryRecord]:
         try:
-            with history_connection_scope(self._database, require_existing=True) as connection:
+            with history_connection_scope(
+                self._database,
+                require_existing=True,
+                lock_timeout_seconds=self._lock_timeout_seconds,
+            ) as connection:
                 rows = connection.execute(
                     """
                     SELECT *

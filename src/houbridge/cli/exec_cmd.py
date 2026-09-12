@@ -69,7 +69,10 @@ def _build_sync_execution_service(
     history = None
     if settings.history.enabled:
         history = SynchronousExecutionHistory(
-            HistoryStorageService(paths),
+            HistoryStorageService(
+                paths,
+                lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+            ),
             requested_code_profile=settings.search.embedding.code_profile,
             resource_store_factory=output_policy.resource_store_factory,
         )

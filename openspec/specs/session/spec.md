@@ -57,6 +57,8 @@ The registry SHALL represent the primary selection separately from numbered sess
 
 `primary` SHALL always be present and SHALL contain either one registered session number or `null` when no primary is selected. No individual session record SHALL carry a duplicate primary flag. Each session record SHALL retain at least the auto-selected openport and Houdini process PID.
 
+Cross-process Session registry mutation SHALL use a process-coordination lock. Waiting to acquire that lock SHALL be bounded by `[houdini].lock_timeout_seconds`; expiration SHALL fail the operation rather than block indefinitely.
+
 #### Scenario: Commands run from different directories
 - **WHEN** two commands use different current working directories
 - **THEN** both resolve Session registration from the same global `<data-dir>/sessions.json`

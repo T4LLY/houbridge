@@ -50,9 +50,11 @@ class HistoryStore:
         database: Path,
         *,
         embedding_provider: EmbeddingProvider | None = None,
+        lock_timeout_seconds: float = 120.0,
     ) -> None:
         self.database = database
         self._provider = embedding_provider or Model2VecEmbeddingProvider()
+        self.lock_timeout_seconds = float(lock_timeout_seconds)
 
     def exists(self) -> bool:
         return self.database.is_file()
@@ -268,7 +270,14 @@ class HistoryStore:
         return entry_id
 
     def _connect(self) -> AbstractContextManager[sqlite3.Connection]:
-        return history_connection_scope(self.database)
+        return history_connection_scope(
+            self.database,
+            lock_timeout_seconds=self.lock_timeout_seconds,
+        )
 
     def _connect_existing(self) -> AbstractContextManager[sqlite3.Connection]:
-        return history_connection_scope(self.database, require_existing=True)
+        return history_connection_scope(
+            self.database,
+            require_existing=True,
+            lock_timeout_seconds=self.lock_timeout_seconds,
+        )

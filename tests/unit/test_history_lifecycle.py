@@ -3,6 +3,7 @@ from __future__ import annotations
 import runpy
 import sys
 import threading
+import time
 import types
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,8 +11,10 @@ from types import SimpleNamespace
 import pytest
 
 from houbridge.history.locking import (
+    HistoryDatabaseMissingError,
     history_connection_scope,
     history_database_lock_path,
+    history_database_reset_path,
 )
 
 
@@ -136,3 +139,38 @@ def test_scene_reset_waits_until_active_history_connection_closes(
     assert runtime["current_generation"](str(database)) == 1
     assert not database.exists()
 
+
+
+def test_scene_reset_timeout_leaves_pending_reset_consumed_before_next_connection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, hip_file, events = _load_runtime(monkeypatch)
+    database = tmp_path / "history.db"
+    lock_path = history_database_lock_path(database)
+    reset_path = history_database_reset_path(database)
+    runtime["install"](str(database), str(lock_path), 0.05)
+
+    with history_connection_scope(database, lock_timeout_seconds=1.0) as connection:
+        connection.execute("CREATE TABLE marker(value TEXT)")
+        connection.execute("INSERT INTO marker(value) VALUES ('old')")
+
+        started = time.monotonic()
+        hip_file.emit(events.AfterLoad)
+        elapsed = time.monotonic() - started
+
+        assert elapsed < 0.5
+        assert database.exists()
+        assert reset_path.is_file()
+        assert runtime["current_generation"](str(database)) == 1
+
+    with pytest.raises(HistoryDatabaseMissingError):
+        with history_connection_scope(
+            database,
+            require_existing=True,
+            lock_timeout_seconds=1.0,
+        ):
+            raise AssertionError("pending scene reset must remove the old database first")
+
+    assert not database.exists()
+    assert not reset_path.exists()

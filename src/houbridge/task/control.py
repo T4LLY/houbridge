@@ -31,5 +31,6 @@ def build_task_runtime_control(config: HoubridgeConfig) -> TaskRuntimeControl:
         resource_ttl_hours=config.resource.ttl_hours,
         max_concurrency=config.task.max_concurrency,
         handoff_timeout_seconds=config.houdini.transport_timeout_seconds,
+        lock_timeout_seconds=config.houdini.lock_timeout_seconds,
     )
     return TaskRuntimeControl(store, runtime_state, supervisor, launcher)

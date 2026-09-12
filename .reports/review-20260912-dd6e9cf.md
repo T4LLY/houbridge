@@ -79,7 +79,7 @@ The finding combines intended behavior with a verified defect. OpenSpec explicit
 - **Trigger conditions:** Upgrade from a version whose default/accepted config contained any key removed/renamed in the current schema.
 - **Suggested verification direction:** Add a config containing `storage.root` and run any command. Consider key migration, warn-and-ignore for recognized-legacy keys, or an error message naming the offending key with a suggested fix (it does name the key — add remediation).
 
-### [ ] C5. InterprocessFileLock default infinite wait can deadlock CLI/Houdini on a held history DB lock; lifecycle hip-event handler has no timeout at all
+### [Fixed] C5. InterprocessFileLock default infinite wait can deadlock CLI/Houdini on a held history DB lock; lifecycle hip-event handler has no timeout at all
 
 - **Severity:** Medium-High
 - **Confidence:** Plausible candidate
@@ -90,6 +90,10 @@ The finding combines intended behavior with a verified defect. OpenSpec explicit
 - **Expected impact:** CLI hangs with no diagnostics; Houdini UI freezes on scene load/clear while another process holds the DB lock.
 - **Trigger conditions:** History DB (or registry) lock held by a process that stops making progress without dying (suspended, long GC/IO inside the locked section, crash mid-section on POSIX where the fd is held by a surviving child).
 - **Suggested verification direction:** Hold the history lock manually (small script) then run `houbridge history …` and load a hip file in Houdini; confirm indefinite block. Add bounded timeouts + `lock_timeout` error code and retry/deferral for the hip-event destroy.
+
+#### Update — 2026-09-12 13:21 — Base 0c89605
+
+Verified the unbounded waits in both `history_connection_scope` and `SessionRegistry.locked`, and reproduced contention with a held History/registry lock. History and Session coordination now use the configured `[houdini].lock_timeout_seconds`; host-side History timeout reports `history_lock_timeout` and Session registry timeout reports `session_registry_lock_timeout`. The Houdini `AfterLoad`/`AfterClear` callback now uses a bounded lock wait. To preserve the scene-reset contract when that wait expires, it publishes a coordination-only pending-reset marker before waiting; the next History connection that acquires the database lock destroys the old DB/WAL/SHM/journal before any read or recreation. Async Task workers receive the same lock timeout when launched. Regression coverage verifies bounded Session/History waits and that a timed-out hip-event reset returns promptly while the pending reset is consumed before the next History connection. The unit suite passed with the existing external `filetype` test stub.
 
 ### [ ] C6. Sync exec writes the status file after in-Houdini history finalize — a history-DB lock hang converts a successful execution into a transport timeout
 

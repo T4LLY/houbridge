@@ -221,13 +221,19 @@ def test_history_cli_uses_registered_session_selection(monkeypatch: pytest.Monke
         return object(), SimpleNamespace(identity=ProcessIdentity(3003, "start-3003"))
 
     class Storage:
-        def __init__(self, _paths):
+        def __init__(self, _paths, **_kwargs):
             pass
 
         def existing(self, _identity):
             return None
 
-    monkeypatch.setattr(history_cmd, "load_config", lambda: object())
+    monkeypatch.setattr(
+        history_cmd,
+        "load_config",
+        lambda: SimpleNamespace(
+            houdini=SimpleNamespace(lock_timeout_seconds=120.0),
+        ),
+    )
     monkeypatch.setattr(history_cmd, "_resolve", resolve)
     monkeypatch.setattr(history_cmd, "HistoryStorageService", Storage)
     monkeypatch.setattr(history_cmd.OutputPolicy, "from_config", classmethod(lambda cls, _settings: object()))

@@ -31,7 +31,10 @@ def info_command(
 ) -> None:
     settings = load_config()
     paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
-    registry = SessionRegistry(paths.sessions_registry)
+    registry = SessionRegistry(
+        paths.sessions_registry,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+    )
     probe = SessionProbe(lambda: HoudiniTransport.from_config(settings.houdini))
     resolver = SessionResolver(registry, probe)
     stale_cleanup = SessionStaleCleanupService(
@@ -54,7 +57,10 @@ def new_command(
 ) -> None:
     settings = load_config()
     paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
-    registry = SessionRegistry(paths.sessions_registry)
+    registry = SessionRegistry(
+        paths.sessions_registry,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+    )
 
     def probe_for_launch(executable: Path) -> SessionProbe:
         transport_executable = resolve_transport_hcommand_for_launch(executable)
@@ -86,7 +92,10 @@ def promote_command(
 ) -> None:
     settings = load_config()
     paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
-    registry = SessionRegistry(paths.sessions_registry)
+    registry = SessionRegistry(
+        paths.sessions_registry,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+    )
     probe = SessionProbe(lambda: HoudiniTransport.from_config(settings.houdini))
     resolver = SessionResolver(registry, probe)
     stale_cleanup = SessionStaleCleanupService(

@@ -33,6 +33,8 @@ Within one live Houdini process incarnation, a successful scene replacement SHAL
 
 If `AfterLoad` or `AfterClear` occurs while a managed Python invocation is recording History, that invocation's in-memory Action baseline and pending History entry SHALL be discarded. Houbridge SHALL NOT compare state captured before the scene replacement with the replacement scene or commit that invocation's History entry after the boundary.
 
+Scene-reset deletion SHALL coordinate with History readers/writers through the per-database process lock, but the Houdini hip-event callback SHALL NOT wait longer than `[houdini].lock_timeout_seconds`. Before waiting, it SHALL publish a process-coordination reset marker. If the callback cannot acquire the lock within that bound, it SHALL return without freezing the UI and leave the reset pending. The next Houbridge History connection that acquires the same database lock SHALL consume the pending reset by destroying the previous database and SQLite sidecars before it may read, initialize, or recreate History.
+
 #### Scenario: Another HIP file is opened successfully
 - **WHEN** Houdini reports `AfterLoad` for a successfully loaded scene
 - **THEN** the previous scene's History database is destroyed

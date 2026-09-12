@@ -26,10 +26,11 @@ def prepare(request_path_value: str) -> HistoryCaptureContext:
         Path(_required_string(request, "database_lock_path")).resolve()
     )
     capture_path = Path(_required_string(request, "capture_file"))
+    lock_timeout_seconds = _positive_number(request.get("lock_timeout_seconds", 120.0))
 
     script_dir = Path(__file__).resolve().parent
     lifecycle = runpy.run_path(str(script_dir / "lifecycle.py"))
-    lifecycle["install"](database_path, database_lock_path)
+    lifecycle["install"](database_path, database_lock_path, lock_timeout_seconds)
     generation_getter: Callable[[], int] = lambda: int(
         lifecycle["current_generation"](database_path)
     )
@@ -65,6 +66,15 @@ def _required_string(payload: object, key: str) -> str:
     if not isinstance(value, str) or not value:
         raise RuntimeError(f"History execution request is missing {key}.")
     return value
+
+
+def _positive_number(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise RuntimeError("History execution request has invalid lock_timeout_seconds.")
+    parsed = float(value)
+    if parsed <= 0 or parsed == float("inf") or parsed == float("-inf") or parsed != parsed:
+        raise RuntimeError("History execution request has invalid lock_timeout_seconds.")
+    return parsed
 
 
 def _atomic_write_json(path: Path, payload: object) -> None:

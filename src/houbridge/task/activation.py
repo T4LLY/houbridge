@@ -23,6 +23,7 @@ class TaskRuntimeProcessLauncher:
     resource_ttl_hours: int
     max_concurrency: int
     handoff_timeout_seconds: float
+    lock_timeout_seconds: float
     poll_interval_seconds: float = 0.05
     popen: Callable[..., subprocess.Popen[bytes]] = subprocess.Popen
     monotonic: Callable[[], float] = time.monotonic
@@ -31,6 +32,8 @@ class TaskRuntimeProcessLauncher:
     def __post_init__(self) -> None:
         if self.handoff_timeout_seconds <= 0:
             raise ValueError("handoff_timeout_seconds must be > 0")
+        if self.lock_timeout_seconds <= 0:
+            raise ValueError("lock_timeout_seconds must be > 0")
         if self.poll_interval_seconds <= 0:
             raise ValueError("poll_interval_seconds must be > 0")
 
@@ -49,6 +52,8 @@ class TaskRuntimeProcessLauncher:
             str(self.resource_ttl_hours),
             "--max-concurrency",
             str(self.max_concurrency),
+            "--lock-timeout-seconds",
+            str(self.lock_timeout_seconds),
         ]
         kwargs: dict[str, object] = {
             "stdin": subprocess.DEVNULL,

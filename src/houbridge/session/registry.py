@@ -11,7 +11,11 @@ from typing import Iterator, Mapping
 from uuid import uuid4
 
 from houbridge.errors import BridgeError
-from houbridge.process_coordination import InterprocessFileLock, coordination_directory
+from houbridge.process_coordination import (
+    InterprocessFileLock,
+    InterprocessFileLockTimeout,
+    coordination_directory,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,8 +64,9 @@ class SessionRegistryState:
 class SessionRegistry:
     """Global ``sessions.json`` owner."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, lock_timeout_seconds: float = 120.0) -> None:
         self.path = path
+        self._lock_timeout_seconds = float(lock_timeout_seconds)
         self._file_lock = InterprocessFileLock()
 
     @contextmanager
@@ -71,8 +76,18 @@ class SessionRegistry:
         canonical = os.path.normcase(str(self.path.resolve(strict=False)))
         digest = hashlib.sha256(os.fsencode(canonical)).hexdigest()[:32]
         lock_path = coordination_directory() / "session-registry" / f"{digest}.lock"
-        with self._file_lock.acquire(lock_path):
-            yield
+        try:
+            with self._file_lock.acquire(
+                lock_path,
+                timeout_seconds=self._lock_timeout_seconds,
+            ):
+                yield
+        except InterprocessFileLockTimeout as exc:
+            raise BridgeError(
+                "session_registry_lock_timeout",
+                "Timed out waiting for the Session registry lock.",
+                str(self.path),
+            ) from exc
 
     def load(self) -> SessionRegistryState:
         if not self.path.exists():
