@@ -12,6 +12,7 @@ from houbridge.resource.store import ResourceStore
 from houbridge.temporary_workspace import TemporaryWorkspace
 
 from .changes import ActionChange, materialize_action_changes
+from .locking import history_database_lock_path
 from .service import HistorySessionStorage, HistoryStorageService
 
 
@@ -91,6 +92,9 @@ class HistoryInvocationRecorder:
             json.dumps(
                 {
                     "database_path": str(storage.store.database.resolve()),
+                    "database_lock_path": str(
+                        history_database_lock_path(storage.store.database).resolve()
+                    ),
                     "capture_file": str(capture_path.resolve()),
                 },
                 ensure_ascii=False,

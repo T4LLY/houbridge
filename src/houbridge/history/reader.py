@@ -7,7 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-from houbridge.db.connection import connection_scope
+from houbridge.history.locking import (
+    HistoryDatabaseMissingError,
+    history_connection_scope,
+)
 from houbridge.errors import BridgeError
 from houbridge.formatting import format_public_datetime
 
@@ -58,7 +61,7 @@ class HistoryReader:
 
     def get(self, history_id: int) -> HistoryEntryRecord | None:
         try:
-            with connection_scope(self._database) as connection:
+            with history_connection_scope(self._database, require_existing=True) as connection:
                 row = connection.execute(
                     "SELECT * FROM history_entries WHERE id = ?",
                     (history_id,),
@@ -74,13 +77,15 @@ class HistoryReader:
                     """,
                     (history_id,),
                 ).fetchall()
+        except HistoryDatabaseMissingError:
+            return None
         except sqlite3.Error as exc:
             raise _database_error(exc) from exc
         return _decode_entry(row, changes)
 
     def list(self, limit: int) -> list[HistoryEntryRecord]:
         try:
-            with connection_scope(self._database) as connection:
+            with history_connection_scope(self._database, require_existing=True) as connection:
                 rows = connection.execute(
                     """
                     SELECT *
@@ -90,13 +95,15 @@ class HistoryReader:
                     """,
                     (limit,),
                 ).fetchall()
+        except HistoryDatabaseMissingError:
+            return []
         except sqlite3.Error as exc:
             raise _database_error(exc) from exc
         return [_decode_entry(row, ()) for row in rows]
 
     def all_for_search(self) -> list[HistoryEntryRecord]:
         try:
-            with connection_scope(self._database) as connection:
+            with history_connection_scope(self._database, require_existing=True) as connection:
                 rows = connection.execute(
                     """
                     SELECT *
@@ -111,6 +118,8 @@ class HistoryReader:
                     ORDER BY entry_id ASC, ordinal ASC
                     """
                 ).fetchall()
+        except HistoryDatabaseMissingError:
+            return []
         except sqlite3.Error as exc:
             raise _database_error(exc) from exc
 

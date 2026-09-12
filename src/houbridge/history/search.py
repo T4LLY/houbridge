@@ -6,7 +6,10 @@ from collections import defaultdict
 import numpy as np
 
 from houbridge.config import SearchHybridConfig
-from houbridge.db.connection import connection_scope
+from houbridge.history.locking import (
+    HistoryDatabaseMissingError,
+    history_connection_scope,
+)
 from houbridge.errors import BridgeError
 from houbridge.formatting import SearchScoreMetric, format_search_score
 from houbridge.search.dense import DenseVectorRecord, SQLiteVecIndex
@@ -97,6 +100,8 @@ class HistorySearchService:
                 namespaces=[LEXICAL_NAMESPACE],
                 limit=candidate_limit,
             )
+        except HistoryDatabaseMissingError:
+            return {"hits": []}
         except BridgeError:
             raise
         except sqlite3.Error as exc:
@@ -142,7 +147,7 @@ class HistorySearchService:
         profile: str,
     ) -> tuple[SQLiteVecIndex, SQLiteFtsIndex]:
         assert self._store is not None
-        factory = lambda: connection_scope(self._store.database)
+        factory = lambda: history_connection_scope(self._store.database, require_existing=True)
         cache = SQLiteEmbeddingCache(factory, table_name=SOURCE_EMBEDDING_TABLE)
         dense = SQLiteVecIndex(factory, schema=DENSE_SCHEMA)
         lexical = SQLiteFtsIndex(factory, schema=LEXICAL_SCHEMA)

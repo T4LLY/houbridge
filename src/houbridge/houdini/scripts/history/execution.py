@@ -22,11 +22,14 @@ def prepare(request_path_value: str) -> HistoryCaptureContext:
     request_path = Path(request_path_value)
     request = json.loads(request_path.read_text(encoding="utf-8"))
     database_path = str(Path(_required_string(request, "database_path")).resolve())
+    database_lock_path = str(
+        Path(_required_string(request, "database_lock_path")).resolve()
+    )
     capture_path = Path(_required_string(request, "capture_file"))
 
     script_dir = Path(__file__).resolve().parent
     lifecycle = runpy.run_path(str(script_dir / "lifecycle.py"))
-    lifecycle["install"](database_path)
+    lifecycle["install"](database_path, database_lock_path)
     generation_getter: Callable[[], int] = lambda: int(
         lifecycle["current_generation"](database_path)
     )

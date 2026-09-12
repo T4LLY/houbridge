@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import runpy
 import sys
+import threading
 import types
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+from houbridge.history.locking import (
+    history_connection_scope,
+    history_database_lock_path,
+)
 
 
 STATE_MODULE = "_houbridge_history_scene_lifecycle_v1"
@@ -61,7 +67,7 @@ def test_after_load_and_clear_destroy_current_database_and_advance_generation(
     database = tmp_path / "history.db"
     sidecars = [Path(str(database) + suffix) for suffix in ("-wal", "-shm", "-journal")]
 
-    assert runtime["install"](str(database)) == 0
+    assert runtime["install"](str(database), str(history_database_lock_path(database))) == 0
     assert len(hip_file.callbacks) == 1
 
     for path in (database, *sidecars):
@@ -83,7 +89,7 @@ def test_merge_and_save_do_not_reset_history(
     runtime, hip_file, events = _load_runtime(monkeypatch)
     database = tmp_path / "history.db"
     database.write_bytes(b"keep")
-    runtime["install"](str(database))
+    runtime["install"](str(database), str(history_database_lock_path(database)))
 
     hip_file.emit(events.AfterMerge)
     hip_file.emit(events.AfterSave)
@@ -99,8 +105,34 @@ def test_reinstall_reuses_one_process_local_callback(
     runtime, hip_file, _events = _load_runtime(monkeypatch)
     database = tmp_path / "history.db"
 
-    assert runtime["install"](str(database)) == 0
+    assert runtime["install"](str(database), str(history_database_lock_path(database))) == 0
     runtime_again = runpy.run_path(str(SCRIPT))
-    assert runtime_again["install"](str(database)) == 0
+    assert runtime_again["install"](str(database), str(history_database_lock_path(database))) == 0
 
     assert len(hip_file.callbacks) == 1
+
+def test_scene_reset_waits_until_active_history_connection_closes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, hip_file, events = _load_runtime(monkeypatch)
+    database = tmp_path / "history.db"
+    lock_path = history_database_lock_path(database)
+    runtime["install"](str(database), str(lock_path))
+
+    with history_connection_scope(database) as connection:
+        connection.execute("CREATE TABLE marker(value TEXT)")
+        connection.execute("INSERT INTO marker(value) VALUES ('old')")
+        reset = threading.Thread(target=hip_file.emit, args=(events.AfterLoad,))
+        reset.start()
+        reset.join(timeout=0.1)
+
+        assert reset.is_alive()
+        assert database.exists()
+        assert connection.execute("SELECT value FROM marker").fetchone()[0] == "old"
+
+    reset.join(timeout=2)
+    assert not reset.is_alive()
+    assert runtime["current_generation"](str(database)) == 1
+    assert not database.exists()
+

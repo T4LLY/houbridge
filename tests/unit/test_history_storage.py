@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from houbridge.history import HistoryStorageService, HistoryStore, history_session_key
+from houbridge.history.reader import HistoryReader
 from houbridge.paths import GlobalDataPaths
 from houbridge.process_coordination import ProcessIdentity
 
@@ -131,3 +132,17 @@ def test_history_schema_keeps_entries_changes_search_and_metadata_in_one_databas
     } <= tables
     assert "node_session_id" in change_columns
     assert not (tmp_path / "history-source").exists()
+
+def test_history_reader_does_not_recreate_database_after_scene_reset(tmp_path: Path) -> None:
+    database = tmp_path / "history.db"
+    store = HistoryStore(database, embedding_provider=FakeEmbeddingProvider())
+    store.initialize("profile-a")
+    reader = HistoryReader(database)
+
+    database.unlink()
+
+    assert reader.get(1) is None
+    assert reader.list(10) == []
+    assert reader.all_for_search() == []
+    assert not database.exists()
+

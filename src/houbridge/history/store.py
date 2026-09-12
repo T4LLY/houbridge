@@ -10,7 +10,10 @@ from typing import Callable
 
 import numpy as np
 
-from houbridge.db.connection import connection_scope
+from houbridge.history.locking import (
+    HistoryDatabaseMissingError,
+    history_connection_scope,
+)
 from houbridge.errors import BridgeError
 from houbridge.search.embedding import (
     EmbeddingCoordinator,
@@ -87,27 +90,30 @@ class HistoryStore:
 
         # These are History-owned derived search structures. They live in the
         # same session database and never make workspace search.db authoritative.
-        SQLiteEmbeddingCache(self._connect, table_name=SOURCE_EMBEDDING_TABLE)
-        SQLiteVecIndex(self._connect, schema=DENSE_SCHEMA)
-        SQLiteFtsIndex(self._connect, schema=LEXICAL_SCHEMA)
+        SQLiteEmbeddingCache(self._connect_existing, table_name=SOURCE_EMBEDDING_TABLE)
+        SQLiteVecIndex(self._connect_existing, schema=DENSE_SCHEMA)
+        SQLiteFtsIndex(self._connect_existing, schema=LEXICAL_SCHEMA)
         return profile
 
     def code_profile(self) -> str | None:
         if not self.exists():
             return None
-        with self._connect() as connection:
-            try:
-                row = connection.execute(
-                    "SELECT value FROM history_metadata WHERE key = ?",
-                    (_CODE_PROFILE_KEY,),
-                ).fetchone()
-            except sqlite3.OperationalError:
-                return None
+        try:
+            with self._connect_existing() as connection:
+                try:
+                    row = connection.execute(
+                        "SELECT value FROM history_metadata WHERE key = ?",
+                        (_CODE_PROFILE_KEY,),
+                    ).fetchone()
+                except sqlite3.OperationalError:
+                    return None
+        except HistoryDatabaseMissingError:
+            return None
         return None if row is None else str(row["value"])
 
     def allocate_id(self, *, requested_code_profile: str) -> int:
         self.initialize(requested_code_profile)
-        with self._connect() as connection:
+        with self._connect_existing() as connection:
             row = connection.execute(
                 """
                 UPDATE history_id_sequence
@@ -131,7 +137,7 @@ class HistoryStore:
     ) -> HistorySourceEmbedding:
         profile = self.initialize(requested_code_profile)
         source_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
-        cache = SQLiteEmbeddingCache(self._connect, table_name=SOURCE_EMBEDDING_TABLE)
+        cache = SQLiteEmbeddingCache(self._connect_existing, table_name=SOURCE_EMBEDDING_TABLE)
         vector = EmbeddingCoordinator(self._provider, cache).encode(
             [EmbeddingItem(content_hash=source_hash, text=source)],
             profile=profile,
@@ -166,7 +172,7 @@ class HistoryStore:
                 "History database disappeared before action finalization.",
             )
 
-        with self._connect() as connection:
+        with self._connect_existing() as connection:
             connection.execute("BEGIN IMMEDIATE")
             if execution_key is not None:
                 normalized_key = execution_key.strip()
@@ -262,4 +268,7 @@ class HistoryStore:
         return entry_id
 
     def _connect(self) -> AbstractContextManager[sqlite3.Connection]:
-        return connection_scope(self.database)
+        return history_connection_scope(self.database)
+
+    def _connect_existing(self) -> AbstractContextManager[sqlite3.Connection]:
+        return history_connection_scope(self.database, require_existing=True)

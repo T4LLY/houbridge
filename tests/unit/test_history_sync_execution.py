@@ -18,6 +18,7 @@ from houbridge.execution.models import ExecutionInvocation
 from houbridge.execution.runtime import ExecutionRuntime
 from houbridge.execution.workspace import stage_invocation
 from houbridge.history.execution import SynchronousExecutionHistory
+from houbridge.history.locking import history_database_lock_path
 from houbridge.history.service import HistoryStorageService
 from houbridge.houdini.scripts.execution.runtime import run as run_execution_script
 from houbridge.houdini.transport import HoudiniTarget, TransportResult
@@ -293,7 +294,11 @@ def test_action_baseline_failure_occurs_before_caller_python(
     history_request = workspace.path_for("history-request.json")
     capture = workspace.path_for("history-capture.json")
     history_request.write_text(
-        json.dumps({"database_path": str(database), "capture_file": str(capture)}),
+        json.dumps({
+            "database_path": str(database),
+            "database_lock_path": str(history_database_lock_path(database)),
+            "capture_file": str(capture),
+        }),
         encoding="utf-8",
     )
     from houbridge.houdini.scripts.history import execution as history_runtime
@@ -359,6 +364,9 @@ def test_history_finalization_failure_does_not_replay_or_redefine_success(
                 json.dumps(
                     {
                         "database_path": str(tmp_path / "history.db"),
+                        "database_lock_path": str(
+                            history_database_lock_path(tmp_path / "history.db")
+                        ),
                         "capture_file": str(workspace.path_for("history-capture.json")),
                     }
                 ),
