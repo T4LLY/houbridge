@@ -140,8 +140,8 @@
 
 - [ ] 9.1 Create one global `<data-dir>/tasks.db` schema for Task rows, output chunks, semantic ordinal state, runtime ownership, and claims.
 - [ ] 9.2 Expose exactly the four public states `queued`, `running`, `completed`, and `failed` with correct transition timing.
-- [ ] 9.3 Read and freeze exact submitted Python source before Task creation and retain it only while queued/running/recoverable.
-- [ ] 9.4 Generate Task semantic IDs from submitted source only, using caller fallback `task-unknown` and ordinal state independent of retained Task rows.
+- [x] 9.3 Read and freeze exact submitted Python source before Task creation and retain it only while queued/running/recoverable.
+- [x] 9.4 Generate Task semantic IDs from submitted source only, using caller fallback `task-unknown` and ordinal state independent of retained Task rows.
 - [ ] 9.5 Freeze absolute file, args, purpose, origin cwd, Session, target port, PID/process-incarnation, transport context, History decision, and requested embedding profile at submission.
 - [ ] 9.6 Implement recoverable on-demand Task Runtime ownership/activation in `tasks.db` rather than a permanent daemon flag.
 - [ ] 9.7 Implement queue claiming/scheduling with global `[task].max_concurrency` enforcement.

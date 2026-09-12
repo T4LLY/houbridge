@@ -67,6 +67,14 @@ class HoudiniTransport:
             environ=environ,
         )
 
+    def subprocess_environment(self) -> dict[str, str]:
+        """Return the exact subprocess environment that would be used now."""
+
+        return subprocess_environment_for(
+            self.executable,
+            environ=self._environ,
+        )
+
     def execute_script(
         self,
         target: HoudiniTarget,
