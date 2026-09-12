@@ -229,7 +229,7 @@ def load_config(
 
     merged = _deep_merge(global_raw, local_raw)
     _validate_schema(merged)
-    return _parse_config(merged)
+    return _parse_config(merged, global_config_dir=config_path.resolve().parent)
 
 
 def _read_toml(path: Path) -> dict[str, object]:
@@ -318,7 +318,33 @@ def _validate_schema(
             _validate_schema(value, child_schema, prefix=dotted)
 
 
-def _parse_config(raw: Mapping[str, object]) -> HoubridgeConfig:
+def _resolve_global_path(value: str, *, global_config_dir: Path) -> Path:
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return path
+    return (global_config_dir / path).resolve()
+
+
+def _resolve_global_executable(value: str, *, global_config_dir: Path) -> str:
+    if not value:
+        return ""
+
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return str(path)
+
+    # Bare executable names intentionally keep PATH-based discovery semantics.
+    # Relative path forms are anchored to the global config, never the caller cwd.
+    if value.startswith(".") or any(separator in value for separator in ("/", "\\")):
+        return str((global_config_dir / path).resolve())
+    return value
+
+
+def _parse_config(
+    raw: Mapping[str, object],
+    *,
+    global_config_dir: Path,
+) -> HoubridgeConfig:
     storage = _table(raw, "storage")
     houdini = _table(raw, "houdini")
     local_script_database = _table(raw, "local_script_database")
@@ -333,15 +359,19 @@ def _parse_config(raw: Mapping[str, object]) -> HoubridgeConfig:
 
     configured_data_dir = _string(storage, "data_dir", allow_empty=True).strip()
     data_dir = (
-        Path(configured_data_dir).expanduser()
+        _resolve_global_path(configured_data_dir, global_config_dir=global_config_dir)
         if configured_data_dir
         else default_data_dir()
     )
+    configured_hcommand = _string(houdini, "hcommand", allow_empty=True).strip()
 
     return HoubridgeConfig(
         storage=StorageConfig(data_dir=data_dir),
         houdini=HoudiniConfig(
-            hcommand=_string(houdini, "hcommand", allow_empty=True),
+            hcommand=_resolve_global_executable(
+                configured_hcommand,
+                global_config_dir=global_config_dir,
+            ),
             transport_timeout_seconds=_number(
                 houdini, "transport_timeout_seconds", positive=True
             ),

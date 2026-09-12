@@ -51,6 +51,7 @@ Houbridge-specific persistent settings SHALL come from TOML configuration or exp
 #### Scenario: Data directory is configured
 - **WHEN** `[storage].data_dir` contains a path
 - **THEN** that path is expanded and used for global operational state
+- **AND** a relative path is resolved relative to the global `config.toml` directory
 - **AND** commands use that same directory regardless of their current working directory
 
 
@@ -81,7 +82,7 @@ Generated defaults SHALL be:
 - `[houdini].startup_timeout_seconds = 60`
 - `[houdini].startup_poll_interval_seconds = 0.25`
 
-An empty global `[houdini].hcommand` SHALL mean that `session new` falls back to the executable name `houdini`. The setting identifies an executable only and SHALL NOT contain launch arguments. It SHALL be global-only and SHALL NOT be overridden by `<cwd>/.houbridge.toml`.
+An empty global `[houdini].hcommand` SHALL mean that `session new` falls back to the executable name `houdini`. The setting identifies an executable only and SHALL NOT contain launch arguments. A configured bare executable name SHALL retain normal executable discovery semantics; a configured relative executable path SHALL resolve relative to the global `config.toml` directory so its meaning does not vary by current working directory. It SHALL be global-only and SHALL NOT be overridden by `<cwd>/.houbridge.toml`.
 
 #### Scenario: Session new uses the configured launch executable
 - **WHEN** `session new` has no invocation `--hcommand` and global `[houdini].hcommand` is non-empty

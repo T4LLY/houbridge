@@ -126,6 +126,58 @@ def test_global_data_dir_is_expanded(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert config.storage.data_dir == tmp_path / "houbridge-data"
 
 
+def test_global_relative_data_dir_is_anchored_to_global_config(
+    tmp_path: Path,
+) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    config_path = config_dir / "config.toml"
+    _write_default(config_path)
+    _replace(config_path, 'data_dir = ""', 'data_dir = "shared-state"')
+    workspace_a = tmp_path / "workspace-a"
+    workspace_b = tmp_path / "workspace-b"
+    workspace_a.mkdir()
+    workspace_b.mkdir()
+
+    first = load_config(config_path, cwd=workspace_a)
+    second = load_config(config_path, cwd=workspace_b)
+
+    expected = (config_dir / "shared-state").resolve()
+    assert first.storage.data_dir == expected
+    assert second.storage.data_dir == expected
+
+
+def test_global_relative_hcommand_path_is_anchored_to_global_config(
+    tmp_path: Path,
+) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    config_path = config_dir / "config.toml"
+    _write_default(config_path)
+    _replace(config_path, 'hcommand = ""', 'hcommand = "./houdini-bin/houdini"')
+    workspace_a = tmp_path / "workspace-a"
+    workspace_b = tmp_path / "workspace-b"
+    workspace_a.mkdir()
+    workspace_b.mkdir()
+
+    first = load_config(config_path, cwd=workspace_a)
+    second = load_config(config_path, cwd=workspace_b)
+
+    expected = str((config_dir / "houdini-bin" / "houdini").resolve())
+    assert first.houdini.hcommand == expected
+    assert second.houdini.hcommand == expected
+
+
+def test_global_hcommand_bare_name_keeps_path_lookup_semantics(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    _write_default(config_path)
+    _replace(config_path, 'hcommand = ""', 'hcommand = "houdini-custom"')
+
+    config = load_config(config_path, cwd=tmp_path)
+
+    assert config.houdini.hcommand == "houdini-custom"
+
+
 def test_local_may_override_non_global_houdini_timeout(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     _write_default(config_path)
