@@ -10,6 +10,7 @@ from houbridge.houdini.transport import HoudiniTarget, HoudiniTransport
 from houbridge.process_coordination import ProcessIdentity, process_identity_for_pid
 from houbridge.temporary_workspace import TemporaryWorkspace, TemporaryWorkspaceService
 
+from .history import TaskHistoryBoundary
 from .invocation_store import TaskInvocationState, TaskInvocationStore
 from .models import TaskRecord
 from .script import TaskScriptBuilder
@@ -69,6 +70,7 @@ class TaskInvocationRunner:
         workspaces: TemporaryWorkspaceService,
         success_finalizer: TaskSuccessFinalizer,
         *,
+        history: TaskHistoryBoundary | None = None,
         dispatcher: TaskDispatcher | None = None,
         script_builder: TaskScriptBuilder | None = None,
         identity_reader: Callable[[int], ProcessIdentity] = process_identity_for_pid,
@@ -82,6 +84,7 @@ class TaskInvocationRunner:
         self._invocations = invocations
         self._workspaces = workspaces
         self._success_finalizer = success_finalizer
+        self._history = history
         self._dispatcher = dispatcher or FrozenTaskDispatcher()
         self._script_builder = script_builder or TaskScriptBuilder()
         self._identity_reader = identity_reader
@@ -94,7 +97,12 @@ class TaskInvocationRunner:
         workspace = self._workspaces.allocate(prefix="task")
         state = self._invocations.create(task.id, workspace.directory)
         try:
-            request_path = stage_task_request(workspace, task)
+            history_preparation = self._prepare_history(task, workspace)
+            request_path = stage_task_request(
+                workspace,
+                task,
+                history=history_preparation,
+            )
             staged = self._script_builder.stage(workspace, request_path)
             dispatch = self._dispatcher.start(task, staged.script_path)
         except BridgeError as exc:
@@ -222,13 +230,13 @@ class TaskInvocationRunner:
             completion = read_completion_marker(workspace, task.id)
             if completion is not None:
                 self._streams.drain(task.id, workspace, final=True)
-                self._finalize(task.id, completion)
+                self._finalize(task.id, completion, workspace)
                 return
             if not self._target_is_current(task):
                 completion = read_completion_marker(workspace, task.id)
                 if completion is not None:
                     self._streams.drain(task.id, workspace, final=True)
-                    self._finalize(task.id, completion)
+                    self._finalize(task.id, completion, workspace)
                 else:
                     self.runtime_failed(task, _target_changed(task))
                 return
@@ -249,10 +257,22 @@ class TaskInvocationRunner:
             )
         return True
 
-    def _finalize(self, task_id: str, completion: TaskCompletion) -> None:
+    def _finalize(
+        self,
+        task_id: str,
+        completion: TaskCompletion,
+        workspace: TemporaryWorkspace,
+    ) -> None:
         task = self._store.get(task_id)
         if task is None:
             raise BridgeError("task_not_found", f"Task does not exist: {task_id}")
+        if task.history_enabled and self._history is not None:
+            try:
+                self._history.finalize(task, workspace, python_ok=completion.python_ok)
+            except Exception:
+                # Caller Python has already reached its terminal outcome. History
+                # persistence must never redefine it or cause Task replay.
+                pass
         if completion.python_ok:
             self._success_finalizer.finalize_success(task)
         else:
@@ -264,6 +284,29 @@ class TaskInvocationRunner:
                 f"Task {task_id} terminal finalizer returned without committing terminal state.",
             )
         self._cleanup_invocation(task_id)
+
+    def _prepare_history(
+        self,
+        task: TaskRecord,
+        workspace: TemporaryWorkspace,
+    ):
+        if not task.history_enabled:
+            return None
+        if self._history is None:
+            raise BridgeError(
+                "history_preflight_failed",
+                f"Task {task.id} enabled History but no History boundary is available.",
+            )
+        try:
+            return self._history.prepare(task, workspace)
+        except BridgeError:
+            raise
+        except Exception as exc:
+            raise BridgeError(
+                "history_preflight_failed",
+                f"Task {task.id} History preflight failed.",
+                f"{type(exc).__name__}: {exc}",
+            ) from exc
 
     def _target_is_current(self, task: TaskRecord) -> bool:
         try:

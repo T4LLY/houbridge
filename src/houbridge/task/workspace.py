@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from houbridge.errors import BridgeError
+from houbridge.history.invocation import HistoryInvocationPreparation
 from houbridge.temporary_workspace import TemporaryWorkspace
 
 from .models import TaskRecord
@@ -29,7 +30,12 @@ class StagedTaskInvocation:
     script_path: Path
 
 
-def stage_task_request(workspace: TemporaryWorkspace, task: TaskRecord) -> Path:
+def stage_task_request(
+    workspace: TemporaryWorkspace,
+    task: TaskRecord,
+    *,
+    history: HistoryInvocationPreparation | None = None,
+) -> Path:
     if task.source is None:
         raise BridgeError(
             "task_source_missing",
@@ -49,6 +55,11 @@ def stage_task_request(workspace: TemporaryWorkspace, task: TaskRecord) -> Path:
         "started_marker": str(workspace.path_for(STARTED_MARKER)),
         "completion_marker": str(workspace.path_for(COMPLETION_MARKER)),
     }
+    if history is not None:
+        request["history"] = {
+            "runtime_script": str(history.runtime_script.resolve()),
+            "request_file": str(history.request_path.resolve()),
+        }
     request_path.write_text(
         json.dumps(request, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",

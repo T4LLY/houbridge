@@ -3,10 +3,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from houbridge.history.service import HistoryStorageService
+from houbridge.paths import GlobalDataPaths
 from houbridge.resource.store import ResourceStore
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
 from .completion import TaskCompletionResourceFinalizer
+from .history import AsyncTaskHistory
 from .invocation_store import TaskInvocationStore
 from .runner import TaskInvocationRunner
 from .runtime import TaskRuntime
@@ -31,11 +34,17 @@ def main(argv: list[str] | None = None) -> int:
         ttl_hours=args.resource_ttl_hours,
     )
     finalizer = TaskCompletionResourceFinalizer(task_store, resource_store)
+    paths = GlobalDataPaths.from_data_dir(args.tasks_db.resolve().parent)
+    history = AsyncTaskHistory(
+        HistoryStorageService(paths),
+        resource_store=resource_store,
+    )
     runner = TaskInvocationRunner(
         task_store,
         invocations,
         TemporaryWorkspaceService(),
         finalizer,
+        history=history,
     )
     runtime = TaskRuntime(
         task_store,

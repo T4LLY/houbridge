@@ -56,6 +56,7 @@ def _submission(
         origin_cwd="/workspace",
         dispatch=_dispatch(environment),
         history_enabled=True,
+        history_code_profile="profile-a",
     )
 
 
@@ -137,6 +138,7 @@ def test_submission_freezes_source_and_dispatch_context(tmp_path: Path) -> None:
         transport=transport,
         lock_timeout_seconds=9,
         history_enabled=False,
+        history_code_profile="profile-a",
     )
     environment["HFS"] = "/changed"
     source_path.write_text("value = 2\n", encoding="utf-8")

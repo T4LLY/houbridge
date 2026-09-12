@@ -102,5 +102,6 @@ def _build_async_execution_submitter(settings: HoubridgeConfig) -> AsyncExecutio
         control.launcher,
         lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
         history_enabled=settings.history.enabled,
+        history_code_profile=settings.search.embedding.code_profile,
         ttl_hours=settings.resource.ttl_hours,
     )

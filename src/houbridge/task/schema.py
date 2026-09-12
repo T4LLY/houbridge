@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     transport_environment_json TEXT NOT NULL,
     lock_timeout_seconds REAL NOT NULL CHECK (lock_timeout_seconds > 0),
     history_enabled INTEGER NOT NULL CHECK (history_enabled IN (0, 1)),
+    history_code_profile TEXT NOT NULL CHECK (length(trim(history_code_profile)) > 0),
     created_at TEXT NOT NULL,
     started_at TEXT,
     finished_at TEXT,

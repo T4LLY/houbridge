@@ -96,8 +96,9 @@ class TaskStore:
                     transport_environment_json,
                     lock_timeout_seconds,
                     history_enabled,
+                    history_code_profile,
                     created_at
-                ) VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
@@ -118,6 +119,7 @@ class TaskStore:
                     environment_json,
                     dispatch.lock_timeout_seconds,
                     int(submission.history_enabled),
+                    submission.history_code_profile,
                     created_at,
                 ),
             )
@@ -393,6 +395,7 @@ def _row_to_task(row: sqlite3.Row) -> TaskRecord:
             else None
         ),
         history_enabled=bool(row["history_enabled"]),
+        history_code_profile=str(row["history_code_profile"]),
         runtime_failure_code=(
             str(row["runtime_failure_code"]) if row["runtime_failure_code"] is not None else None
         ),

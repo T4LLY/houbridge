@@ -18,6 +18,7 @@ def freeze_task_submission(
     transport: HoudiniTransport,
     lock_timeout_seconds: float,
     history_enabled: bool,
+    history_code_profile: str,
 ) -> TaskSubmission:
     """Freeze all mutable dispatch inputs needed after the submitting CLI exits."""
 
@@ -44,4 +45,5 @@ def freeze_task_submission(
             lock_timeout_seconds=lock_timeout_seconds,
         ),
         history_enabled=bool(history_enabled),
+        history_code_profile=history_code_profile,
     )

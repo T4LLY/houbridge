@@ -63,6 +63,7 @@ class TaskSubmission:
     origin_cwd: str
     dispatch: FrozenDispatchContext
     history_enabled: bool
+    history_code_profile: str
 
     def __post_init__(self) -> None:
         if not isinstance(self.source, str):
@@ -77,6 +78,9 @@ class TaskSubmission:
             raise TypeError("purpose must be a string or None")
         if not isinstance(self.history_enabled, bool):
             raise TypeError("history_enabled must be a boolean")
+        if not isinstance(self.history_code_profile, str) or not self.history_code_profile.strip():
+            raise ValueError("history_code_profile must not be empty")
+        object.__setattr__(self, "history_code_profile", self.history_code_profile.strip())
 
         origin = Path(self.origin_cwd).expanduser().resolve()
         source_path = Path(self.file_path).expanduser()
@@ -104,6 +108,7 @@ class TaskRecord:
     finished_at: str | None
     completion_resource_id: str | None
     history_enabled: bool
+    history_code_profile: str
     runtime_failure_code: str | None
     runtime_failure_message: str | None
     runtime_failure_detail: str | None

@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 
 
 def initialize_history_schema(connection: sqlite3.Connection) -> None:
@@ -44,6 +44,12 @@ def initialize_history_schema(connection: sqlite3.Connection) -> None:
             FOREIGN KEY(entry_id) REFERENCES history_entries(id) ON DELETE CASCADE
         ) WITHOUT ROWID;
 
+        CREATE TABLE IF NOT EXISTS history_execution_keys(
+            execution_key TEXT PRIMARY KEY NOT NULL,
+            entry_id INTEGER NOT NULL UNIQUE,
+            FOREIGN KEY(entry_id) REFERENCES history_entries(id) ON DELETE CASCADE
+        ) WITHOUT ROWID;
+
         CREATE INDEX IF NOT EXISTS history_changes_node_session_lookup
         ON history_changes(node_session_id);
         """
@@ -52,7 +58,7 @@ def initialize_history_schema(connection: sqlite3.Connection) -> None:
         """
         INSERT INTO history_metadata(key, value)
         VALUES ('schema_version', ?)
-        ON CONFLICT(key) DO NOTHING
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
         """,
         (SCHEMA_VERSION,),
     )

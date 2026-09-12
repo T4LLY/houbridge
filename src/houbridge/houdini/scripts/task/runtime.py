@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import runpy
 import sys
 import traceback
 from pathlib import Path
@@ -25,6 +26,23 @@ def run(request_path_value: str) -> None:
     stderr_path = Path(request["stderr_file"])
     started_path = Path(request["started_marker"])
     completion_path = Path(request["completion_marker"])
+
+    history_runtime = None
+    history_context = None
+    history_request = request.get("history")
+    if history_request is not None:
+        if not isinstance(history_request, dict):
+            raise RuntimeError("Task History request must be a JSON object.")
+        runtime_script = history_request.get("runtime_script")
+        request_file = history_request.get("request_file")
+        if not isinstance(runtime_script, str) or not runtime_script:
+            raise RuntimeError("Task History runtime script is missing.")
+        if not isinstance(request_file, str) or not request_file:
+            raise RuntimeError("Task History request file is missing.")
+        history_runtime = runpy.run_path(runtime_script)
+        # Action baseline establishment is part of pre-start History setup. The
+        # started marker must not become visible before this succeeds.
+        history_context = history_runtime["prepare"](request_file)
 
     namespace = {
         "__name__": "__main__",
@@ -54,8 +72,16 @@ def run(request_path_value: str) -> None:
             _flush_file(stdout_file)
             _flush_file(stderr_file)
 
-    # Completion becomes visible only after both transport streams have been
-    # flushed. It is emitted for Python success and Python failure alike.
+    if history_runtime is not None and history_context is not None:
+        try:
+            history_runtime["finalize"](history_context)
+        except Exception:
+            # Caller Python already reached a terminal outcome. History capture
+            # failure must not redefine it or trigger replay.
+            pass
+
+    # Completion becomes visible only after both transport streams and the
+    # best-effort History capture have reached their terminal state.
     _atomic_write_json(
         completion_path,
         {"version": 1, "task_id": task_id, "python_ok": python_ok},

@@ -25,6 +25,7 @@ class AsyncExecutionSubmitter:
         *,
         lock_timeout_seconds: float,
         history_enabled: bool,
+        history_code_profile: str,
         ttl_hours: int,
     ) -> None:
         self._resolver = resolver
@@ -34,6 +35,7 @@ class AsyncExecutionSubmitter:
         self._runtime_launcher = runtime_launcher
         self._lock_timeout_seconds = lock_timeout_seconds
         self._history_enabled = history_enabled
+        self._history_code_profile = history_code_profile
         self._ttl_hours = ttl_hours
 
     def submit(
@@ -49,6 +51,7 @@ class AsyncExecutionSubmitter:
             transport=self._transport,
             lock_timeout_seconds=self._lock_timeout_seconds,
             history_enabled=self._history_enabled,
+            history_code_profile=self._history_code_profile,
         )
         self._store.cleanup_expired(ttl_hours=self._ttl_hours)
         task = self._store.submit(submission)

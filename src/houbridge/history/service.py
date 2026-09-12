@@ -63,3 +63,18 @@ class HistoryStorageService:
         if not database.is_file():
             return None
         return HistoryStore(database, embedding_provider=self._embedding_provider)
+
+    def existing_storage(self, identity: ProcessIdentity) -> HistorySessionStorage | None:
+        store = self.existing(identity)
+        if store is None:
+            return None
+        profile = store.code_profile()
+        if profile is None or not profile.strip():
+            return None
+        key = history_session_key(identity)
+        return HistorySessionStorage(
+            identity=identity,
+            session_key=key,
+            store=store,
+            code_profile=profile,
+        )

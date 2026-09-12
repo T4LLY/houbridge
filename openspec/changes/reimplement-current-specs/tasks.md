@@ -45,7 +45,7 @@
 
 - [x] 3.1 Resolve SideFX/Houdini installations and derive a subprocess environment sufficient for SideFX command-line tools.
 - [x] 3.2 Implement local serverless transport through Houdini openport and SideFX `hcommand` without adding an HTTP/RPC/MCP daemon.
-- [ ] 3.3 Keep reusable injected Houdini source under feature-specific `houbridge/houdini/scripts/` modules instead of embedding full reusable bodies in host orchestration.
+- [x] 3.3 Keep reusable injected Houdini source under feature-specific `houbridge/houdini/scripts/` modules instead of embedding full reusable bodies in host orchestration.
 - [x] 3.4 Probe and represent Houdini process identity as PID plus process-start/incarnation identity.
 - [x] 3.5 Place managed-execution coordination locks in a fixed platform-standard per-user Houbridge directory independent of `[storage].data_dir`.
 - [x] 3.6 Implement one exact-process managed-execution lock shared by synchronous Exec and Async Task.
@@ -142,7 +142,7 @@
 - [x] 9.2 Expose exactly the four public states `queued`, `running`, `completed`, and `failed` with correct transition timing.
 - [x] 9.3 Read and freeze exact submitted Python source before Task creation and retain it only while queued/running/recoverable.
 - [x] 9.4 Generate Task semantic IDs from submitted source only, using caller fallback `task-unknown` and ordinal state independent of retained Task rows.
-- [ ] 9.5 Freeze absolute file, args, purpose, origin cwd, Session, target port, PID/process-incarnation, transport context, History decision, and requested embedding profile at submission.
+- [x] 9.5 Freeze absolute file, args, purpose, origin cwd, Session, target port, PID/process-incarnation, transport context, History decision, and requested embedding profile at submission.
 - [x] 9.6 Implement recoverable on-demand Task Runtime ownership/activation in `tasks.db` rather than a permanent daemon flag.
 - [x] 9.7 Implement queue claiming/scheduling with global `[task].max_concurrency` enforcement.
 - [x] 9.8 Revalidate the exact bound Houdini process incarnation immediately before dispatch and fail instead of retargeting a replacement process.
@@ -152,7 +152,7 @@
 - [x] 9.12 Represent Python exceptions as Task failure with traceback in stderr while representing Task Runtime failures as structured runtime errors.
 - [x] 9.13 Use atomic started/completion markers plus runtime claims to distinguish never-started, possibly-started, and completed invocations.
 - [x] 9.14 Recover/finalize a possibly-started Task without automatically replaying caller Python.
-- [ ] 9.15 Preserve frozen History context through queue wait and hand it to the shared History boundary only if caller Python actually starts.
+- [x] 9.15 Preserve frozen History context through queue wait and hand it to the shared History boundary only if caller Python actually starts.
 - [x] 9.16 Create one successful completion JSON Resource containing exactly Task-defined stdout/stderr payload.
 - [x] 9.17 Clear source bodies at terminalization and retain terminal Tasks for the effective Resource TTL without expiring active Tasks.
 - [x] 9.18 Make Task reset atomic with active-state checks and reset semantic ordinals only on successful reset.
@@ -239,7 +239,7 @@
 - [x] 14.11 Persist one minimal terminal History entry only for executions whose caller Python actually started, including failed Python executions when finalization is possible.
 - [x] 14.12 Hash exact executed source, store/reuse embeddings by source-hash/profile, pin one profile per History DB, and never persist source bodies.
 - [x] 14.13 Fail closed on enabled-History preflight before Python starts; after Python starts never replay caller Python solely because History finalization failed.
-- [ ] 14.14 Carry the same History finalization boundary through Async Task using frozen submission context.
+- [x] 14.14 Carry the same History finalization boundary through Async Task using frozen submission context.
 - [ ] 14.15 Implement History search using source semantic embeddings plus lexical purpose/file/args/Action context without Action Change embeddings.
 - [ ] 14.16 Implement History reader/get and chronological newest-first list independently from search ranking.
 - [ ] 14.17 Wire `history search`, `history get`, and `history list` to registered live Session selection, shared formatting, Output Policy, and error handling.

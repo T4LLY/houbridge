@@ -155,6 +155,7 @@ class HistoryStore:
         purpose: str | None,
         source_hash: str,
         changes: tuple[ActionChange, ...],
+        execution_key: str | None = None,
     ) -> int:
         """Commit one finalized started action without recreating missing History."""
 
@@ -168,6 +169,19 @@ class HistoryStore:
 
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if execution_key is not None:
+                normalized_key = execution_key.strip()
+                if not normalized_key:
+                    raise ValueError("History execution key must not be empty")
+                existing = connection.execute(
+                    "SELECT entry_id FROM history_execution_keys WHERE execution_key = ?",
+                    (normalized_key,),
+                ).fetchone()
+                if existing is not None:
+                    return int(existing["entry_id"])
+            else:
+                normalized_key = None
+
             profile_row = connection.execute(
                 "SELECT value FROM history_metadata WHERE key = ?",
                 (_CODE_PROFILE_KEY,),
@@ -240,6 +254,11 @@ class HistoryStore:
                             sort_keys=True,
                         ),
                     ),
+                )
+            if normalized_key is not None:
+                connection.execute(
+                    "INSERT INTO history_execution_keys(execution_key, entry_id) VALUES (?, ?)",
+                    (normalized_key, entry_id),
                 )
         return entry_id
 

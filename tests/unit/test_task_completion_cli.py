@@ -42,6 +42,7 @@ def _submission(source: str = "print('x')\n") -> TaskSubmission:
             lock_timeout_seconds=5,
         ),
         history_enabled=False,
+        history_code_profile="profile-a",
     )
 
 
@@ -223,6 +224,7 @@ def test_async_handoff_failure_does_not_leave_queued_task(tmp_path: Path) -> Non
         lambda _token: None,
         lock_timeout_seconds=5,
         history_enabled=False,
+        history_code_profile="profile-a",
         ttl_hours=72,
     )
     invocation = ExecutionInvocation(

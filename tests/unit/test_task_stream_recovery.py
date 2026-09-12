@@ -49,6 +49,7 @@ def _submit(store: TaskStore, *, timeout: float = 5.0) -> str:
                 lock_timeout_seconds=5,
             ),
             history_enabled=False,
+            history_code_profile="profile-a",
         )
     ).id
 

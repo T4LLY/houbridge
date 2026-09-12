@@ -60,6 +60,7 @@ def _submit(store: TaskStore, index: int, *, pid: int, identity: str | None = No
                 lock_timeout_seconds=5,
             ),
             history_enabled=False,
+            history_code_profile="profile-a",
         )
     )
     return task.id
