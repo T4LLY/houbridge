@@ -226,13 +226,13 @@
 
 ## 14. Session Action History
 
-- [ ] 14.1 Resolve one History database per exact Houdini process incarnation at `<data-dir>/history/<session-key>/history.db`.
-- [ ] 14.2 Install process-local HIP lifecycle handling that destroys current History on successful scene load/clear replacement.
-- [ ] 14.3 Retire stale History directories when the owning Houdini process incarnation is no longer current.
-- [ ] 14.4 Create a database-complete History schema for entries, six Action Changes, source embedding/profile state, and History search state without graph/recipe/checkpoint/Task/output/source-body tables.
-- [ ] 14.5 Allocate session-local History ids monotonically.
+- [x] 14.1 Resolve one History database per exact Houdini process incarnation at `<data-dir>/history/<session-key>/history.db`.
+- [x] 14.2 Install process-local HIP lifecycle handling that destroys current History on successful scene load/clear replacement.
+- [x] 14.3 Retire stale History directories when the owning Houdini process incarnation is no longer current.
+- [x] 14.4 Create a database-complete History schema for entries, six Action Changes, source embedding/profile state, and History search state without graph/recipe/checkpoint/Task/output/source-body tables.
+- [x] 14.5 Allocate session-local History ids monotonically.
 - [ ] 14.6 Use `hou.Node.sessionId()` only as identity inside the owning process-incarnation History and keep path/type as human-readable context.
-- [ ] 14.7 Honor effective `[history].enabled`, default-on, without initializing recorder/embedding/write work when disabled.
+- [x] 14.7 Honor effective `[history].enabled`, default-on, without initializing recorder/embedding/write work when disabled.
 - [ ] 14.8 Capture a lightweight invocation-local baseline around caller Python rather than persisting snapshots.
 - [ ] 14.9 Record exactly `node_created`, `node_deleted`, `node_renamed`, `parm_changed`, `input_rewired`, and `flag_changed` and compact them to net Before/After changes.
 - [ ] 14.10 Store parameter raw unevaluated Before/After values; spill values over the UTF-8 byte threshold to Resource references with token count.

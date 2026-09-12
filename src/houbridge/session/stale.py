@@ -15,9 +15,11 @@ class SessionStaleCleanupService:
         registry: SessionRegistry,
         *,
         identity_reader: Callable[[int], ProcessIdentity] = process_identity_for_pid,
+        on_stale: Callable[[SessionRecord], None] | None = None,
     ) -> None:
         self._registry = registry
         self._identity_reader = identity_reader
+        self._on_stale = on_stale
 
     def cleanup(self) -> SessionRegistryState:
         state = self._registry.load()
@@ -25,6 +27,8 @@ class SessionStaleCleanupService:
         for number, record in state.sessions.items():
             if self._record_is_live(record):
                 live[number] = record
+            elif self._on_stale is not None:
+                self._on_stale(record)
 
         primary = state.primary if state.primary in live else None
         cleaned = SessionRegistryState(primary=primary, sessions=live)

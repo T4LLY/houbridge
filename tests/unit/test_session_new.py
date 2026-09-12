@@ -368,3 +368,23 @@ def test_physical_bootstrap_loads_file_and_uses_automatic_openport(tmp_path: Pat
     assert payload == {"pid": 18744, "port": 49153}
     assert calls == ["openport -a -q"]
     assert loaded == [str(requested)]
+
+
+def test_session_new_forwards_stale_records_to_cleanup_hook(tmp_path: Path) -> None:
+    registry = SessionRegistry(tmp_path / "sessions.json")
+    stale = SessionRecord(1, 49151, 1001, "old-start")
+    registry.save(SessionRegistryState(primary=1, sessions={1: stale}))
+    launcher = FakeLauncher(_launch_result(pid=2002, port=49154))
+    retired: list[SessionRecord] = []
+
+    def identity(pid: int) -> ProcessIdentity:
+        raise ProcessLookupError(pid)
+
+    SessionNewService(
+        registry,
+        launcher,  # type: ignore[arg-type]
+        identity_reader=identity,
+        on_stale=retired.append,
+    ).create()
+
+    assert retired == [stale]

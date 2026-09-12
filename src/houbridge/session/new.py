@@ -19,12 +19,14 @@ class SessionNewService:
         launcher: HoudiniSessionLauncher,
         *,
         identity_reader: Callable[[int], ProcessIdentity] = process_identity_for_pid,
+        on_stale: Callable[[SessionRecord], None] | None = None,
     ) -> None:
         self._registry = registry
         self._launcher = launcher
         self._stale_cleanup = SessionStaleCleanupService(
             registry,
             identity_reader=identity_reader,
+            on_stale=on_stale,
         )
 
     def create(
