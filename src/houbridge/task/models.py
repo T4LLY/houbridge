@@ -5,6 +5,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Literal, Mapping
 
+from houbridge.process_coordination import ProcessIdentity
+
 
 TaskStatus = Literal["queued", "running", "completed", "failed"]
 TASK_STATUSES: tuple[TaskStatus, ...] = ("queued", "running", "completed", "failed")
@@ -43,6 +45,13 @@ class FrozenDispatchContext:
         object.__setattr__(self, "process_start_identity", identity)
         object.__setattr__(self, "transport_executable", executable)
         object.__setattr__(self, "transport_environment", MappingProxyType(environment))
+
+    @property
+    def process_identity(self) -> ProcessIdentity:
+        return ProcessIdentity(
+            pid=self.pid,
+            process_start_identity=self.process_start_identity,
+        )
 
 
 @dataclass(frozen=True, slots=True)

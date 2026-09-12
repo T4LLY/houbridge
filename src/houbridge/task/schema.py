@@ -47,8 +47,31 @@ CREATE TABLE IF NOT EXISTS task_stream_chunks (
     PRIMARY KEY(task_id, sequence)
 ) WITHOUT ROWID;
 
+CREATE TABLE IF NOT EXISTS task_runtime_ownership (
+    singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1),
+    token TEXT NOT NULL,
+    starter_pid INTEGER NOT NULL CHECK (starter_pid > 0),
+    starter_process_start_identity TEXT NOT NULL,
+    runtime_pid INTEGER CHECK (runtime_pid IS NULL OR runtime_pid > 0),
+    runtime_process_start_identity TEXT,
+    acquired_at TEXT NOT NULL,
+    CHECK ((runtime_pid IS NULL) = (runtime_process_start_identity IS NULL))
+);
+
+CREATE TABLE IF NOT EXISTS task_claims (
+    task_id TEXT PRIMARY KEY NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    owner_token TEXT NOT NULL,
+    target_pid INTEGER NOT NULL CHECK (target_pid > 0),
+    target_process_start_identity TEXT NOT NULL,
+    claimed_at TEXT NOT NULL,
+    UNIQUE(target_pid, target_process_start_identity)
+) WITHOUT ROWID;
+
 CREATE INDEX IF NOT EXISTS task_status_created_idx
 ON tasks(status, created_at, id);
+
+CREATE INDEX IF NOT EXISTS task_claim_target_idx
+ON task_claims(target_pid, target_process_start_identity);
 """
 
 

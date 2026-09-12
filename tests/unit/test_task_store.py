@@ -264,4 +264,10 @@ def test_task_schema_keeps_ordinal_state_separate_from_task_rows(tmp_path: Path)
                 "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'task%'"
             )
         }
-    assert task_tables == {"tasks", "task_semantic_ordinals", "task_stream_chunks"}
+    assert task_tables == {
+        "tasks",
+        "task_semantic_ordinals",
+        "task_stream_chunks",
+        "task_runtime_ownership",
+        "task_claims",
+    }

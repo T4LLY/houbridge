@@ -143,10 +143,10 @@
 - [x] 9.3 Read and freeze exact submitted Python source before Task creation and retain it only while queued/running/recoverable.
 - [x] 9.4 Generate Task semantic IDs from submitted source only, using caller fallback `task-unknown` and ordinal state independent of retained Task rows.
 - [ ] 9.5 Freeze absolute file, args, purpose, origin cwd, Session, target port, PID/process-incarnation, transport context, History decision, and requested embedding profile at submission.
-- [ ] 9.6 Implement recoverable on-demand Task Runtime ownership/activation in `tasks.db` rather than a permanent daemon flag.
-- [ ] 9.7 Implement queue claiming/scheduling with global `[task].max_concurrency` enforcement.
-- [ ] 9.8 Revalidate the exact bound Houdini process incarnation immediately before dispatch and fail instead of retargeting a replacement process.
-- [ ] 9.9 Acquire the same exact-process managed-execution lock used by synchronous Exec.
+- [x] 9.6 Implement recoverable on-demand Task Runtime ownership/activation in `tasks.db` rather than a permanent daemon flag.
+- [x] 9.7 Implement queue claiming/scheduling with global `[task].max_concurrency` enforcement.
+- [x] 9.8 Revalidate the exact bound Houdini process incarnation immediately before dispatch and fail instead of retargeting a replacement process.
+- [x] 9.9 Acquire the same exact-process managed-execution lock used by synchronous Exec.
 - [ ] 9.10 Persist stdout/stderr incrementally as ordered Task-owned chunks in `tasks.db`.
 - [ ] 9.11 Reconstruct accumulated stdout/stderr as logical Task state without exposing chunk ids/cursors.
 - [ ] 9.12 Represent Python exceptions as Task failure with traceback in stderr while representing Task Runtime failures as structured runtime errors.

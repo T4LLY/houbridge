@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from houbridge.execution.models import ExecutionInvocation
+if TYPE_CHECKING:
+    from houbridge.execution.models import ExecutionInvocation
 from houbridge.houdini.transport import HoudiniTransport
 from houbridge.session.resolver import ResolvedSession
 
@@ -10,7 +12,7 @@ from .models import FrozenDispatchContext, TaskSubmission
 
 
 def freeze_task_submission(
-    invocation: ExecutionInvocation,
+    invocation: "ExecutionInvocation",
     *,
     session: ResolvedSession,
     transport: HoudiniTransport,
