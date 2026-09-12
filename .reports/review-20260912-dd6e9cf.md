@@ -35,7 +35,7 @@
 
 Verified against the current source. A two-session reproduction with one dead recorded PID caused `SessionInfoService.inspect(None)` to raise `session_unreachable` before the surviving session could be listed. The root cause was that the no-argument info path loaded and resolved the registry directly without the stale cleanup already used by `session new` and `session promote`. The CLI now injects `SessionStaleCleanupService` into `SessionInfoService`; no-argument inspection performs proven-dead cleanup before resolving the remaining sessions, while explicit `--session` behavior is unchanged. Added a regression test covering dead-primary removal with a surviving session and updated the command OpenSpec to define the cleanup boundary.
 
-### [ ] C2. No post-start timeout or cancellation for running async tasks — hung Houdini Python leaves tasks `running` forever and blocks worker retirement
+### [Partially fixed] C2. No post-start timeout or cancellation for running async tasks — hung Houdini Python leaves tasks `running` forever and blocks worker retirement
 
 - **Severity:** High
 - **Confidence:** High-confidence candidate (design gap confirmed in source; runtime hang not reproduced)
@@ -46,6 +46,10 @@ Verified against the current source. A two-session reproduction with one dead re
 - **Expected impact:** Permanent `running` task; worker process leak; per-target claim (UNIQUE(target_pid, identity)) serializes all subsequent tasks for that Houdini session behind the hung one.
 - **Trigger conditions:** Any async task whose user Python never terminates, or whose Houdini-side completion-marker write path raises/hangs after the started marker was written.
 - **Suggested verification direction:** Submit a task containing `while True: pass`; observe task stays `running` and worker never retires. Evaluate adding an optional phase-2 deadline (max task wall time) and/or an explicit `task cancel` path that terminates the target script.
+
+#### Update — 2026-09-12 13:12 — Base 4bcb7cb
+
+The finding combines intended behavior with a verified defect. OpenSpec explicitly requires that caller Python may remain `running` indefinitely after the started marker, so no wall-clock timeout or automatic cancellation was added for long-running caller code. The separate post-Python wrapper-failure path was reproduced by forcing `_flush_file` to raise after caller Python returned: `started.json` existed, `completion.json` did not, and the runner previously had no terminal transition while the Houdini target remained live. The wrapper protocol now publishes `python-finished.json` immediately after the Python outcome, best-effort publishes `wrapper-failed.json` for post-Python infrastructure exceptions, and the monitor terminalizes either an observed wrapper-failed marker or an exited hcommand after the Python-finished boundary. Recovery therefore does not replay caller Python. A blocked History-finalize lock remains dependent on C5's unbounded lock wait and is not claimed fixed by this update.
 
 ### [ ] C3. Embedding-model download is a hard prerequisite for basic exec/task operation (offline fresh machine cannot run `houbridge exec` or complete async tasks)
 

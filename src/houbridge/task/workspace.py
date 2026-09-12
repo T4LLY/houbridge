@@ -12,6 +12,8 @@ from .models import TaskRecord
 
 
 STARTED_MARKER = "started.json"
+PYTHON_FINISHED_MARKER = "python-finished.json"
+WRAPPER_FAILED_MARKER = "wrapper-failed.json"
 COMPLETION_MARKER = "completion.json"
 STDOUT_FILE = "stdout.txt"
 STDERR_FILE = "stderr.txt"
@@ -21,6 +23,12 @@ STDERR_FILE = "stderr.txt"
 class TaskCompletion:
     task_id: str
     python_ok: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TaskWrapperFailure:
+    task_id: str
+    detail: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +61,8 @@ def stage_task_request(
         "stdout_file": str(workspace.path_for(STDOUT_FILE)),
         "stderr_file": str(workspace.path_for(STDERR_FILE)),
         "started_marker": str(workspace.path_for(STARTED_MARKER)),
+        "python_finished_marker": str(workspace.path_for(PYTHON_FINISHED_MARKER)),
+        "wrapper_failed_marker": str(workspace.path_for(WRAPPER_FAILED_MARKER)),
         "completion_marker": str(workspace.path_for(COMPLETION_MARKER)),
     }
     if history is not None:
@@ -76,6 +86,34 @@ def started_marker_exists(workspace: TemporaryWorkspace, task_id: str) -> bool:
     if set(payload) != {"version", "task_id"} or payload.get("version") != 1:
         raise BridgeError("task_marker_invalid", f"Task {task_id} started marker is invalid.")
     return True
+
+
+def python_finished_marker_exists(workspace: TemporaryWorkspace, task_id: str) -> bool:
+    path = workspace.path_for(PYTHON_FINISHED_MARKER)
+    if not path.exists():
+        return False
+    payload = _read_marker(path, expected_task_id=task_id)
+    if set(payload) != {"version", "task_id", "python_ok"} or payload.get("version") != 1:
+        raise BridgeError("task_marker_invalid", f"Task {task_id} Python-finished marker is invalid.")
+    if not isinstance(payload.get("python_ok"), bool):
+        raise BridgeError("task_marker_invalid", f"Task {task_id} Python-finished marker is invalid.")
+    return True
+
+
+def read_wrapper_failure_marker(
+    workspace: TemporaryWorkspace,
+    task_id: str,
+) -> TaskWrapperFailure | None:
+    path = workspace.path_for(WRAPPER_FAILED_MARKER)
+    if not path.exists():
+        return None
+    payload = _read_marker(path, expected_task_id=task_id)
+    if set(payload) != {"version", "task_id", "detail"} or payload.get("version") != 1:
+        raise BridgeError("task_marker_invalid", f"Task {task_id} wrapper-failed marker is invalid.")
+    detail = payload.get("detail")
+    if not isinstance(detail, str) or not detail:
+        raise BridgeError("task_marker_invalid", f"Task {task_id} wrapper-failed marker is invalid.")
+    return TaskWrapperFailure(task_id=task_id, detail=detail)
 
 
 def read_completion_marker(

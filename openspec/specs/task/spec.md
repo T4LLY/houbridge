@@ -224,13 +224,22 @@ A Python exception SHALL make the Task `failed` while preserving the traceback i
 
 ### Requirement: Do not automatically replay a possibly-started Task
 
-Task Runtime SHALL NOT automatically re-dispatch submitted Python when there is evidence that the invocation may already have started. Invocation-local started/completion markers and Task runtime ownership metadata SHALL allow a replacement runtime to distinguish queued work that is safe to claim from started work that must not be replayed. The completion marker SHALL be published only after the execution wrapper has captured the Python outcome and flushed the Task stdout/stderr transport streams; it SHALL be published for both successful completion and Python failure.
+Task Runtime SHALL NOT automatically re-dispatch submitted Python when there is evidence that the invocation may already have started. Invocation-local started/Python-finished/wrapper-failed/completion markers and Task runtime ownership metadata SHALL allow a replacement runtime to distinguish queued work that is safe to claim from started work that must not be replayed. The execution wrapper SHALL atomically publish a Python-finished marker immediately after caller Python reaches a terminal outcome and before post-Python stream flushing or History finalization. The completion marker SHALL be published only after the execution wrapper has captured the Python outcome and flushed the Task stdout/stderr transport streams; it SHALL be published for both successful completion and Python failure. If wrapper infrastructure fails after caller Python has finished but before completion can be published, the wrapper SHALL best-effort publish a wrapper-failed marker carrying a bounded diagnostic.
 
-If a replacement runtime observes a started Task without a completion marker while the bound Houdini PID is still valid, it SHALL monitor/finalize that existing invocation rather than submit the source again. If the bound process is no longer valid, the Task SHALL become `failed`.
+If a replacement runtime observes a started Task without a completion marker while the bound Houdini PID is still valid, it SHALL monitor/finalize that existing invocation rather than submit the source again. A wrapper-failed marker SHALL terminate that invocation as a Task Runtime failure without replaying caller Python. During the original monitored dispatch, hcommand exit after the Python-finished marker and before completion SHALL likewise terminate as a Task Runtime failure. Absence of a Python-finished marker SHALL NOT create a wall-clock timeout for caller Python. If the bound process is no longer valid, the Task SHALL become `failed`.
 
 #### Scenario: Task Runtime exits after Python started
 - **WHEN** another Task Runtime later recovers ownership and the started marker exists
 - **THEN** it does not execute the submitted source a second time
+
+#### Scenario: Wrapper fails after caller Python finished
+- **WHEN** caller Python reached a terminal outcome but wrapper infrastructure fails before completion can be published
+- **THEN** recovery-visible wrapper failure evidence terminates the Task through the runtime-failure contract
+- **AND** caller Python is not replayed
+
+#### Scenario: Caller Python is still running
+- **WHEN** the started marker exists but no Python-finished marker exists
+- **THEN** absence of a completion marker does not by itself impose a wall-clock timeout on caller Python
 
 #### Scenario: Completion marker exists after runtime restart
 - **WHEN** caller Python already finished and the completion marker is available

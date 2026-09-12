@@ -18,7 +18,9 @@ from .store import TaskStore
 from .streaming import TaskStreamCollector
 from .workspace import (
     TaskCompletion,
+    python_finished_marker_exists,
     read_completion_marker,
+    read_wrapper_failure_marker,
     stage_task_request,
     started_marker_exists,
 )
@@ -232,6 +234,33 @@ class TaskInvocationRunner:
                 self._streams.drain(task.id, workspace, final=True)
                 self._finalize(task.id, completion, workspace)
                 return
+
+            wrapper_failure = read_wrapper_failure_marker(workspace, task.id)
+            if wrapper_failure is not None:
+                self.runtime_failed(task, _wrapper_failed(task, wrapper_failure.detail))
+                return
+
+            if dispatch is not None and python_finished_marker_exists(workspace, task.id):
+                returncode = dispatch.poll()
+                if returncode is not None:
+                    completion = read_completion_marker(workspace, task.id)
+                    if completion is not None:
+                        self._streams.drain(task.id, workspace, final=True)
+                        self._finalize(task.id, completion, workspace)
+                        return
+                    wrapper_failure = read_wrapper_failure_marker(workspace, task.id)
+                    if wrapper_failure is not None:
+                        self.runtime_failed(task, _wrapper_failed(task, wrapper_failure.detail))
+                    else:
+                        self.runtime_failed(
+                            task,
+                            _wrapper_failed(
+                                task,
+                                f"hcommand exited after caller Python finished with status={returncode}",
+                            ),
+                        )
+                    return
+
             if not self._target_is_current(task):
                 completion = read_completion_marker(workspace, task.id)
                 if completion is not None:
@@ -331,6 +360,14 @@ class TaskInvocationRunner:
         if workspace is not None:
             workspace.remove()
         self._invocations.remove(task_id)
+
+
+def _wrapper_failed(task: TaskRecord, detail: str) -> BridgeError:
+    return BridgeError(
+        "task_wrapper_failed",
+        f"Task {task.id} execution wrapper failed after caller Python finished.",
+        detail,
+    )
 
 
 def _target_changed(task: TaskRecord) -> BridgeError:

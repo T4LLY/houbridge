@@ -7,6 +7,8 @@ import time
 import types
 from pathlib import Path
 
+import pytest
+
 from houbridge.process_coordination import ProcessIdentity
 from houbridge.semantic_id import SemanticBase
 from houbridge.task import (
@@ -160,6 +162,89 @@ def _publish_completion(workspace: TemporaryWorkspace, task_id: str, python_ok: 
             separators=(",", ":"),
         ).encode(),
     )
+
+
+def _publish_python_finished(workspace: TemporaryWorkspace, task_id: str, python_ok: bool) -> None:
+    workspace.publish_marker(
+        "python-finished.json",
+        json.dumps(
+            {"version": 1, "task_id": task_id, "python_ok": python_ok},
+            separators=(",", ":"),
+        ).encode(),
+    )
+
+
+def _publish_wrapper_failed(workspace: TemporaryWorkspace, task_id: str, detail: str) -> None:
+    workspace.publish_marker(
+        "wrapper-failed.json",
+        json.dumps(
+            {"version": 1, "task_id": task_id, "detail": detail},
+            separators=(",", ":"),
+        ).encode(),
+    )
+
+
+def test_recovery_terminalizes_wrapper_failure_after_python_finished(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    runner, invocations, workspaces = _runner(store, tmp_path, CompleteSuccess(store))
+    workspace = workspaces.allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    workspace.path_for("stdout.txt").write_text("done\n", encoding="utf-8")
+    workspace.path_for("stderr.txt").write_text("", encoding="utf-8")
+    _publish_started(workspace, task_id)
+    _publish_python_finished(workspace, task_id, True)
+    _publish_wrapper_failed(workspace, task_id, "OSError: simulated fsync failure")
+    store.mark_running(task_id)
+
+    task = store.get(task_id)
+    assert task is not None
+    runner.recover(task)
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_wrapper_failed"
+    assert failed.runtime_failure_detail == "OSError: simulated fsync failure"
+    assert invocations.get(task_id) is None
+    assert not workspace.directory.exists()
+
+
+def test_live_monitor_terminalizes_exited_wrapper_after_python_finished(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+
+    class ExitedHandle:
+        def poll(self):
+            return 7
+
+        def terminate(self):
+            raise AssertionError("post-start wrapper failure must not use dispatch-time termination")
+
+    class Dispatcher:
+        def start(self, task, script_path):
+            workspace = TemporaryWorkspace(script_path.parent)
+            workspace.path_for("stdout.txt").write_text("done\n", encoding="utf-8")
+            workspace.path_for("stderr.txt").write_text("", encoding="utf-8")
+            _publish_started(workspace, task.id)
+            _publish_python_finished(workspace, task.id, True)
+            return ExitedHandle()
+
+    runner, _invocations, _workspaces = _runner(
+        store,
+        tmp_path,
+        CompleteSuccess(store),
+        dispatcher=Dispatcher(),
+    )
+    task = store.get(task_id)
+    assert task is not None
+    runner.run(task)
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_wrapper_failed"
+    assert "status=7" in (failed.runtime_failure_detail or "")
 
 
 def test_running_stream_is_incrementally_committed_and_reads_accumulate(tmp_path: Path) -> None:
@@ -373,6 +458,62 @@ def test_houdini_task_runtime_publishes_started_before_source_and_traceback_to_s
     assert "RuntimeError: boom" in stderr.read_text(encoding="utf-8")
 
 
+def test_houdini_task_runtime_publishes_wrapper_failure_after_python_finished(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from houbridge.houdini.scripts.task import runtime
+
+    monkeypatch.setitem(sys.modules, "hou", types.ModuleType("hou"))
+    started = tmp_path / "started.json"
+    python_finished = tmp_path / "python-finished.json"
+    wrapper_failed = tmp_path / "wrapper-failed.json"
+    completion = tmp_path / "completion.json"
+    stdout = tmp_path / "stdout.txt"
+    stderr = tmp_path / "stderr.txt"
+    source = tmp_path / "source.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    request = tmp_path / "request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "task_id": "wrapper-failure-000",
+                "source_file": str(source),
+                "source_path": str(source),
+                "argv": (str(source),),
+                "stdout_file": str(stdout),
+                "stderr_file": str(stderr),
+                "started_marker": str(started),
+                "python_finished_marker": str(python_finished),
+                "wrapper_failed_marker": str(wrapper_failed),
+                "completion_marker": str(completion),
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        runtime,
+        "_flush_file",
+        lambda _stream: (_ for _ in ()).throw(OSError("simulated fsync failure")),
+    )
+
+    with pytest.raises(OSError, match="simulated fsync failure"):
+        runtime.run(str(request))
+
+    assert json.loads(started.read_text(encoding="utf-8"))["task_id"] == "wrapper-failure-000"
+    assert json.loads(python_finished.read_text(encoding="utf-8")) == {
+        "version": 1,
+        "task_id": "wrapper-failure-000",
+        "python_ok": True,
+    }
+    assert json.loads(wrapper_failed.read_text(encoding="utf-8")) == {
+        "version": 1,
+        "task_id": "wrapper-failure-000",
+        "detail": "OSError: simulated fsync failure",
+    }
+    assert not completion.exists()
+
+
 def test_many_stream_flushes_remain_one_accumulated_logical_stream(tmp_path: Path) -> None:
     store = _store(tmp_path)
     task_id = _submit(store)
@@ -410,6 +551,56 @@ def test_terminal_task_workspace_left_by_crash_is_cleanup_recoverable(tmp_path: 
 
     assert invocations.get(task_id) is None
     assert not workspace.directory.exists()
+
+
+def test_started_python_without_finished_marker_has_no_post_start_timeout(tmp_path: Path) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    store = _store(tmp_path)
+    task_id = _submit(store, timeout=1.0)
+    base = datetime(2026, 9, 11, 8, 0, tzinfo=timezone.utc)
+    invocations = TaskInvocationStore(store.database, now=lambda: base)
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp-running")
+
+    class StopMonitor(Exception):
+        pass
+
+    class ExitedHandle:
+        def poll(self):
+            return 7
+
+        def terminate(self):
+            raise AssertionError("started caller Python must not be terminated by dispatch timeout")
+
+    class Dispatcher:
+        def start(self, task, script_path):
+            workspace = TemporaryWorkspace(script_path.parent)
+            workspace.path_for("stdout.txt").write_text("", encoding="utf-8")
+            workspace.path_for("stderr.txt").write_text("", encoding="utf-8")
+            _publish_started(workspace, task.id)
+            return ExitedHandle()
+
+    runner = TaskInvocationRunner(
+        store,
+        invocations,
+        workspaces,
+        CompleteSuccess(store),
+        dispatcher=Dispatcher(),
+        identity_reader=lambda _pid: ProcessIdentity(4242, "process-4242"),
+        sleep=lambda _seconds: (_ for _ in ()).throw(StopMonitor()),
+        now=lambda: base + timedelta(seconds=20),
+        poll_interval_seconds=0.01,
+    )
+    task = store.get(task_id)
+    assert task is not None
+
+    with pytest.raises(StopMonitor):
+        runner.run(task)
+
+    running = store.get(task_id)
+    assert running is not None
+    assert running.status == "running"
+    assert running.runtime_failure_code is None
 
 
 def test_dispatch_timeout_applies_only_before_started_marker(tmp_path: Path) -> None:
