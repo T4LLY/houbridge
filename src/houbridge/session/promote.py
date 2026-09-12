@@ -23,18 +23,27 @@ class SessionPromoteService:
 
     def promote(self, session: int) -> dict[str, int]:
         _require_positive_session(session)
-        state = self._stale_cleanup.cleanup()
-        record = state.sessions.get(session)
-        if record is None:
-            raise BridgeError(
-                "session_not_found",
-                f"Registered Houdini session {session} does not exist.",
-            )
+        with self._registry.locked():
+            state = self._stale_cleanup.cleanup_locked()
+            record = state.sessions.get(session)
+            if record is None:
+                raise BridgeError(
+                    "session_not_found",
+                    f"Registered Houdini session {session} does not exist.",
+                )
 
         self._resolver.resolve_record(record)
-        self._registry.save(
-            SessionRegistryState(primary=session, sessions=state.sessions)
-        )
+
+        with self._registry.locked():
+            current = self._registry.load()
+            if current.sessions.get(session) != record:
+                raise BridgeError(
+                    "session_unreachable",
+                    f"Registered Houdini session {session} changed during promotion.",
+                )
+            self._registry.save(
+                SessionRegistryState(primary=session, sessions=current.sessions)
+            )
         return {"primary": session}
 
 

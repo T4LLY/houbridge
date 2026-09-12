@@ -8,6 +8,8 @@ import pytest
 
 import houbridge.process_coordination as coordination
 from houbridge.process_coordination import (
+    InterprocessFileLock,
+    InterprocessFileLockTimeout,
     ManagedExecutionLock,
     ManagedExecutionLockTimeout,
     ProcessIdentity,
@@ -65,6 +67,33 @@ def test_coordination_directory_is_platform_runtime_not_configured_data_dir(
 
     assert coordination.coordination_directory() == runtime / "coordination"
 
+
+def test_interprocess_file_lock_serializes_same_path(tmp_path: Path) -> None:
+    path = tmp_path / "registry.lock"
+    holder_lock = InterprocessFileLock(poll_interval_seconds=0.01)
+    contender_lock = InterprocessFileLock(poll_interval_seconds=0.01)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def holder() -> None:
+        with holder_lock.acquire(path):
+            entered.set()
+            assert release.wait(timeout=2)
+
+    thread = threading.Thread(target=holder)
+    thread.start()
+    assert entered.wait(timeout=2)
+
+    with pytest.raises(InterprocessFileLockTimeout):
+        with contender_lock.acquire(path, timeout_seconds=0.05):
+            raise AssertionError("same lock path must not overlap")
+
+    release.set()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+
+    with contender_lock.acquire(path, timeout_seconds=0.05):
+        pass
 
 def test_same_process_incarnation_is_serialized(
     monkeypatch: pytest.MonkeyPatch,

@@ -22,6 +22,12 @@ class SessionStaleCleanupService:
         self._on_stale = on_stale
 
     def cleanup(self) -> SessionRegistryState:
+        with self._registry.locked():
+            return self.cleanup_locked()
+
+    def cleanup_locked(self) -> SessionRegistryState:
+        """Clean stale entries while the caller holds the registry mutation lock."""
+
         state = self._registry.load()
         live: dict[int, SessionRecord] = {}
         for number, record in state.sessions.items():

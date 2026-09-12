@@ -42,20 +42,23 @@ class SessionNewService:
             hcommand=hcommand,
         )
         try:
-            registry_existed = self._registry.path.exists()
-            state = self._stale_cleanup.cleanup()
-            number = _smallest_unused_session(state)
-            sessions = dict(state.sessions)
-            sessions[number] = SessionRecord(
-                session=number,
-                port=launch.port,
-                pid=launch.pid,
-                process_start_identity=launch.identity.process_start_identity,
-            )
-            primary = state.primary
-            if not registry_existed:
-                primary = number
-            self._registry.save(SessionRegistryState(primary=primary, sessions=sessions))
+            with self._registry.locked():
+                registry_existed = self._registry.path.exists()
+                state = self._stale_cleanup.cleanup_locked()
+                number = _smallest_unused_session(state)
+                sessions = dict(state.sessions)
+                sessions[number] = SessionRecord(
+                    session=number,
+                    port=launch.port,
+                    pid=launch.pid,
+                    process_start_identity=launch.identity.process_start_identity,
+                )
+                primary = state.primary
+                if not registry_existed:
+                    primary = number
+                self._registry.save(
+                    SessionRegistryState(primary=primary, sessions=sessions)
+                )
         except BaseException:
             self._launcher.terminate(launch)
             raise

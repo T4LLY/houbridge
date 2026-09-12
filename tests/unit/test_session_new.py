@@ -5,6 +5,8 @@ import os
 import runpy
 import shutil
 import sys
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -107,6 +109,58 @@ def test_first_session_becomes_session_one_and_primary(tmp_path: Path) -> None:
     assert state.sessions[1].process_start_identity == "start-18744"
     assert len(launcher.calls) == 1
 
+
+def test_concurrent_new_calls_allocate_distinct_sessions(tmp_path: Path) -> None:
+    path = tmp_path / "sessions.json"
+    start = threading.Barrier(2)
+    results: list[dict[str, object]] = []
+    errors: list[BaseException] = []
+    result_lock = threading.Lock()
+
+    class SlowRegistry(SessionRegistry):
+        def load(self) -> SessionRegistryState:
+            state = super().load()
+            time.sleep(0.05)
+            return state
+
+    class SynchronizedLauncher(FakeLauncher):
+        def launch(self, **kwargs) -> SessionLaunchResult:
+            start.wait(timeout=2)
+            return super().launch(**kwargs)
+
+    def run(pid: int, port: int) -> None:
+        registry = SlowRegistry(path)
+        launcher = SynchronizedLauncher(_launch_result(pid=pid, port=port))
+        service = SessionNewService(
+            registry,
+            launcher,  # type: ignore[arg-type]
+            identity_reader=lambda value: ProcessIdentity(value, f"start-{value}"),
+        )
+        try:
+            payload = service.create()
+        except BaseException as exc:
+            with result_lock:
+                errors.append(exc)
+        else:
+            with result_lock:
+                results.append(payload)
+
+    first = threading.Thread(target=run, args=(2001, 49153))
+    second = threading.Thread(target=run, args=(2002, 49154))
+    first.start()
+    second.start()
+    first.join(timeout=5)
+    second.join(timeout=5)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert errors == []
+    assert {payload["session"] for payload in results} == {1, 2}
+
+    state = SessionRegistry(path).load()
+    assert state.primary == 1
+    assert set(state.sessions) == {1, 2}
+    assert {record.pid for record in state.sessions.values()} == {2001, 2002}
 
 def test_additional_session_never_reuses_a_live_process(tmp_path: Path) -> None:
     registry = SessionRegistry(tmp_path / "sessions.json")
@@ -287,7 +341,6 @@ def test_unreadable_or_missing_hip_is_rejected_before_launch(tmp_path: Path) -> 
 
     assert caught.value.code == "session_file_unreadable"
     assert called is False
-
 
 
 def test_windows_launch_uses_new_process_group_for_ctrl_c_isolation(tmp_path: Path, monkeypatch) -> None:

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from dataclasses import dataclass
+import hashlib
 import json
 import os
-from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping
+from typing import Iterator, Mapping
 from uuid import uuid4
 
 from houbridge.errors import BridgeError
+from houbridge.process_coordination import InterprocessFileLock, coordination_directory
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +62,17 @@ class SessionRegistry:
 
     def __init__(self, path: Path) -> None:
         self.path = path
+        self._file_lock = InterprocessFileLock()
+
+    @contextmanager
+    def locked(self) -> Iterator[None]:
+        """Hold the cross-process mutation lock for this registry path."""
+
+        canonical = os.path.normcase(str(self.path.resolve(strict=False)))
+        digest = hashlib.sha256(os.fsencode(canonical)).hexdigest()[:32]
+        lock_path = coordination_directory() / "session-registry" / f"{digest}.lock"
+        with self._file_lock.acquire(lock_path):
+            yield
 
     def load(self) -> SessionRegistryState:
         if not self.path.exists():

@@ -66,6 +66,55 @@ def coordination_directory() -> Path:
     return user_runtime_path("houbridge", ensure_exists=False) / "coordination"
 
 
+class InterprocessFileLockTimeout(TimeoutError):
+    def __init__(self, path: Path) -> None:
+        super().__init__(f"Timed out waiting for interprocess lock: {path}")
+        self.path = path
+
+
+class InterprocessFileLock:
+    """Serialize a short critical section through one filesystem lock file."""
+
+    def __init__(self, *, poll_interval_seconds: float = _DEFAULT_POLL_INTERVAL_SECONDS) -> None:
+        if poll_interval_seconds <= 0:
+            raise ValueError("poll_interval_seconds must be greater than zero")
+        self._poll_interval_seconds = float(poll_interval_seconds)
+
+    @contextmanager
+    def acquire(
+        self,
+        path: Path,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Iterator[None]:
+        if timeout_seconds is not None and timeout_seconds < 0:
+            raise ValueError("timeout_seconds must be non-negative or None")
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a+b") as handle:
+            _ensure_lock_byte(handle)
+            deadline = None if timeout_seconds is None else time.monotonic() + timeout_seconds
+            while True:
+                try:
+                    _try_lock(handle)
+                    break
+                except BlockingIOError:
+                    if deadline is not None and time.monotonic() >= deadline:
+                        raise InterprocessFileLockTimeout(path) from None
+                    sleep_for = self._poll_interval_seconds
+                    if deadline is not None:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise InterprocessFileLockTimeout(path) from None
+                        sleep_for = min(sleep_for, remaining)
+                    time.sleep(sleep_for)
+
+            try:
+                yield
+            finally:
+                _unlock(handle)
+
+
 class ManagedExecutionLockTimeout(TimeoutError):
     def __init__(self, identity: ProcessIdentity) -> None:
         super().__init__(
@@ -79,9 +128,9 @@ class ManagedExecutionLock:
     """Serialize managed Python dispatch by exact Houdini process identity."""
 
     def __init__(self, *, poll_interval_seconds: float = _DEFAULT_POLL_INTERVAL_SECONDS) -> None:
-        if poll_interval_seconds <= 0:
-            raise ValueError("poll_interval_seconds must be greater than zero")
-        self._poll_interval_seconds = float(poll_interval_seconds)
+        self._file_lock = InterprocessFileLock(
+            poll_interval_seconds=poll_interval_seconds
+        )
 
     @contextmanager
     def acquire(
@@ -90,37 +139,17 @@ class ManagedExecutionLock:
         *,
         timeout_seconds: float | None = None,
     ) -> Iterator[None]:
-        if timeout_seconds is not None and timeout_seconds < 0:
-            raise ValueError("timeout_seconds must be non-negative or None")
-
-        lock_dir = coordination_directory() / "managed-execution"
-        lock_dir.mkdir(parents=True, exist_ok=True)
-        lock_path = lock_dir / (
+        lock_path = coordination_directory() / "managed-execution" / (
             f"pid-{identity.pid}-{identity._coordination_digest()[:32]}.lock"
         )
-
-        with lock_path.open("a+b") as handle:
-            _ensure_lock_byte(handle)
-            deadline = None if timeout_seconds is None else time.monotonic() + timeout_seconds
-            while True:
-                try:
-                    _try_lock(handle)
-                    break
-                except BlockingIOError:
-                    if deadline is not None and time.monotonic() >= deadline:
-                        raise ManagedExecutionLockTimeout(identity) from None
-                    sleep_for = self._poll_interval_seconds
-                    if deadline is not None:
-                        remaining = deadline - time.monotonic()
-                        if remaining <= 0:
-                            raise ManagedExecutionLockTimeout(identity) from None
-                        sleep_for = min(sleep_for, remaining)
-                    time.sleep(sleep_for)
-
-            try:
+        try:
+            with self._file_lock.acquire(
+                lock_path,
+                timeout_seconds=timeout_seconds,
+            ):
                 yield
-            finally:
-                _unlock(handle)
+        except InterprocessFileLockTimeout:
+            raise ManagedExecutionLockTimeout(identity) from None
 
 
 def _ensure_lock_byte(handle: BinaryIO) -> None:

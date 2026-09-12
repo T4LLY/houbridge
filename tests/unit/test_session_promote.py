@@ -186,3 +186,47 @@ def test_stale_cleanup_removes_reused_pid_and_unsets_primary(tmp_path: Path) -> 
     assert set(state.sessions) == {1}
     assert registry.load().primary is None
     assert set(registry.load().sessions) == {1}
+
+
+def test_promote_preserves_registry_changes_made_during_target_probe(tmp_path: Path) -> None:
+    path = tmp_path / "sessions.json"
+    registry = SessionRegistry(path)
+    registry.save(
+        SessionRegistryState(
+            primary=1,
+            sessions={
+                1: SessionRecord(1, 49152, 1001, "start-1"),
+                3: SessionRecord(3, 49154, 1003, "start-3"),
+            },
+        )
+    )
+
+    concurrent_registry = SessionRegistry(path)
+
+    class ResolverWithConcurrentRegistration:
+        def resolve_record(self, record: SessionRecord) -> object:
+            with concurrent_registry.locked():
+                current = concurrent_registry.load()
+                sessions = dict(current.sessions)
+                sessions[2] = SessionRecord(2, 49153, 1002, "start-2")
+                concurrent_registry.save(
+                    SessionRegistryState(primary=current.primary, sessions=sessions)
+                )
+            return object()
+
+    cleanup = SessionStaleCleanupService(
+        registry,
+        identity_reader=_identity_reader({1001: "start-1", 1003: "start-3"}),
+    )
+    service = SessionPromoteService(
+        registry,
+        ResolverWithConcurrentRegistration(),  # type: ignore[arg-type]
+        stale_cleanup=cleanup,
+    )
+
+    assert service.promote(3) == {"primary": 3}
+
+    state = registry.load()
+    assert state.primary == 3
+    assert set(state.sessions) == {1, 2, 3}
+    assert state.sessions[2].pid == 1002
