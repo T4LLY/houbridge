@@ -17,6 +17,7 @@ from houbridge.session.info import SessionInfoService
 from houbridge.session.probe import SessionProbe, SessionProbeResult
 from houbridge.session.registry import SessionRecord, SessionRegistry, SessionRegistryState
 from houbridge.session.resolver import SessionResolver
+from houbridge.session.stale import SessionStaleCleanupService
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
 
@@ -307,6 +308,57 @@ def test_session_info_all_uses_exact_public_schema_and_allows_null_file_headless
             },
         ],
     }
+
+
+def test_session_info_all_removes_dead_sessions_before_listing(
+    tmp_path: Path,
+) -> None:
+    registry = SessionRegistry(tmp_path / "sessions.json")
+    registry.save(
+        SessionRegistryState(
+            primary=1,
+            sessions={
+                1: SessionRecord(1, 49152, 1001, "dead-1"),
+                2: SessionRecord(2, 49154, 1002, "live-2"),
+            },
+        )
+    )
+    probe = FakeProbe({49154: _probe_result(pid=1002, port=49154)})
+
+    def identity(pid: int) -> ProcessIdentity:
+        if pid == 1001:
+            raise ProcessLookupError(pid)
+        return ProcessIdentity(pid, "live-2")
+
+    resolver = SessionResolver(
+        registry,
+        probe,  # type: ignore[arg-type]
+        identity_reader=identity,
+    )
+    cleanup = SessionStaleCleanupService(registry, identity_reader=identity)
+
+    payload = SessionInfoService(
+        registry,
+        resolver,
+        stale_cleanup=cleanup,
+    ).inspect()
+
+    assert payload == {
+        "primary": None,
+        "sessions": [
+            {
+                "session": 2,
+                "port": 49154,
+                "pid": 1002,
+                "version": "22.0.429",
+                "license": "Commercial",
+                "file": "C:/project/test.hip",
+                "headless": False,
+            }
+        ],
+    }
+    assert set(registry.load().sessions) == {2}
+    assert probe.calls == [49154]
 
 
 def test_session_info_without_sessions_reports_null_primary_without_transport(

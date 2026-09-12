@@ -16,7 +16,7 @@ houbridge session info [--session INTEGER]
 
 `--session` SHALL be a positive registered session number.
 
-When `--session` is omitted, `session info` SHALL inspect all registered sessions and return the registry primary selection plus one public info object per session:
+When `--session` is omitted, `session info` SHALL first remove registry entries whose recorded operating-system process identity is proven stale, using the normal stale-cleanup rule. An identity-read failure that does not prove process death SHALL NOT remove the entry. It SHALL then inspect all remaining registered sessions and return the registry primary selection plus one public info object per session:
 
 ```json
 {

@@ -34,7 +34,15 @@ def info_command(
     registry = SessionRegistry(paths.sessions_registry)
     probe = SessionProbe(lambda: HoudiniTransport.from_config(settings.houdini))
     resolver = SessionResolver(registry, probe)
-    payload = SessionInfoService(registry, resolver).inspect(session_number)
+    stale_cleanup = SessionStaleCleanupService(
+        registry,
+        on_stale=_history_retirement_callback(paths),
+    )
+    payload = SessionInfoService(
+        registry,
+        resolver,
+        stale_cleanup=stale_cleanup,
+    ).inspect(session_number)
     emit_result(payload)
 
 

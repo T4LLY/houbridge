@@ -4,14 +4,22 @@ from houbridge.errors import BridgeError
 
 from .registry import SessionRegistry
 from .resolver import ResolvedSession, SessionResolver
+from .stale import SessionStaleCleanupService
 
 
 class SessionInfoService:
     """Expose exactly the OpenSpec Session info public contract."""
 
-    def __init__(self, registry: SessionRegistry, resolver: SessionResolver) -> None:
+    def __init__(
+        self,
+        registry: SessionRegistry,
+        resolver: SessionResolver,
+        *,
+        stale_cleanup: SessionStaleCleanupService | None = None,
+    ) -> None:
         self._registry = registry
         self._resolver = resolver
+        self._stale_cleanup = stale_cleanup
 
     def inspect(self, session: int | None = None) -> dict[str, object]:
         if session is not None:
@@ -31,6 +39,9 @@ class SessionInfoService:
                 "primary": state.primary == session,
                 **payload,
             }
+
+        if self._stale_cleanup is not None:
+            self._stale_cleanup.cleanup()
 
         state = self._registry.load()
         sessions: list[dict[str, object]] = []
