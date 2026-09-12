@@ -3,10 +3,26 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+
+import pytest
 from pathlib import Path
 
 from houbridge.output.tokens import FallbackTokenEstimator
 from houbridge.resource.store import ResourceStore
+from houbridge.semantic_id import SemanticBase
+
+
+class _FixedSemanticGenerator:
+    def generate(self, _text: str, *, fallback_stem: str) -> SemanticBase:
+        return SemanticBase(prefix="node-graph-python", tags=("node", "graph", "python"))
+
+
+@pytest.fixture(autouse=True)
+def _avoid_loading_potion(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "houbridge.resource.store.PotionSemanticBaseGenerator",
+        lambda: _FixedSemanticGenerator(),
+    )
 
 
 def test_store_persists_exact_payload_bytes_in_global_database(tmp_path: Path, monkeypatch) -> None:
@@ -78,7 +94,7 @@ def test_store_does_not_put_task_or_history_state_in_resources_database(
             ).fetchall()
         }
 
-    assert tables == {"resources"}
+    assert tables == {"resources", "resource_semantic_aliases"}
 
 
 def test_binary_resource_has_no_token_count(tmp_path: Path, monkeypatch) -> None:

@@ -87,16 +87,16 @@
 
 ## 6. Resource persistence and inspection
 
-- [ ] 6.1 Create global `<data-dir>/resources.db` schema that is database-complete for payload bytes, canonical identity, content metadata, semantic alias/tag state, ordinal state, and retention state.
+- [x] 6.1 Create global `<data-dir>/resources.db` schema that is database-complete for payload bytes, canonical identity, content metadata, semantic alias/tag state, ordinal state, and retention state.
 - [x] 6.2 Store exact Resource payload bytes in SQLite and make Resource lookup independent of cwd.
 - [x] 6.3 Implement one shared payload classifier using magic detection, strict UTF-8/control-character handling, and JSON parsing in the specified order.
 - [x] 6.4 Use lowercase SHA-256 of exact payload bytes as canonical Resource identity and deduplicate identical payloads.
-- [ ] 6.5 Implement shared feature-agnostic semantic-base generation with caller-owned fallback stems.
-- [ ] 6.6 Generate Resource aliases from three usable Potion tags and deterministic semantic text derived from classified Resource content.
-- [ ] 6.7 Filter unusable semantic tag atoms and keep semantic ordinal allocation independent from retained Resource rows.
-- [ ] 6.8 Commit payload upsert, classification metadata, alias allocation, ordinal reservation, and retention refresh in one SQLite transaction.
-- [ ] 6.9 Prevent alias/ordinal duplication under concurrent writers and prevent cleanup/write races from deleting freshly refreshed payloads.
-- [ ] 6.10 Implement 72-hour active Resource retention with refresh on write/rewrite and no retention extension on reads.
+- [x] 6.5 Implement shared feature-agnostic semantic-base generation with caller-owned fallback stems.
+- [x] 6.6 Generate Resource aliases from three usable Potion tags and deterministic semantic text derived from classified Resource content.
+- [x] 6.7 Filter unusable semantic tag atoms and keep semantic ordinal allocation independent from retained Resource rows.
+- [x] 6.8 Commit payload upsert, classification metadata, alias allocation, ordinal reservation, and retention refresh in one SQLite transaction.
+- [x] 6.9 Prevent alias/ordinal duplication under concurrent writers and prevent cleanup/write races from deleting freshly refreshed payloads.
+- [x] 6.10 Implement 72-hour active Resource retention with refresh on write/rewrite and no retention extension on reads.
 - [x] 6.11 Keep generic Resource metadata minimal and free of Task, Execution, History, target, or dispatch-specific fields.
 - [ ] 6.12 Allow Execution/Task output payloads to be stored as Resources without changing generic Resource metadata.
 - [ ] 6.13 Implement bounded Resource metadata inspection and full-get behavior using final serialized size limits.

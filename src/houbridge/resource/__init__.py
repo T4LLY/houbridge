@@ -1,4 +1,4 @@
-"""Global Resource persistence and classification."""
+"""Global Resource persistence, classification, semantic identity, and retention."""
 
 from houbridge.resource.classifier import ContentClassification, classify_content
 from houbridge.resource.models import Resource
