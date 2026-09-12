@@ -101,6 +101,17 @@ class CompletingRunner:
         self.recover_ids.append(task.id)
         self.store.mark_completed(task.id)
 
+    def runtime_failed(self, task, error) -> None:
+        self.store.mark_runtime_failed(
+            task.id,
+            code=error.code,
+            message=error.message,
+            detail=error.detail,
+        )
+
+    def cleanup_terminal_workspaces(self) -> None:
+        return None
+
 
 def _reserve(state: TaskRuntimeStateStore, token: str = "runtime-token") -> None:
     assert state.reserve_runtime_start(token, ProcessIdentity(9001, "starter"))
@@ -297,3 +308,43 @@ def test_claim_capacity_is_shared_across_runtime_state_instances(tmp_path: Path)
     assert first != second
     assert third is None
     assert first_state.claim_count() == second_state.claim_count() == 2
+
+
+def test_replacement_runtime_adopts_queued_task_once_dispatch_state_exists(tmp_path: Path) -> None:
+    from houbridge.task import TaskInvocationStore
+
+    store = _store(tmp_path)
+    task_id = _submit(store, 0, pid=8800)
+    state = _runtime_state(store)
+    _reserve(state, "dead-owner")
+    assert state.claim_runtime_owner("dead-owner", ProcessIdentity(9800, "dead-runtime"))
+    assert state.claim_next_queued("dead-owner", max_concurrency=1) == task_id
+    invocations = TaskInvocationStore(store.database)
+    invocations.create(task_id, tmp_path / "recoverable-workspace")
+    assert state.clear_runtime_owner("dead-owner")
+    assert state.reserve_runtime_start("replacement", ProcessIdentity(9801, "starter"))
+
+    class RecoverQueuedRunner(CompletingRunner):
+        def run(self, task) -> None:
+            raise AssertionError("queued Task with dispatch state must not be replayed")
+
+        def recover(self, task) -> None:
+            self.recover_ids.append(task.id)
+            if task.status == "queued":
+                self.store.mark_running(task.id)
+            self.store.mark_completed(task.id)
+            invocations.remove(task.id)
+
+    runner = RecoverQueuedRunner(store)
+    runtime = TaskRuntime(
+        store,
+        state,
+        runner,
+        max_concurrency=1,
+        target_validator=AcceptTarget(),
+    )
+    runtime.run("replacement", runtime_identity=ProcessIdentity(9802, "replacement-runtime"))
+
+    assert runner.run_ids == []
+    assert runner.recover_ids == [task_id]
+    assert store.get(task_id).status == "completed"  # type: ignore[union-attr]

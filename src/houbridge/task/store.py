@@ -197,7 +197,22 @@ class TaskStore:
             allowed_from=("running",),
         )
 
-    def mark_failed(
+    def mark_python_failed(
+        self,
+        task_id: str,
+        *,
+        finished_at: datetime | None = None,
+    ) -> None:
+        self._mark_terminal(
+            task_id,
+            status="failed",
+            completion_resource_id=None,
+            failure=None,
+            finished_at=finished_at,
+            allowed_from=("running",),
+        )
+
+    def mark_runtime_failed(
         self,
         task_id: str,
         *,

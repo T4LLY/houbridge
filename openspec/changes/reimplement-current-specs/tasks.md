@@ -74,10 +74,10 @@
 ## 5. Temporary Workspace and Temporary Artifact boundaries
 
 - [x] 5.1 Allocate collision-safe private Temporary Workspaces below the operating-system temporary root for managed Execution/Task invocations.
-- [ ] 5.2 Publish started markers atomically only after invocation state proves caller Python may have started.
-- [ ] 5.3 Publish completion markers atomically only after Python outcome and stream flush are established.
-- [ ] 5.4 Retain active/recoverable Temporary Workspaces only while Task recovery or terminal finalization may need them.
-- [ ] 5.5 Delete finished private workspaces after authoritative Task/Resource state no longer depends on them.
+- [x] 5.2 Publish started markers atomically only after invocation state proves caller Python may have started.
+- [x] 5.3 Publish completion markers atomically only after Python outcome and stream flush are established.
+- [x] 5.4 Retain active/recoverable Temporary Workspaces only while Task recovery or terminal finalization may need them.
+- [x] 5.5 Delete finished private workspaces after authoritative Task/Resource state no longer depends on them.
 - [x] 5.6 Implement one shared Temporary Artifact namespace below the operating-system temporary directory.
 - [x] 5.7 Reserve collision-safe final artifact paths and publish exact completed bytes/files atomically.
 - [x] 5.8 Keep MIME/extension classification in the producing feature rather than in Temporary Artifact.
@@ -138,7 +138,7 @@
 
 ## 9. Async Task subsystem
 
-- [ ] 9.1 Create one global `<data-dir>/tasks.db` schema for Task rows, output chunks, semantic ordinal state, runtime ownership, and claims.
+- [x] 9.1 Create one global `<data-dir>/tasks.db` schema for Task rows, output chunks, semantic ordinal state, runtime ownership, and claims.
 - [ ] 9.2 Expose exactly the four public states `queued`, `running`, `completed`, and `failed` with correct transition timing.
 - [x] 9.3 Read and freeze exact submitted Python source before Task creation and retain it only while queued/running/recoverable.
 - [x] 9.4 Generate Task semantic IDs from submitted source only, using caller fallback `task-unknown` and ordinal state independent of retained Task rows.
@@ -147,11 +147,11 @@
 - [x] 9.7 Implement queue claiming/scheduling with global `[task].max_concurrency` enforcement.
 - [x] 9.8 Revalidate the exact bound Houdini process incarnation immediately before dispatch and fail instead of retargeting a replacement process.
 - [x] 9.9 Acquire the same exact-process managed-execution lock used by synchronous Exec.
-- [ ] 9.10 Persist stdout/stderr incrementally as ordered Task-owned chunks in `tasks.db`.
-- [ ] 9.11 Reconstruct accumulated stdout/stderr as logical Task state without exposing chunk ids/cursors.
-- [ ] 9.12 Represent Python exceptions as Task failure with traceback in stderr while representing Task Runtime failures as structured runtime errors.
-- [ ] 9.13 Use atomic started/completion markers plus runtime claims to distinguish never-started, possibly-started, and completed invocations.
-- [ ] 9.14 Recover/finalize a possibly-started Task without automatically replaying caller Python.
+- [x] 9.10 Persist stdout/stderr incrementally as ordered Task-owned chunks in `tasks.db`.
+- [x] 9.11 Reconstruct accumulated stdout/stderr as logical Task state without exposing chunk ids/cursors.
+- [x] 9.12 Represent Python exceptions as Task failure with traceback in stderr while representing Task Runtime failures as structured runtime errors.
+- [x] 9.13 Use atomic started/completion markers plus runtime claims to distinguish never-started, possibly-started, and completed invocations.
+- [x] 9.14 Recover/finalize a possibly-started Task without automatically replaying caller Python.
 - [ ] 9.15 Preserve frozen History context through queue wait and hand it to the shared History boundary only if caller Python actually starts.
 - [ ] 9.16 Create one successful completion JSON Resource containing exactly Task-defined stdout/stderr payload.
 - [ ] 9.17 Clear source bodies at terminalization and retain terminal Tasks for the effective Resource TTL without expiring active Tasks.

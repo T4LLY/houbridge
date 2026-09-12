@@ -40,3 +40,13 @@ class TemporaryWorkspaceService:
         prefix = require_component(prefix, label="workspace prefix")
         directory = Path(tempfile.mkdtemp(prefix=f"{prefix}-", dir=self._root))
         return TemporaryWorkspace(directory)
+
+    def open_existing(self, directory: Path) -> TemporaryWorkspace:
+        resolved = directory.expanduser().resolve()
+        try:
+            resolved.relative_to(self._root)
+        except ValueError as exc:
+            raise ValueError("workspace path is outside the managed Temporary Workspace root") from exc
+        if not resolved.is_dir():
+            raise FileNotFoundError(resolved)
+        return TemporaryWorkspace(resolved)

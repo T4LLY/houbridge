@@ -186,3 +186,38 @@ def test_houdini_scripts_have_a_physical_package_boundary() -> None:
     package_dir = Path(scripts.__file__).parent
     assert package_dir.name == "scripts"
     assert package_dir.parent.name == "houdini"
+
+
+def test_transport_can_start_async_script_without_sync_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    script = tmp_path / "run.py"
+    script.write_text("pass", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    class FakeProcess:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            return None
+
+    def fake_popen(args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return FakeProcess()
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    process = HoudiniTransport("hcommand-test", timeout_seconds=0.01).start_script(
+        HoudiniTarget("localhost", 1714),
+        script,
+    )
+
+    assert process.poll() is None
+    assert captured["args"] == [
+        "hcommand-test",
+        "1714",
+        f'python "{script.resolve().as_posix()}"',
+    ]
+    assert "timeout" not in captured["kwargs"]  # type: ignore[operator]

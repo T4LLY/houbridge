@@ -1,0 +1,411 @@
+from __future__ import annotations
+
+import json
+import sys
+import threading
+import time
+import types
+from pathlib import Path
+
+from houbridge.process_coordination import ProcessIdentity
+from houbridge.semantic_id import SemanticBase
+from houbridge.task import (
+    FrozenDispatchContext,
+    TaskInvocationRunner,
+    TaskInvocationStore,
+    TaskStore,
+    TaskSubmission,
+)
+from houbridge.task.streaming import TaskStreamCollector
+from houbridge.temporary_workspace import TemporaryWorkspace, TemporaryWorkspaceService
+
+
+class FixedSemanticGenerator:
+    def generate(self, _text: str, *, fallback_stem: str) -> SemanticBase:
+        assert fallback_stem == "task-unknown"
+        return SemanticBase(prefix="stream-recovery-work", tags=("stream", "recovery", "work"))
+
+
+def _store(tmp_path: Path) -> TaskStore:
+    return TaskStore(tmp_path / "tasks.db", semantic_generator=FixedSemanticGenerator())
+
+
+def _submit(store: TaskStore, *, timeout: float = 5.0) -> str:
+    return store.submit(
+        TaskSubmission(
+            source="print('hello')\n",
+            file_path="/workspace/task.py",
+            argv=("task.py",),
+            purpose=None,
+            origin_cwd="/workspace",
+            dispatch=FrozenDispatchContext(
+                session=1,
+                port=1714,
+                pid=4242,
+                process_start_identity="process-4242",
+                transport_executable="hcommand",
+                transport_timeout_seconds=timeout,
+                transport_environment={},
+                lock_timeout_seconds=5,
+            ),
+            history_enabled=False,
+        )
+    ).id
+
+
+class CompleteSuccess:
+    def __init__(self, store: TaskStore) -> None:
+        self.store = store
+        self.calls: list[str] = []
+
+    def finalize_success(self, task) -> None:
+        self.calls.append(task.id)
+        self.store.mark_completed(task.id)
+
+
+class NeverDispatch:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def start(self, task, script_path):
+        self.calls += 1
+        raise AssertionError("recovery must never re-dispatch submitted Python")
+
+
+class _ThreadDispatchHandle:
+    def __init__(self, thread: threading.Thread) -> None:
+        self.thread = thread
+        self.terminated = False
+
+    def poll(self) -> int | None:
+        return 0 if not self.thread.is_alive() else None
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+
+class StreamingDispatch:
+    def __init__(self) -> None:
+        self.first_written = threading.Event()
+        self.finish = threading.Event()
+
+    def start(self, task, script_path):
+        directory = script_path.parent
+
+        def writer() -> None:
+            workspace = TemporaryWorkspace(directory)
+            workspace.path_for("stdout.txt").write_bytes(b"")
+            workspace.path_for("stderr.txt").write_bytes(b"")
+            workspace.publish_marker(
+                "started.json",
+                json.dumps({"version": 1, "task_id": task.id}, separators=(",", ":")).encode(),
+            )
+            with workspace.path_for("stdout.txt").open("ab", buffering=0) as stream:
+                stream.write("10%\n".encode())
+                self.first_written.set()
+                assert self.finish.wait(5)
+                stream.write("20%\n".encode())
+            workspace.publish_marker(
+                "completion.json",
+                json.dumps(
+                    {"version": 1, "task_id": task.id, "python_ok": True},
+                    separators=(",", ":"),
+                ).encode(),
+            )
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        return _ThreadDispatchHandle(thread)
+
+
+def _runner(
+    store: TaskStore,
+    tmp_path: Path,
+    success,
+    *,
+    dispatcher=None,
+    identity_reader=None,
+) -> tuple[TaskInvocationRunner, TaskInvocationStore, TemporaryWorkspaceService]:
+    invocations = TaskInvocationStore(store.database)
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+    expected = ProcessIdentity(4242, "process-4242")
+    return (
+        TaskInvocationRunner(
+            store,
+            invocations,
+            workspaces,
+            success,
+            dispatcher=dispatcher,
+            identity_reader=identity_reader or (lambda _pid: expected),
+            poll_interval_seconds=0.01,
+        ),
+        invocations,
+        workspaces,
+    )
+
+
+def _publish_started(workspace: TemporaryWorkspace, task_id: str) -> None:
+    workspace.publish_marker(
+        "started.json",
+        json.dumps({"version": 1, "task_id": task_id}, separators=(",", ":")).encode(),
+    )
+
+
+def _publish_completion(workspace: TemporaryWorkspace, task_id: str, python_ok: bool) -> None:
+    workspace.publish_marker(
+        "completion.json",
+        json.dumps(
+            {"version": 1, "task_id": task_id, "python_ok": python_ok},
+            separators=(",", ":"),
+        ).encode(),
+    )
+
+
+def test_running_stream_is_incrementally_committed_and_reads_accumulate(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    dispatcher = StreamingDispatch()
+    success = CompleteSuccess(store)
+    runner, _invocations, _workspaces = _runner(
+        store,
+        tmp_path,
+        success,
+        dispatcher=dispatcher,
+    )
+    task = store.get(task_id)
+    assert task is not None
+
+    thread = threading.Thread(target=runner.run, args=(task,))
+    thread.start()
+    assert dispatcher.first_written.wait(5)
+    deadline = time.monotonic() + 5
+    while store.accumulated_stream(task_id, "stdout") != "10%\n":
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+    assert store.get(task_id).status == "running"  # type: ignore[union-attr]
+
+    dispatcher.finish.set()
+    thread.join(5)
+    assert not thread.is_alive()
+    assert store.accumulated_stream(task_id, "stdout") == "10%\n20%\n"
+    assert store.get(task_id).status == "completed"  # type: ignore[union-attr]
+    assert success.calls == [task_id]
+
+
+def test_recovery_uses_started_completion_markers_without_redispatch(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    success = CompleteSuccess(store)
+    dispatcher = NeverDispatch()
+    runner, invocations, workspaces = _runner(
+        store,
+        tmp_path,
+        success,
+        dispatcher=dispatcher,
+    )
+    workspace = workspaces.allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    workspace.path_for("stdout.txt").write_text("done\n", encoding="utf-8")
+    workspace.path_for("stderr.txt").write_text("", encoding="utf-8")
+    _publish_started(workspace, task_id)
+    _publish_completion(workspace, task_id, True)
+
+    task = store.get(task_id)
+    assert task is not None
+    runner.recover(task)
+
+    assert dispatcher.calls == 0
+    assert store.accumulated_stream(task_id, "stdout") == "done\n"
+    assert store.get(task_id).status == "completed"  # type: ignore[union-attr]
+    assert invocations.get(task_id) is None
+    assert not workspace.directory.exists()
+
+
+def test_python_failure_keeps_traceback_in_stderr_without_runtime_failure(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    runner, invocations, workspaces = _runner(store, tmp_path, CompleteSuccess(store))
+    workspace = workspaces.allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    workspace.path_for("stdout.txt").write_text("before\n", encoding="utf-8")
+    workspace.path_for("stderr.txt").write_text("Traceback...\nRuntimeError: boom\n", encoding="utf-8")
+    _publish_started(workspace, task_id)
+    _publish_completion(workspace, task_id, False)
+
+    task = store.get(task_id)
+    assert task is not None
+    runner.recover(task)
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code is None
+    assert failed.runtime_failure_message is None
+    assert "RuntimeError: boom" in store.accumulated_stream(task_id, "stderr")
+
+
+def test_runtime_failure_is_structured_and_does_not_fabricate_stderr(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    runner, invocations, workspaces = _runner(
+        store,
+        tmp_path,
+        CompleteSuccess(store),
+        identity_reader=lambda _pid: ProcessIdentity(4242, "different-incarnation"),
+    )
+    workspace = workspaces.allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    workspace.path_for("stdout.txt").write_text("partial\n", encoding="utf-8")
+    workspace.path_for("stderr.txt").write_text("", encoding="utf-8")
+    _publish_started(workspace, task_id)
+
+    task = store.get(task_id)
+    assert task is not None
+    runner.recover(task)
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_target_changed"
+    assert store.accumulated_stream(task_id, "stderr") == ""
+    assert store.accumulated_stream(task_id, "stdout") == "partial\n"
+
+
+def test_recovery_before_started_marker_does_not_replay_when_target_is_gone(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    success = CompleteSuccess(store)
+    dispatcher = NeverDispatch()
+    invocations = TaskInvocationStore(store.database)
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+    workspace = workspaces.allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    runner = TaskInvocationRunner(
+        store,
+        invocations,
+        workspaces,
+        success,
+        dispatcher=dispatcher,
+        identity_reader=lambda _pid: ProcessIdentity(4242, "different-incarnation"),
+        sleep=lambda _seconds: None,
+        poll_interval_seconds=0.01,
+    )
+
+    task = store.get(task_id)
+    assert task is not None
+    runner.recover(task)
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_target_changed"
+    assert dispatcher.calls == 0
+
+def test_stream_collector_keeps_incomplete_utf8_for_next_chunk(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    invocations = TaskInvocationStore(store.database)
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+    workspace = workspaces.allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    collector = TaskStreamCollector(invocations)
+    payload = "AあB".encode("utf-8")
+    path = workspace.path_for("stdout.txt")
+    path.write_bytes(payload[:2])
+    workspace.path_for("stderr.txt").write_bytes(b"")
+
+    collector.drain(task_id, workspace)
+    assert store.accumulated_stream(task_id, "stdout") == "A"
+    path.write_bytes(payload)
+    collector.drain(task_id, workspace, final=True)
+    assert store.accumulated_stream(task_id, "stdout") == "AあB"
+
+
+def test_houdini_task_runtime_publishes_started_before_source_and_traceback_to_stderr(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from houbridge.houdini.scripts.task import runtime
+
+    monkeypatch.setitem(sys.modules, "hou", types.ModuleType("hou"))
+    started = tmp_path / "started.json"
+    completion = tmp_path / "completion.json"
+    stdout = tmp_path / "stdout.txt"
+    stderr = tmp_path / "stderr.txt"
+    source = tmp_path / "source.py"
+    source.write_text(
+        "from pathlib import Path\n"
+        f"assert Path({str(started)!r}).is_file()\n"
+        "print('before failure', flush=True)\n"
+        "raise RuntimeError('boom')\n",
+        encoding="utf-8",
+    )
+    request = tmp_path / "request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "task_id": "marker-order-000",
+                "source_file": str(source),
+                "source_path": str(source),
+                "argv": (str(source),),
+                "stdout_file": str(stdout),
+                "stderr_file": str(stderr),
+                "started_marker": str(started),
+                "completion_marker": str(completion),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    runtime.run(str(request))
+
+    assert json.loads(started.read_text(encoding="utf-8")) == {
+        "version": 1,
+        "task_id": "marker-order-000",
+    }
+    assert json.loads(completion.read_text(encoding="utf-8")) == {
+        "version": 1,
+        "task_id": "marker-order-000",
+        "python_ok": False,
+    }
+    assert stdout.read_text(encoding="utf-8") == "before failure\n"
+    assert "RuntimeError: boom" in stderr.read_text(encoding="utf-8")
+
+
+def test_many_stream_flushes_remain_one_accumulated_logical_stream(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    invocations = TaskInvocationStore(store.database)
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+    workspace = workspaces.allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    stdout = workspace.path_for("stdout.txt")
+    stderr = workspace.path_for("stderr.txt")
+    stdout.write_bytes(b"")
+    stderr.write_bytes(b"")
+    collector = TaskStreamCollector(invocations)
+
+    expected = ""
+    for index in range(100):
+        chunk = f"{index:03d}\n"
+        expected += chunk
+        with stdout.open("ab") as stream:
+            stream.write(chunk.encode("utf-8"))
+        collector.drain(task_id, workspace)
+
+    assert store.accumulated_stream(task_id, "stdout") == expected
+
+
+def test_terminal_task_workspace_left_by_crash_is_cleanup_recoverable(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    runner, invocations, workspaces = _runner(store, tmp_path, CompleteSuccess(store))
+    workspace = workspaces.allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    store.mark_running(task_id)
+    store.mark_python_failed(task_id)
+
+    runner.cleanup_terminal_workspaces()
+
+    assert invocations.get(task_id) is None
+    assert not workspace.directory.exists()

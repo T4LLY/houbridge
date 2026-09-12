@@ -50,7 +50,11 @@ class TaskRuntimeStateStore:
         with self._connect() as connection:
             return (
                 connection.execute(
-                    "SELECT 1 FROM tasks WHERE status IN ('queued', 'running') LIMIT 1"
+                    """
+                    SELECT 1
+                    WHERE EXISTS (SELECT 1 FROM tasks WHERE status IN ('queued', 'running'))
+                       OR EXISTS (SELECT 1 FROM task_invocations)
+                    """
                 ).fetchone()
                 is not None
             )
@@ -133,7 +137,11 @@ class TaskRuntimeStateStore:
             connection.execute("BEGIN IMMEDIATE")
             _require_runtime_owner(connection, token)
             if connection.execute(
-                "SELECT 1 FROM tasks WHERE status IN ('queued', 'running') LIMIT 1"
+                """
+                SELECT 1
+                WHERE EXISTS (SELECT 1 FROM tasks WHERE status IN ('queued', 'running'))
+                   OR EXISTS (SELECT 1 FROM task_invocations)
+                """
             ).fetchone() is not None:
                 return False
             connection.execute(
@@ -154,7 +162,14 @@ class TaskRuntimeStateStore:
                 """
                 DELETE FROM task_claims
                 WHERE owner_token <> ?
-                  AND task_id IN (SELECT id FROM tasks WHERE status = 'queued')
+                  AND task_id IN (
+                      SELECT t.id
+                      FROM tasks AS t
+                      WHERE t.status = 'queued'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM task_invocations AS i WHERE i.task_id = t.id
+                        )
+                  )
                 """,
                 (owner_token,),
             )
@@ -163,7 +178,17 @@ class TaskRuntimeStateStore:
                 UPDATE task_claims
                 SET owner_token = ?, claimed_at = ?
                 WHERE owner_token <> ?
-                  AND task_id IN (SELECT id FROM tasks WHERE status = 'running')
+                  AND task_id IN (
+                      SELECT t.id
+                      FROM tasks AS t
+                      WHERE t.status = 'running'
+                         OR (
+                             t.status = 'queued'
+                             AND EXISTS (
+                                 SELECT 1 FROM task_invocations AS i WHERE i.task_id = t.id
+                             )
+                         )
+                  )
                 """,
                 (owner_token, claimed_at, owner_token),
             )
@@ -172,9 +197,15 @@ class TaskRuntimeStateStore:
                 INSERT OR IGNORE INTO task_claims(
                     task_id, owner_token, target_pid, target_process_start_identity, claimed_at
                 )
-                SELECT id, ?, target_pid, target_process_start_identity, ?
-                FROM tasks
-                WHERE status = 'running'
+                SELECT t.id, ?, t.target_pid, t.target_process_start_identity, ?
+                FROM tasks AS t
+                WHERE t.status = 'running'
+                   OR (
+                       t.status = 'queued'
+                       AND EXISTS (
+                           SELECT 1 FROM task_invocations AS i WHERE i.task_id = t.id
+                       )
+                   )
                 """,
                 (owner_token, claimed_at),
             )
@@ -183,7 +214,16 @@ class TaskRuntimeStateStore:
                 SELECT t.id
                 FROM tasks AS t
                 JOIN task_claims AS c ON c.task_id = t.id
-                WHERE t.status = 'running' AND c.owner_token = ?
+                WHERE c.owner_token = ?
+                  AND (
+                      t.status = 'running'
+                      OR (
+                          t.status = 'queued'
+                          AND EXISTS (
+                              SELECT 1 FROM task_invocations AS i WHERE i.task_id = t.id
+                          )
+                      )
+                  )
                 ORDER BY t.created_at, t.id
                 """,
                 (owner_token,),
@@ -251,14 +291,23 @@ class TaskRuntimeStateStore:
             )
             return task_id
 
-    def running_claims_for_owner(self, owner_token: str) -> tuple[str, ...]:
+    def recoverable_claims_for_owner(self, owner_token: str) -> tuple[str, ...]:
         with self._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT t.id
                 FROM tasks AS t
                 JOIN task_claims AS c ON c.task_id = t.id
-                WHERE t.status = 'running' AND c.owner_token = ?
+                WHERE c.owner_token = ?
+                  AND (
+                      t.status = 'running'
+                      OR (
+                          t.status = 'queued'
+                          AND EXISTS (
+                              SELECT 1 FROM task_invocations AS i WHERE i.task_id = t.id
+                          )
+                      )
+                  )
                 ORDER BY t.created_at, t.id
                 """,
                 (owner_token,),

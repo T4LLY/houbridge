@@ -28,6 +28,18 @@ class TransportResult:
     returncode: int
 
 
+@dataclass(slots=True)
+class RunningTransportProcess:
+    process: subprocess.Popen[bytes]
+
+    def poll(self) -> int | None:
+        return self.process.poll()
+
+    def terminate(self) -> None:
+        if self.process.poll() is None:
+            self.process.terminate()
+
+
 class HoudiniTransport:
     """Invocation-local hcommand/openport transport for one Houdini target."""
 
@@ -87,9 +99,8 @@ class HoudiniTransport:
                 f"Execution script does not exist: {script_path}",
             )
 
-        command = f'python "{_hscript_path(script_path)}"'
         executable = str(self.executable)
-        args = [executable, str(target.port), command]
+        args = _script_args(self.executable, target, script_path)
         try:
             completed = subprocess.run(
                 args,
@@ -135,6 +146,50 @@ class HoudiniTransport:
             )
         return result
 
+    def start_script(
+        self,
+        target: HoudiniTarget,
+        script_path: Path,
+    ) -> RunningTransportProcess:
+        """Start hcommand without imposing the synchronous wall-clock timeout.
+
+        Async Task uses its started marker as the dispatch-establishment boundary.
+        Once caller Python has started, the hcommand lifetime must not become a
+        timeout on the caller's Python runtime.
+        """
+
+        _require_local_target(target)
+        if not script_path.is_file():
+            raise BridgeError(
+                "script_not_found",
+                f"Execution script does not exist: {script_path}",
+            )
+        executable = str(self.executable)
+        args = _script_args(self.executable, target, script_path)
+        try:
+            process = subprocess.Popen(
+                args,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=subprocess_environment_for(
+                    self.executable,
+                    environ=self._environ,
+                ),
+            )
+        except FileNotFoundError as exc:
+            raise BridgeError(
+                "hcommand_not_found",
+                f"hcommand executable was not found: {executable}",
+            ) from exc
+        except OSError as exc:
+            raise BridgeError(
+                "hcommand_failed",
+                "Failed to start hcommand.",
+                f"{type(exc).__name__}: {exc}",
+            ) from exc
+        return RunningTransportProcess(process)
+
 
 def _require_local_target(target: HoudiniTarget) -> None:
     host = target.host.strip().lower().rstrip(".")
@@ -151,6 +206,11 @@ def _require_local_target(target: HoudiniTarget) -> None:
         "remote_target_disabled",
         "Houdini transport accepts loopback targets only.",
     )
+
+
+def _script_args(executable: str | Path, target: HoudiniTarget, script_path: Path) -> list[str]:
+    command = f'python "{_hscript_path(script_path)}"'
+    return [str(executable), str(target.port), command]
 
 
 def _hscript_path(path: Path) -> str:

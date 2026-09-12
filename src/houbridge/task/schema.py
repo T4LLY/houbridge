@@ -47,6 +47,14 @@ CREATE TABLE IF NOT EXISTS task_stream_chunks (
     PRIMARY KEY(task_id, sequence)
 ) WITHOUT ROWID;
 
+CREATE TABLE IF NOT EXISTS task_invocations (
+    task_id TEXT PRIMARY KEY NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    workspace_path TEXT NOT NULL UNIQUE,
+    dispatch_started_at TEXT NOT NULL,
+    stdout_committed_bytes INTEGER NOT NULL DEFAULT 0 CHECK (stdout_committed_bytes >= 0),
+    stderr_committed_bytes INTEGER NOT NULL DEFAULT 0 CHECK (stderr_committed_bytes >= 0)
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS task_runtime_ownership (
     singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1),
     token TEXT NOT NULL,

@@ -18,15 +18,22 @@ class TaskRunner(Protocol):
     """Execution boundary for one claimed Task invocation.
 
     ``run`` is only called for a queued Task that passed exact-target validation.
-    ``recover`` is only called for a Task already recorded as running. Marker and
-    stream semantics stay behind this boundary so the scheduler never guesses
-    whether caller Python has started.
+    ``recover`` is called for a Task whose prior runtime already established
+    invocation recovery state, whether its public status is still queued or has
+    reached running. Marker and stream semantics stay behind this boundary so
+    the scheduler never guesses whether caller Python has started.
     """
 
     def run(self, task: TaskRecord) -> None:
         ...
 
     def recover(self, task: TaskRecord) -> None:
+        ...
+
+    def runtime_failed(self, task: TaskRecord, error: BridgeError) -> None:
+        ...
+
+    def cleanup_terminal_workspaces(self) -> None:
         ...
 
 
@@ -65,6 +72,7 @@ class TaskRuntime:
                 "Task Runtime could not claim the reserved global Task ownership.",
             )
 
+        self._runner.cleanup_terminal_workspaces()
         recovery_queue = deque(self._runtime_state.adopt_runtime_claims(owner_token))
         active_ids: set[str] = set()
         futures: dict[Future[None], str] = {}
@@ -105,13 +113,14 @@ class TaskRuntime:
 
                     running = tuple(
                         task_id
-                        for task_id in self._runtime_state.running_claims_for_owner(owner_token)
+                        for task_id in self._runtime_state.recoverable_claims_for_owner(owner_token)
                         if task_id not in active_ids
                     )
                     if running:
                         recovery_queue.extend(running)
                         continue
 
+                    self._runner.cleanup_terminal_workspaces()
                     if self._runtime_state.retire_runtime_if_idle(owner_token):
                         return
 
@@ -155,12 +164,7 @@ class TaskRuntime:
         except BridgeError as exc:
             if exc.code != "task_target_changed":
                 raise
-            self._store.mark_failed(
-                task.id,
-                code=exc.code,
-                message=exc.message,
-                detail=exc.detail,
-            )
+            self._runner.runtime_failed(task, exc)
             self._runtime_state.release_claim(task.id, owner_token)
             return False
         return True

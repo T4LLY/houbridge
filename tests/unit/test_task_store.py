@@ -159,7 +159,7 @@ def test_submission_freezes_source_and_dispatch_context(tmp_path: Path) -> None:
 def test_terminal_transition_removes_frozen_source(tmp_path: Path) -> None:
     store = _store(tmp_path)
     failed = store.submit(_submission(source="raise RuntimeError()\n"))
-    store.mark_failed(failed.id, code="target_changed", message="target changed")
+    store.mark_runtime_failed(failed.id, code="target_changed", message="target changed")
     failed_after = store.get(failed.id)
     assert failed_after is not None
     assert failed_after.status == "failed"
@@ -268,6 +268,7 @@ def test_task_schema_keeps_ordinal_state_separate_from_task_rows(tmp_path: Path)
         "tasks",
         "task_semantic_ordinals",
         "task_stream_chunks",
+        "task_invocations",
         "task_runtime_ownership",
         "task_claims",
     }
