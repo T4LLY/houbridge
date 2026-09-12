@@ -36,11 +36,12 @@ def emit_result(
     payload: Mapping[str, Any],
     *,
     allow_resource_fallback: bool = True,
+    policy: OutputPolicy | None = None,
 ) -> None:
     """Apply the common Output Policy and emit exactly one public JSON result."""
 
     try:
-        active_policy = OutputPolicy.from_config(load_config())
+        active_policy = policy or OutputPolicy.from_config(load_config())
         serialized = active_policy.render(
             payload,
             allow_resource_fallback=allow_resource_fallback,
