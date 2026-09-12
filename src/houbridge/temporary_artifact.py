@@ -41,6 +41,30 @@ class TemporaryArtifactService:
         staging = stage_file(directory, source)
         return self._publish_staged(staging, directory, stem=stem, extension=extension)
 
+    def publish_file_exact(
+        self,
+        source: Path,
+        *,
+        namespace: str,
+        stem: str,
+        extension: str,
+    ) -> Path:
+        """Publish one completed file under an exact caller-selected name.
+
+        This keeps the Temporary Artifact boundary responsible for staging and
+        atomic no-overwrite publication while allowing features such as Capture
+        to own a readable sequential naming contract.
+        """
+
+        directory = self._namespace_directory(namespace)
+        staging = stage_file(directory, source)
+        return self._publish_staged_exact(
+            staging,
+            directory,
+            stem=stem,
+            extension=extension,
+        )
+
     def cleanup_before(self, *, namespace: str, cutoff_timestamp: float) -> int:
         """Delete managed artifact files selected by a caller-owned retention cutoff."""
 
@@ -76,6 +100,26 @@ class TemporaryArtifactService:
             if "/" in extension or "\\" in extension:
                 raise ValueError("artifact extension must not contain path separators")
         return stem, extension
+
+    def _publish_staged_exact(
+        self,
+        staging: Path,
+        directory: Path,
+        *,
+        stem: str,
+        extension: str,
+    ) -> Path:
+        stem, extension = self._validate_name(stem, extension)
+        final = directory / f"{stem}{extension}"
+        try:
+            os.link(staging, final)
+            staging.unlink()
+            return final
+        finally:
+            try:
+                staging.unlink()
+            except FileNotFoundError:
+                pass
 
     def _publish_staged(
         self,

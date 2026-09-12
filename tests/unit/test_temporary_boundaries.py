@@ -175,3 +175,27 @@ def test_temporary_artifact_does_not_classify_format(tmp_path: Path) -> None:
 
     assert path.suffix == ".png"
     assert path.read_bytes() == b"not actually a png"
+
+
+def test_exact_artifact_publication_preserves_caller_name_and_never_overwrites(tmp_path: Path) -> None:
+    service = TemporaryArtifactService(temp_root=tmp_path)
+    source = tmp_path / "source.png"
+    source.write_bytes(b"complete")
+
+    published = service.publish_file_exact(
+        source,
+        namespace="capture",
+        stem="viewport20260911-1900-001",
+        extension=".png",
+    )
+
+    assert published.name == "viewport20260911-1900-001.png"
+    assert published.read_bytes() == b"complete"
+    with pytest.raises(FileExistsError):
+        service.publish_file_exact(
+            source,
+            namespace="capture",
+            stem="viewport20260911-1900-001",
+            extension=".png",
+        )
+    assert published.read_bytes() == b"complete"

@@ -203,18 +203,18 @@
 
 ## 13. Capture subsystem
 
-- [ ] 13.1 Keep reusable Capture-injected helpers under `houbridge/houdini/scripts/capture/` and host orchestration outside that tree.
-- [ ] 13.2 Inspect visible Scene Viewer viewports and expose only stable public viewport information.
-- [ ] 13.3 Capture the active viewport to PNG.
-- [ ] 13.4 Implement directed top/bottom/front/back/left/right/persp/uv captures using cloned/temporary viewer state without modifying the user's viewer.
-- [ ] 13.5 Implement the fixed captioned four-view quad image.
-- [ ] 13.6 Parse screenshot preset JSON strictly and reject unknown keys/invalid values.
-- [ ] 13.7 Enforce viewport/window/turntable-specific preset capability restrictions.
-- [ ] 13.8 Apply requested positive scale before aspect-preserving clamp to configured maximum dimensions.
-- [ ] 13.9 Publish Capture outputs through Temporary Artifact with readable collision-safe names, atomic finalization, and Capture-owned lazy retention.
-- [ ] 13.10 Capture the Houdini main application window through the supported OS/window path.
-- [ ] 13.11 Transform pane-tab/viewport UI bounds into coordinates relative to the final cropped/scaled image.
-- [ ] 13.12 Resolve unambiguous supported window crop selectors and reject ambiguous/unsupported crop requests.
+- [x] 13.1 Keep reusable Capture-injected helpers under `houbridge/houdini/scripts/capture/` and host orchestration outside that tree.
+- [x] 13.2 Inspect visible Scene Viewer viewports and expose only stable public viewport information.
+- [x] 13.3 Capture the active viewport to PNG.
+- [x] 13.4 Implement directed top/bottom/front/back/left/right/persp/uv captures using cloned/temporary viewer state without modifying the user's viewer.
+- [x] 13.5 Implement the fixed captioned four-view quad image.
+- [x] 13.6 Parse screenshot preset JSON strictly and reject unknown keys/invalid values.
+- [x] 13.7 Enforce viewport/window/turntable-specific preset capability restrictions.
+- [x] 13.8 Apply requested positive scale before aspect-preserving clamp to configured maximum dimensions.
+- [x] 13.9 Publish Capture outputs through Temporary Artifact with readable collision-safe names, atomic finalization, and Capture-owned lazy retention.
+- [x] 13.10 Capture the Houdini main application window through the supported OS/window path.
+- [x] 13.11 Transform pane-tab/viewport UI bounds into coordinates relative to the final cropped/scaled image.
+- [x] 13.12 Resolve unambiguous supported window crop selectors and reject ambiguous/unsupported crop requests.
 - [ ] 13.13 Implement OCR detection/recognition result normalization, duplicate-string grouping, scores, and compact bounding boxes.
 - [ ] 13.14 Keep OCR initialization quiet, use the standard Hugging Face assets cache hierarchy, and use the specified RapidOCR/ONNX tiny PP-OCRv6 profile with classification disabled.
 - [ ] 13.15 Pass complete OCR logical results to common Output Policy without OCR-specific thresholds.
