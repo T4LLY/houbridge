@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Protocol
 
@@ -72,6 +73,7 @@ class TaskInvocationRunner:
         script_builder: TaskScriptBuilder | None = None,
         identity_reader: Callable[[int], ProcessIdentity] = process_identity_for_pid,
         sleep: Callable[[float], None] = time.sleep,
+        now: Callable[[], datetime] | None = None,
         poll_interval_seconds: float = 0.05,
     ) -> None:
         if poll_interval_seconds <= 0:
@@ -84,6 +86,7 @@ class TaskInvocationRunner:
         self._script_builder = script_builder or TaskScriptBuilder()
         self._identity_reader = identity_reader
         self._sleep = sleep
+        self._now = now or (lambda: datetime.now(timezone.utc))
         self._poll_interval_seconds = poll_interval_seconds
         self._streams = TaskStreamCollector(invocations)
 
@@ -165,6 +168,9 @@ class TaskInvocationRunner:
         dispatch: RunningDispatch | None,
     ) -> None:
         started = self._observe_started(task, workspace)
+        dispatch_deadline = _parse_utc(state.dispatch_started_at) + timedelta(
+            seconds=task.dispatch.transport_timeout_seconds
+        )
         while not started:
             completion = read_completion_marker(workspace, task.id)
             if completion is not None:
@@ -193,6 +199,20 @@ class TaskInvocationRunner:
                     return
             if not self._target_is_current(task):
                 self.runtime_failed(task, _target_changed(task))
+                return
+            if _as_utc(self._now()) >= dispatch_deadline:
+                if self._observe_started(task, workspace):
+                    started = True
+                    break
+                if dispatch is not None:
+                    dispatch.terminate()
+                self.runtime_failed(
+                    task,
+                    BridgeError(
+                        "task_dispatch_timeout",
+                        f"Task {task.id} did not establish execution before the transport timeout.",
+                    ),
+                )
                 return
             self._sleep(self._poll_interval_seconds)
             started = self._observe_started(task, workspace)
@@ -275,3 +295,21 @@ def _target_changed(task: TaskRecord) -> BridgeError:
         "task_target_changed",
         f"Task {task.id} target changed while managed execution was active.",
     )
+
+
+def _parse_utc(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise BridgeError(
+            "task_store_invalid",
+            "Stored Task invocation timestamp is invalid.",
+            value,
+        ) from exc
+    return _as_utc(parsed)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        raise ValueError("Task runtime clock must return a timezone-aware datetime")
+    return value.astimezone(timezone.utc)

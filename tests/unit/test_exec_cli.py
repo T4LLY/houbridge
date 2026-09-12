@@ -54,7 +54,7 @@ def _install_fake_command_runtime(monkeypatch, result: SynchronousExecutionResul
     return service, store
 
 
-def test_root_help_exposes_exec_and_exec_help_has_only_sync_phase_options() -> None:
+def test_root_help_exposes_exec_and_exec_help_has_current_options() -> None:
     runner = CliRunner()
 
     root = runner.invoke(app, ["--help"])
@@ -71,7 +71,7 @@ def test_root_help_exposes_exec_and_exec_help_has_only_sync_phase_options() -> N
     assert "--port" not in command.stdout
     assert "--root" not in command.stdout
     assert "--hcommand" not in command.stdout
-    assert "--async" not in command.stdout
+    assert "--async" in command.stdout
 
 
 def test_exec_preserves_script_args_order_duplicates_and_purpose(
@@ -186,3 +186,40 @@ def test_exec_rejects_removed_code_option_as_framework_usage_error() -> None:
 
     assert result.exit_code == 2
     assert "--code" in result.stderr
+
+
+def test_exec_async_returns_only_task_reference(monkeypatch, tmp_path: Path) -> None:
+    from houbridge.cli import exec_cmd
+
+    source = tmp_path / "tool.py"
+    source.write_text("print('hello')\n", encoding="utf-8")
+
+    class Submitter:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def submit(self, invocation, *, session=None):
+            self.calls.append((invocation, session))
+            return "geometry-build-cache-000"
+
+    submitter = Submitter()
+    store = _Store()
+    policy = OutputPolicy(
+        inline_max_tokens=4096,
+        token_estimator=FallbackTokenEstimator(),
+        resource_store_factory=lambda: store,  # type: ignore[arg-type]
+    )
+    monkeypatch.setattr(exec_cmd, "load_config", lambda: object())
+    monkeypatch.setattr(exec_cmd.OutputPolicy, "from_config", lambda _settings: policy)
+    monkeypatch.setattr(exec_cmd, "_build_async_execution_submitter", lambda _settings: submitter)
+
+    result = CliRunner().invoke(
+        app,
+        ["exec", "--file", str(source), "--async", "--session", "2", "--", "--quality", "high"],
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout == '{"task":"geometry-build-cache-000"}\n'
+    invocation, session = submitter.calls[0]
+    assert session == 2
+    assert invocation.argv == (str(source), "--quality", "high")

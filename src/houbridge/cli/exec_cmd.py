@@ -19,12 +19,15 @@ from houbridge.session.probe import SessionProbe
 from houbridge.session.registry import SessionRegistry
 from houbridge.session.resolver import SessionResolver
 from houbridge.temporary_workspace import TemporaryWorkspaceService
+from houbridge.task.async_submission import AsyncExecutionSubmitter
+from houbridge.task.control import build_task_runtime_control
 
 
 def exec_command(
     ctx: typer.Context,
     source_file: Path = typer.Option(..., "--file"),
     purpose: str | None = typer.Option(None, "--purpose"),
+    async_mode: bool = typer.Option(False, "--async"),
     session_number: int | None = typer.Option(None, "--session", min=1),
 ) -> None:
     try:
@@ -35,6 +38,14 @@ def exec_command(
         )
         settings = load_config()
         output_policy = OutputPolicy.from_config(settings)
+        if async_mode:
+            task_id = _build_async_execution_submitter(settings).submit(
+                invocation,
+                session=session_number,
+            )
+            emit_result({"task": task_id}, policy=output_policy)
+            return
+
         service = _build_sync_execution_service(settings, output_policy)
         result = service.execute(invocation, session=session_number)
         emit_result(result.payload, policy=output_policy)
@@ -63,4 +74,23 @@ def _build_sync_execution_service(
         resolver,
         runtime,
         ExecutionResultPresenter(output_policy),
+    )
+
+
+def _build_async_execution_submitter(settings: HoubridgeConfig) -> AsyncExecutionSubmitter:
+    paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
+    registry = SessionRegistry(paths.sessions_registry)
+    transport = HoudiniTransport.from_config(settings.houdini)
+    probe = SessionProbe(lambda: transport)
+    resolver = SessionResolver(registry, probe)
+    control = build_task_runtime_control(settings)
+    return AsyncExecutionSubmitter(
+        resolver,
+        transport,
+        control.store,
+        control.supervisor,
+        control.launcher,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+        history_enabled=settings.history.enabled,
+        ttl_hours=settings.resource.ttl_hours,
     )

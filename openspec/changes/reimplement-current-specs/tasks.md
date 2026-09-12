@@ -98,7 +98,7 @@
 - [x] 6.9 Prevent alias/ordinal duplication under concurrent writers and prevent cleanup/write races from deleting freshly refreshed payloads.
 - [x] 6.10 Implement 72-hour active Resource retention with refresh on write/rewrite and no retention extension on reads.
 - [x] 6.11 Keep generic Resource metadata minimal and free of Task, Execution, History, target, or dispatch-specific fields.
-- [ ] 6.12 Allow Execution/Task output payloads to be stored as Resources without changing generic Resource metadata.
+- [x] 6.12 Allow Execution/Task output payloads to be stored as Resources without changing generic Resource metadata.
 - [x] 6.13 Implement bounded Resource metadata inspection and full-get behavior using final serialized size limits.
 - [x] 6.14 Implement UTF-8-safe bounded slicing with explicit offset/limit validation.
 - [x] 6.15 Implement bounded literal text search and structural JSON context for JSON matches.
@@ -132,14 +132,14 @@
 - [ ] 8.10 Expose a History preflight/finalization boundary without letting Execution directly own History tables.
 - [x] 8.11 Materialize required execution artifacts as Resources and pass the logical synchronous result through the common Output Policy.
 - [x] 8.12 Implement public `exec --file PATH [--purpose TEXT] [--async] [--session N] [-- SCRIPT_ARGS...]` parsing with no `--code` source path.
-- [ ] 8.13 Keep Async operational persistence out of Execution and hand asynchronous submission to Task.
+- [x] 8.13 Keep Async operational persistence out of Execution and hand asynchronous submission to Task.
 - [x] 8.14 Separate finite dispatch-establishment timeout from unbounded caller-Python run duration.
 - [x] 8.15 Add Execution source, injected-runtime, presentation, service, CLI, transport-failure, locking, argv, and result-classification tests.
 
 ## 9. Async Task subsystem
 
 - [x] 9.1 Create one global `<data-dir>/tasks.db` schema for Task rows, output chunks, semantic ordinal state, runtime ownership, and claims.
-- [ ] 9.2 Expose exactly the four public states `queued`, `running`, `completed`, and `failed` with correct transition timing.
+- [x] 9.2 Expose exactly the four public states `queued`, `running`, `completed`, and `failed` with correct transition timing.
 - [x] 9.3 Read and freeze exact submitted Python source before Task creation and retain it only while queued/running/recoverable.
 - [x] 9.4 Generate Task semantic IDs from submitted source only, using caller fallback `task-unknown` and ordinal state independent of retained Task rows.
 - [ ] 9.5 Freeze absolute file, args, purpose, origin cwd, Session, target port, PID/process-incarnation, transport context, History decision, and requested embedding profile at submission.
@@ -153,13 +153,13 @@
 - [x] 9.13 Use atomic started/completion markers plus runtime claims to distinguish never-started, possibly-started, and completed invocations.
 - [x] 9.14 Recover/finalize a possibly-started Task without automatically replaying caller Python.
 - [ ] 9.15 Preserve frozen History context through queue wait and hand it to the shared History boundary only if caller Python actually starts.
-- [ ] 9.16 Create one successful completion JSON Resource containing exactly Task-defined stdout/stderr payload.
-- [ ] 9.17 Clear source bodies at terminalization and retain terminal Tasks for the effective Resource TTL without expiring active Tasks.
-- [ ] 9.18 Make Task reset atomic with active-state checks and reset semantic ordinals only on successful reset.
-- [ ] 9.19 Implement stable newest-first `task list` ordering and the specified `task get` fields/omission rules.
-- [ ] 9.20 Trigger lazy runtime recovery/activation from successful `exec --async` submission and every public Task command.
-- [ ] 9.21 Wire `task get`, `task list`, and `task reset` to the global Task store and shared error/output boundaries.
-- [ ] 9.22 Add Task persistence, semantic-id, target-binding, concurrency, scheduler-race, streaming, crash-recovery, no-replay, completion, TTL/reset, CLI, and async-handoff tests.
+- [x] 9.16 Create one successful completion JSON Resource containing exactly Task-defined stdout/stderr payload.
+- [x] 9.17 Clear source bodies at terminalization and retain terminal Tasks for the effective Resource TTL without expiring active Tasks.
+- [x] 9.18 Make Task reset atomic with active-state checks and reset semantic ordinals only on successful reset.
+- [x] 9.19 Implement stable newest-first `task list` ordering and the specified `task get` fields/omission rules.
+- [x] 9.20 Trigger lazy runtime recovery/activation from successful `exec --async` submission and every public Task command.
+- [x] 9.21 Wire `task get`, `task list`, and `task reset` to the global Task store and shared error/output boundaries.
+- [x] 9.22 Add Task persistence, semantic-id, target-binding, concurrency, scheduler-race, streaming, crash-recovery, no-replay, completion, TTL/reset, CLI, and async-handoff tests.
 
 ## 10. Shared Search primitives
 

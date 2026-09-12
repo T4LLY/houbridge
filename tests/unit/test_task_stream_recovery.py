@@ -409,3 +409,49 @@ def test_terminal_task_workspace_left_by_crash_is_cleanup_recoverable(tmp_path: 
 
     assert invocations.get(task_id) is None
     assert not workspace.directory.exists()
+
+
+def test_dispatch_timeout_applies_only_before_started_marker(tmp_path: Path) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    store = _store(tmp_path)
+    task_id = _submit(store, timeout=1.0)
+    base = datetime(2026, 9, 11, 8, 0, tzinfo=timezone.utc)
+    invocations = TaskInvocationStore(store.database, now=lambda: base)
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp-timeout")
+
+    class Handle:
+        terminated = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+    handle = Handle()
+
+    class Dispatcher:
+        def start(self, task, script_path):
+            return handle
+
+    runner = TaskInvocationRunner(
+        store,
+        invocations,
+        workspaces,
+        CompleteSuccess(store),
+        dispatcher=Dispatcher(),
+        identity_reader=lambda _pid: ProcessIdentity(4242, "process-4242"),
+        sleep=lambda _seconds: None,
+        now=lambda: base + timedelta(seconds=2),
+        poll_interval_seconds=0.01,
+    )
+    task = store.get(task_id)
+    assert task is not None
+    runner.run(task)
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_dispatch_timeout"
+    assert handle.terminated is True

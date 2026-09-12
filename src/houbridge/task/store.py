@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Literal, Protocol
 
@@ -134,6 +134,56 @@ class TaskStore:
                 (task_id,),
             ).fetchone()
         return _row_to_task(row) if row is not None else None
+
+    def list_tasks(self) -> tuple[TaskRecord, ...]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM tasks ORDER BY created_at DESC, id DESC"
+            ).fetchall()
+        return tuple(_row_to_task(row) for row in rows)
+
+    def cleanup_expired(
+        self,
+        *,
+        ttl_hours: int,
+        now: datetime | None = None,
+    ) -> int:
+        if ttl_hours < 1:
+            raise ValueError("ttl_hours must be >= 1")
+        cutoff = _as_utc(now or self._now()) - timedelta(hours=ttl_hours)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.execute(
+                """
+                DELETE FROM tasks
+                WHERE status IN ('completed', 'failed')
+                  AND finished_at IS NOT NULL
+                  AND finished_at <= ?
+                """,
+                (cutoff.isoformat(),),
+            )
+            return cursor.rowcount
+
+    def reset(self) -> None:
+        """Atomically reset Task-owned state only when no active Task exists."""
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            active = connection.execute(
+                "SELECT id FROM tasks WHERE status IN ('queued', 'running') LIMIT 1"
+            ).fetchone()
+            if active is not None:
+                raise BridgeError(
+                    "task_reset_active",
+                    "Task reset requires all Tasks to be terminal.",
+                    f"active_task={active['id']}",
+                )
+            connection.execute("DELETE FROM task_claims")
+            connection.execute("DELETE FROM task_invocations")
+            connection.execute("DELETE FROM task_stream_chunks")
+            connection.execute("DELETE FROM tasks")
+            connection.execute("DELETE FROM task_semantic_ordinals")
+            connection.execute("DELETE FROM task_runtime_ownership")
 
     def append_stream(self, task_id: str, stream: StreamName, content: str) -> int:
         if stream not in ("stdout", "stderr"):
