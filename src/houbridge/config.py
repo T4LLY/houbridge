@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
@@ -486,8 +487,10 @@ def _number(
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise BridgeError("invalid_config", f"config.toml {key} must be a number.")
     result = float(value)
-    if positive and result <= 0:
-        raise BridgeError("invalid_config", f"config.toml {key} must be > 0.")
+    if positive and (not math.isfinite(result) or result <= 0):
+        raise BridgeError(
+            "invalid_config", f"config.toml {key} must be finite and > 0."
+        )
     return result
 
 

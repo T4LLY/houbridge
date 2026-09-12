@@ -82,6 +82,8 @@ Generated defaults SHALL be:
 - `[houdini].startup_timeout_seconds = 60`
 - `[houdini].startup_poll_interval_seconds = 0.25`
 
+All numeric `[houdini]` timeout and polling values SHALL be finite and strictly greater than zero. NaN and positive or negative infinity SHALL be rejected as `invalid_config`.
+
 An empty global `[houdini].hcommand` SHALL mean that `session new` falls back to the executable name `houdini`. The setting identifies an executable only and SHALL NOT contain launch arguments. A configured bare executable name SHALL retain normal executable discovery semantics; a configured relative executable path SHALL resolve relative to the global `config.toml` directory so its meaning does not vary by current working directory. It SHALL be global-only and SHALL NOT be overridden by `<cwd>/.houbridge.toml`.
 
 #### Scenario: Session new uses the configured launch executable

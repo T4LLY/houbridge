@@ -193,6 +193,37 @@ def test_local_may_override_non_global_houdini_timeout(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
+    "key",
+    [
+        "transport_timeout_seconds",
+        "lock_timeout_seconds",
+        "startup_timeout_seconds",
+        "startup_poll_interval_seconds",
+    ],
+)
+@pytest.mark.parametrize("literal", ["nan", "inf"])
+def test_houdini_positive_numeric_settings_reject_non_finite_values(
+    tmp_path: Path,
+    key: str,
+    literal: str,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    _write_default(config_path)
+    defaults = {
+        "transport_timeout_seconds": "120",
+        "lock_timeout_seconds": "120",
+        "startup_timeout_seconds": "60",
+        "startup_poll_interval_seconds": "0.25",
+    }
+    _replace(config_path, f"{key} = {defaults[key]}", f"{key} = {literal}")
+
+    with pytest.raises(BridgeError, match="finite and > 0") as exc_info:
+        load_config(config_path, cwd=tmp_path)
+
+    assert exc_info.value.code == "invalid_config"
+
+
+@pytest.mark.parametrize(
     ("old", "new", "message"),
     [
         ("inline_max_tokens = 256", f"inline_max_tokens = {HARD_INLINE_TOKEN_LIMIT + 1}", "<= 4096"),
