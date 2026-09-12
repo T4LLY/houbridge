@@ -254,6 +254,8 @@ def test_task_store_from_config_is_global_not_cwd_scoped(tmp_path: Path, monkeyp
     second = TaskStore.from_config(load_config(global_config), semantic_generator=FixedSemanticGenerator())
 
     assert first.database == second.database == data_dir / "tasks.db"
+    assert first.busy_timeout_seconds == 120
+    assert second.busy_timeout_seconds == 120
 
 
 def test_task_schema_keeps_ordinal_state_separate_from_task_rows(tmp_path: Path) -> None:

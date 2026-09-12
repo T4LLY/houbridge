@@ -36,10 +36,12 @@ class TaskStore:
         *,
         semantic_generator: SemanticBaseGenerator | None = None,
         now: Callable[[], datetime] | None = None,
+        busy_timeout_seconds: float = 5.0,
     ) -> None:
         self.database = database
         self._semantic_generator = semantic_generator or PotionSemanticBaseGenerator()
         self._now = now or (lambda: datetime.now(timezone.utc))
+        self.busy_timeout_seconds = float(busy_timeout_seconds)
         with self._connect() as connection:
             ensure_task_schema(connection)
 
@@ -52,7 +54,12 @@ class TaskStore:
         now: Callable[[], datetime] | None = None,
     ) -> "TaskStore":
         paths = GlobalDataPaths.from_data_dir(config.storage.data_dir)
-        return cls(paths.tasks_database, semantic_generator=semantic_generator, now=now)
+        return cls(
+            paths.tasks_database,
+            semantic_generator=semantic_generator,
+            now=now,
+            busy_timeout_seconds=config.houdini.lock_timeout_seconds,
+        )
 
     def submit(self, submission: TaskSubmission) -> TaskRecord:
         semantic_base = self._semantic_generator.generate(
@@ -326,7 +333,10 @@ class TaskStore:
                 _raise_transition_error(connection, task_id, status)
 
     def _connect(self):
-        return connection_scope(self.database)
+        return connection_scope(
+            self.database,
+            busy_timeout_seconds=self.busy_timeout_seconds,
+        )
 
 
 def _allocate_ordinal(connection: sqlite3.Connection, semantic_base: str) -> int:

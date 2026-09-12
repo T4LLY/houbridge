@@ -27,12 +27,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lock-timeout-seconds", type=float, required=True)
     args = parser.parse_args(argv)
 
-    task_store = TaskStore(args.tasks_db)
-    runtime_state = TaskRuntimeStateStore(args.tasks_db)
-    invocations = TaskInvocationStore(args.tasks_db)
+    task_store = TaskStore(
+        args.tasks_db,
+        busy_timeout_seconds=args.lock_timeout_seconds,
+    )
+    runtime_state = TaskRuntimeStateStore(
+        args.tasks_db,
+        busy_timeout_seconds=args.lock_timeout_seconds,
+    )
+    invocations = TaskInvocationStore(
+        args.tasks_db,
+        busy_timeout_seconds=args.lock_timeout_seconds,
+    )
     resource_store = ResourceStore(
         args.resources_db,
         ttl_hours=args.resource_ttl_hours,
+        busy_timeout_seconds=args.lock_timeout_seconds,
     )
     finalizer = TaskCompletionResourceFinalizer(task_store, resource_store)
     paths = GlobalDataPaths.from_data_dir(args.tasks_db.resolve().parent)

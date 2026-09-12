@@ -39,6 +39,7 @@ class ResourceStore:
         token_estimator: TokenEstimator | None = None,
         semantic_generator: SemanticBaseGenerator | None = None,
         now: Callable[[], datetime] | None = None,
+        busy_timeout_seconds: float = 5.0,
     ) -> None:
         if ttl_hours < 1:
             raise ValueError("ttl_hours must be >= 1")
@@ -47,6 +48,7 @@ class ResourceStore:
         self._token_estimator = token_estimator or FallbackTokenEstimator()
         self._semantic_generator = semantic_generator or PotionSemanticBaseGenerator()
         self._now = now or (lambda: datetime.now(timezone.utc))
+        self.busy_timeout_seconds = float(busy_timeout_seconds)
         with self._connect() as connection:
             ensure_resource_schema(connection)
 
@@ -66,6 +68,7 @@ class ResourceStore:
             token_estimator=token_estimator,
             semantic_generator=semantic_generator,
             now=now,
+            busy_timeout_seconds=config.houdini.lock_timeout_seconds,
         )
 
     def put_bytes(self, payload: bytes) -> Resource:
@@ -287,7 +290,10 @@ class ResourceStore:
         return str(row["semantic_alias"]) if row is not None else None
 
     def _connect(self):
-        return connection_scope(self.database)
+        return connection_scope(
+            self.database,
+            busy_timeout_seconds=self.busy_timeout_seconds,
+        )
 
 
 def _allocate_alias(

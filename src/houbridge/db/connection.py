@@ -6,11 +6,16 @@ from pathlib import Path
 from typing import Iterator
 
 
-def connect(path: Path, *, auto_vacuum_incremental: bool = False) -> sqlite3.Connection:
+def connect(
+    path: Path,
+    *,
+    auto_vacuum_incremental: bool = False,
+    busy_timeout_seconds: float = 5.0,
+) -> sqlite3.Connection:
     """Open one Houbridge SQLite database with shared low-level pragmas."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path)
+    connection = sqlite3.connect(path, timeout=busy_timeout_seconds)
     connection.row_factory = sqlite3.Row
     if auto_vacuum_incremental:
         connection.execute("PRAGMA auto_vacuum = INCREMENTAL")
@@ -25,10 +30,15 @@ def connection_scope(
     path: Path,
     *,
     auto_vacuum_incremental: bool = False,
+    busy_timeout_seconds: float = 5.0,
 ) -> Iterator[sqlite3.Connection]:
     """Commit on success, roll back on failure, and always close the connection."""
 
-    connection = connect(path, auto_vacuum_incremental=auto_vacuum_incremental)
+    connection = connect(
+        path,
+        auto_vacuum_incremental=auto_vacuum_incremental,
+        busy_timeout_seconds=busy_timeout_seconds,
+    )
     try:
         with connection:
             yield connection

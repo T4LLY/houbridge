@@ -174,4 +174,6 @@ def test_store_from_config_uses_same_global_database_from_different_cwds(
 
     assert first.database == data_dir / "resources.db"
     assert second.database == first.database
+    assert first.busy_timeout_seconds == 120
+    assert second.busy_timeout_seconds == 120
     assert second.get_bytes(stored.canonical_id) == b"global payload"

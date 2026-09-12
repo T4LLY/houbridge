@@ -19,6 +19,14 @@ def test_connect_applies_shared_sqlite_pragmas(tmp_path: Path) -> None:
         connection.close()
 
 
+def test_connect_applies_explicit_busy_timeout(tmp_path: Path) -> None:
+    connection = connect(tmp_path / "busy.db", busy_timeout_seconds=12.5)
+    try:
+        assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 12_500
+    finally:
+        connection.close()
+
+
 def test_connection_scope_commits_on_success(tmp_path: Path) -> None:
     database = tmp_path / "state.db"
     with connection_scope(database) as connection:

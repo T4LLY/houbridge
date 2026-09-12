@@ -55,7 +55,10 @@ def history_connection_scope(
             _apply_pending_scene_reset(resolved)
             if require_existing and not resolved.is_file():
                 raise HistoryDatabaseMissingError(str(resolved))
-            with connection_scope(resolved) as connection:
+            with connection_scope(
+                resolved,
+                busy_timeout_seconds=lock_timeout_seconds,
+            ) as connection:
                 yield connection
     except InterprocessFileLockTimeout as exc:
         raise BridgeError(

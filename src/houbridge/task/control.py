@@ -21,8 +21,12 @@ class TaskRuntimeControl:
 
 def build_task_runtime_control(config: HoubridgeConfig) -> TaskRuntimeControl:
     paths = GlobalDataPaths.from_data_dir(config.storage.data_dir)
-    store = TaskStore(paths.tasks_database)
-    runtime_state = TaskRuntimeStateStore(paths.tasks_database)
+    busy_timeout_seconds = config.houdini.lock_timeout_seconds
+    store = TaskStore(paths.tasks_database, busy_timeout_seconds=busy_timeout_seconds)
+    runtime_state = TaskRuntimeStateStore(
+        paths.tasks_database,
+        busy_timeout_seconds=busy_timeout_seconds,
+    )
     supervisor = TaskRuntimeSupervisor(runtime_state)
     launcher = TaskRuntimeProcessLauncher(
         runtime_state=runtime_state,

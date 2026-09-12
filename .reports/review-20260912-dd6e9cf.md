@@ -111,7 +111,7 @@ Verified the unbounded waits in both `history_connection_scope` and `SessionRegi
 
 Verified the ordering defect after C5: the synchronous wrapper still published `execution.json` only after in-Houdini History finalization, while the host-side transport timeout covered the entire hcommand call. A caller that had already reached a terminal Python outcome could therefore still be reported as `hcommand_timeout` when only post-Python History bookkeeping consumed the remaining transport budget. The wrapper now atomically publishes the terminal caller status after stdout/stderr/result files are stable and before History finalization. `ExecutionRuntime` preserves that outcome only when History was enabled, `hcommand_timeout` occurs, and the terminal status marker already exists; timeouts before the marker and no-History timeouts still propagate normally. Regression tests verify marker-before-History ordering, preservation of the completed Python outcome in the History-enabled timeout case, and unchanged timeout behavior without History.
 
-### [ ] C7. SQLite connections rely on the default 5s busy timeout under multi-process `BEGIN IMMEDIATE` contention
+### [Fixed] C7. SQLite connections rely on the default 5s busy timeout under multi-process `BEGIN IMMEDIATE` contention
 
 - **Severity:** Medium
 - **Confidence:** Plausible candidate
@@ -122,6 +122,10 @@ Verified the ordering defect after C5: the synchronous wrapper still published `
 - **Expected impact:** Sporadic `sqlite3.OperationalError: database is locked` in worker or CLI during bursts; potential claim/submit retry churn.
 - **Trigger conditions:** ≥3 processes writing tasks.db concurrently with transactions lasting seconds (Windows AV scanning, WAL checkpoint stalls) or heavy submission volume.
 - **Suggested verification direction:** Hammer test: N parallel `task submit` while a worker runs; watch for OperationalError. Set explicit `busy_timeout` (e.g. 30–60s) and map `OperationalError` to a `BridgeError` subtype.
+
+#### Update — 2026-09-12 13:57 — Base dd6e9cf
+
+Verified against the current source. With two Houbridge SQLite connections to the same database, holding `BEGIN IMMEDIATE` on one caused the second writer to raise `sqlite3.OperationalError: database is locked` after approximately 5.01 seconds, confirming that the shared connection helper inherited Python sqlite3's default busy timeout. The fix does not introduce a new timeout setting: shared Task, Resource, and History writer connections now receive the existing `[houdini].lock_timeout_seconds` value, while the low-level connection helper keeps its existing 5-second default for callers that do not opt into the Houbridge coordination policy. Task worker construction propagates the frozen lock timeout to Task/Runtime/Invocation/Resource stores, and History forwards its existing database-lock timeout to SQLite. Regression coverage verifies the explicit SQLite busy timeout and config-derived propagation.
 
 ### [ ] C8. sqlite-vec KNN applies `k` before WHERE filters — namespace/entry-filtered dense searches can silently return fewer (or zero) results
 

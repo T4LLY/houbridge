@@ -30,9 +30,11 @@ class TaskRuntimeStateStore:
         database: Path,
         *,
         now: Callable[[], datetime] | None = None,
+        busy_timeout_seconds: float = 5.0,
     ) -> None:
         self.database = database
         self._now = now or (lambda: datetime.now(timezone.utc))
+        self.busy_timeout_seconds = float(busy_timeout_seconds)
         with self._connect() as connection:
             ensure_task_schema(connection)
 
@@ -44,7 +46,11 @@ class TaskRuntimeStateStore:
         now: Callable[[], datetime] | None = None,
     ) -> "TaskRuntimeStateStore":
         paths = GlobalDataPaths.from_data_dir(config.storage.data_dir)
-        return cls(paths.tasks_database, now=now)
+        return cls(
+            paths.tasks_database,
+            now=now,
+            busy_timeout_seconds=config.houdini.lock_timeout_seconds,
+        )
 
     def recoverable_work_exists(self) -> bool:
         with self._connect() as connection:
@@ -327,7 +333,10 @@ class TaskRuntimeStateStore:
             return int(connection.execute("SELECT COUNT(*) FROM task_claims").fetchone()[0])
 
     def _connect(self):
-        return connection_scope(self.database)
+        return connection_scope(
+            self.database,
+            busy_timeout_seconds=self.busy_timeout_seconds,
+        )
 
 
 def _delete_terminal_claims(connection) -> None:

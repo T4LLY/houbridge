@@ -39,9 +39,11 @@ class TaskInvocationStore:
         database: Path,
         *,
         now: Callable[[], datetime] | None = None,
+        busy_timeout_seconds: float = 5.0,
     ) -> None:
         self.database = database
         self._now = now or (lambda: datetime.now(timezone.utc))
+        self.busy_timeout_seconds = float(busy_timeout_seconds)
         with self._connect() as connection:
             ensure_task_schema(connection)
 
@@ -161,7 +163,10 @@ class TaskInvocationStore:
         return new_offset
 
     def _connect(self):
-        return connection_scope(self.database)
+        return connection_scope(
+            self.database,
+            busy_timeout_seconds=self.busy_timeout_seconds,
+        )
 
 
 def _row_to_state(row) -> TaskInvocationState:
