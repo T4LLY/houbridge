@@ -54,10 +54,10 @@
 
 ## 4. Session runtime and CLI
 
-- [ ] 4.1 Define the global `sessions.json` registry representation, including registry-level primary selection and registered Session records.
-- [ ] 4.2 Validate registered Sessions using live PID/process-incarnation information and a probe of the recorded port.
-- [ ] 4.3 Resolve a target from explicit `--session` or the registry primary without silently selecting another Session.
-- [ ] 4.4 Implement generic Session inspection and expose only the OpenSpec public Session fields.
+- [x] 4.1 Define the global `sessions.json` registry representation, including registry-level primary selection and registered Session records.
+- [x] 4.2 Validate registered Sessions using live PID/process-incarnation information and a probe of the recorded port.
+- [x] 4.3 Resolve a target from explicit `--session` or the registry primary without silently selecting another Session.
+- [x] 4.4 Implement generic Session inspection and expose only the OpenSpec public Session fields.
 - [ ] 4.5 Resolve `session new` launch executable precedence as invocation `--hcommand` → global `[houdini].hcommand` → default `houdini`.
 - [ ] 4.6 Make `session new` always create a new Houdini process rather than probing for a reusable process.
 - [ ] 4.7 Bootstrap the launched process with Houdini `openport -a` and record Houdini's selected port.

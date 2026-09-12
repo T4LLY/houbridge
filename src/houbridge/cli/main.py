@@ -6,12 +6,16 @@ from houbridge.cli.common import (
     terminate_with_internal_error,
 )
 from houbridge.errors import BridgeError
+from houbridge.cli.session_cmd import session_app
 
 
 app = create_cli_app(
     no_args_is_help=True,
     help="CLI bridge to a running Houdini session.",
 )
+
+
+app.add_typer(session_app, name="session", help="Inspect registered Houdini sessions.")
 
 
 @app.callback()

@@ -160,3 +160,116 @@ else:
 
     def _unlock(handle: BinaryIO) -> None:
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def process_identity_for_pid(pid: int) -> ProcessIdentity:
+    """Resolve the current operating-system incarnation for ``pid``.
+
+    Session resolution uses this before and after the Houdini probe so a PID
+    recycle during validation cannot be mistaken for the recorded process.
+    """
+
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        raise ValueError("pid must be a positive integer")
+
+    if os.name == "nt":
+        identity = _windows_process_start_identity(pid)
+    elif _linux_proc_stat_path(pid).exists():
+        identity = _linux_process_start_identity(pid)
+    else:
+        identity = _posix_process_start_identity(pid)
+    return ProcessIdentity(pid=pid, process_start_identity=identity)
+
+
+def _linux_proc_stat_path(pid: int) -> Path:
+    return Path("/proc") / str(pid) / "stat"
+
+
+def _linux_process_start_identity(pid: int) -> str:
+    try:
+        stat_text = _linux_proc_stat_path(pid).read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise ProcessLookupError(pid) from exc
+    except OSError:
+        raise
+
+    closing_paren = stat_text.rfind(")")
+    if closing_paren < 0:
+        raise OSError(f"Unable to parse process stat for PID {pid}.")
+    fields = stat_text[closing_paren + 2 :].split()
+    # /proc/<pid>/stat field 22 is starttime. The sliced list begins at field 3.
+    if len(fields) <= 19:
+        raise OSError(f"Unable to parse process start identity for PID {pid}.")
+    start_ticks = fields[19]
+    try:
+        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+    except OSError:
+        boot_id = "unknown-boot"
+    return f"linux:{boot_id}:{start_ticks}"
+
+
+def _windows_process_start_identity(pid: int) -> str:
+    import ctypes
+    from ctypes import wintypes
+
+    process_query_limited_information = 0x1000
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetProcessTimes.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+    ]
+    kernel32.GetProcessTimes.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if not handle:
+        error = ctypes.get_last_error()
+        if error in {87, 1168}:  # invalid parameter / not found
+            raise ProcessLookupError(pid)
+        raise OSError(error, f"OpenProcess failed for PID {pid}.")
+
+    creation = wintypes.FILETIME()
+    exit_time = wintypes.FILETIME()
+    kernel = wintypes.FILETIME()
+    user = wintypes.FILETIME()
+    try:
+        if not kernel32.GetProcessTimes(
+            handle,
+            ctypes.byref(creation),
+            ctypes.byref(exit_time),
+            ctypes.byref(kernel),
+            ctypes.byref(user),
+        ):
+            error = ctypes.get_last_error()
+            raise OSError(error, f"GetProcessTimes failed for PID {pid}.")
+    finally:
+        kernel32.CloseHandle(handle)
+
+    creation_ticks = (int(creation.dwHighDateTime) << 32) | int(creation.dwLowDateTime)
+    return f"windows:{creation_ticks}"
+
+
+def _posix_process_start_identity(pid: int) -> str:
+    import subprocess
+
+    try:
+        completed = subprocess.run(
+            ["ps", "-o", "lstart=", "-p", str(pid)],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:
+        raise
+    value = completed.stdout.strip()
+    if completed.returncode != 0 or not value:
+        raise ProcessLookupError(pid)
+    return f"posix:{value}"
