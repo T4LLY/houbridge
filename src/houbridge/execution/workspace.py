@@ -6,6 +6,7 @@ from pathlib import Path
 
 from houbridge.temporary_workspace import TemporaryWorkspace
 
+from .history import ExecutionHistoryPreparation
 from .models import DeclaredResult, ExecutionInvocation, ExecutionOutcome
 
 
@@ -16,7 +17,12 @@ class StagedExecution:
     request_path: Path
 
 
-def stage_invocation(workspace: TemporaryWorkspace, invocation: ExecutionInvocation) -> Path:
+def stage_invocation(
+    workspace: TemporaryWorkspace,
+    invocation: ExecutionInvocation,
+    *,
+    history: ExecutionHistoryPreparation | None = None,
+) -> Path:
     source_path = workspace.path_for("source.py")
     with source_path.open("w", encoding="utf-8", newline="") as stream:
         stream.write(invocation.source)
@@ -34,6 +40,11 @@ def stage_invocation(workspace: TemporaryWorkspace, invocation: ExecutionInvocat
         "result_text_file": str(workspace.path_for("result.txt")),
         "status_file": str(workspace.path_for("execution.json")),
     }
+    if history is not None:
+        request["history"] = {
+            "runtime_script": str(history.runtime_script.resolve()),
+            "request_file": str(history.request_path.resolve()),
+        }
     request_path.write_text(
         json.dumps(request, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",

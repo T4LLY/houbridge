@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ from houbridge.search.embedding import (
 )
 from houbridge.search.lexical import LexicalIndexSchema, SQLiteFtsIndex
 
+from .changes import ActionChange
 from .schema import initialize_history_schema
 
 
@@ -140,6 +142,106 @@ class HistoryStore:
             profile=profile,
             vector=vector.copy(),
         )
+
+    def commit_entry(
+        self,
+        *,
+        expected_code_profile: str,
+        time: str,
+        cwd: str,
+        status: str,
+        file: str,
+        args: tuple[str, ...],
+        purpose: str | None,
+        source_hash: str,
+        changes: tuple[ActionChange, ...],
+    ) -> int:
+        """Commit one finalized started action without recreating missing History."""
+
+        if status not in {"completed", "failed"}:
+            raise ValueError("History status must be completed or failed")
+        if not self.exists():
+            raise BridgeError(
+                "history_finalize_failed",
+                "History database disappeared before action finalization.",
+            )
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            profile_row = connection.execute(
+                "SELECT value FROM history_metadata WHERE key = ?",
+                (_CODE_PROFILE_KEY,),
+            ).fetchone()
+            if profile_row is None or str(profile_row["value"]) != expected_code_profile:
+                raise BridgeError(
+                    "history_finalize_failed",
+                    "History embedding profile changed before action finalization.",
+                )
+            embedding_row = connection.execute(
+                f"""
+                SELECT 1
+                FROM {_SOURCE_EMBEDDING_TABLE}
+                WHERE embedding_profile_id = ? AND content_hash = ?
+                """,
+                (expected_code_profile, source_hash),
+            ).fetchone()
+            if embedding_row is None:
+                raise BridgeError(
+                    "history_finalize_failed",
+                    "History source embedding is missing at action finalization.",
+                )
+
+            row = connection.execute(
+                """
+                UPDATE history_id_sequence
+                SET next_id = next_id + 1
+                WHERE singleton = 1
+                RETURNING next_id - 1 AS allocated_id
+                """
+            ).fetchone()
+            if row is None:
+                raise BridgeError(
+                    "history_store_invalid",
+                    "History database is missing its id allocator.",
+                )
+            entry_id = int(row["allocated_id"])
+            connection.execute(
+                """
+                INSERT INTO history_entries(
+                    id, time, cwd, status, file, args_json, purpose, source_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    entry_id,
+                    time,
+                    cwd,
+                    status,
+                    file,
+                    json.dumps(list(args), ensure_ascii=False, separators=(",", ":")),
+                    purpose,
+                    source_hash,
+                ),
+            )
+            for ordinal, change in enumerate(changes):
+                connection.execute(
+                    """
+                    INSERT INTO history_changes(
+                        entry_id, ordinal, node_session_id, payload_json
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        entry_id,
+                        ordinal,
+                        int(change.node),
+                        json.dumps(
+                            change.to_payload(),
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        ),
+                    ),
+                )
+        return entry_id
 
     def _connect(self) -> AbstractContextManager[sqlite3.Connection]:
         return connection_scope(self.database)

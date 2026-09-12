@@ -11,6 +11,8 @@ from houbridge.execution.presentation import ExecutionResultPresenter
 from houbridge.execution.runtime import ExecutionRuntime
 from houbridge.execution.service import SynchronousExecutionService
 from houbridge.execution.source import prepare_file_invocation
+from houbridge.history.execution import SynchronousExecutionHistory
+from houbridge.history.service import HistoryStorageService
 from houbridge.houdini.transport import HoudiniTransport
 from houbridge.output.policy import OutputPolicy
 from houbridge.paths import GlobalDataPaths
@@ -64,11 +66,19 @@ def _build_sync_execution_service(
     transport = HoudiniTransport.from_config(settings.houdini)
     probe = SessionProbe(lambda: transport)
     resolver = SessionResolver(registry, probe)
+    history = None
+    if settings.history.enabled:
+        history = SynchronousExecutionHistory(
+            HistoryStorageService(paths),
+            requested_code_profile=settings.search.embedding.code_profile,
+            resource_store_factory=output_policy.resource_store_factory,
+        )
     runtime = ExecutionRuntime(
         transport=transport,
         workspaces=TemporaryWorkspaceService(),
         execution_lock=ManagedExecutionLock(),
         lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+        history=history,
     )
     return SynchronousExecutionService(
         resolver,

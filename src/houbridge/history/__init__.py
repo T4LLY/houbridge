@@ -11,6 +11,7 @@ from .changes import (
     ParmChangedChange,
     materialize_action_changes,
 )
+from .execution import SynchronousExecutionHistory, SynchronousHistoryPreparation
 from .identity import history_session_key
 from .retirement import HistoryRetirementService
 from .service import HistorySessionStorage, HistoryStorageService
@@ -28,6 +29,8 @@ __all__ = [
     "OmittedRawValue",
     "ParmChangedChange",
     "HistoryRetirementService",
+    "SynchronousExecutionHistory",
+    "SynchronousHistoryPreparation",
     "HistorySessionStorage",
     "HistorySourceEmbedding",
     "HistoryStorageService",

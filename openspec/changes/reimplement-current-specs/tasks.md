@@ -129,7 +129,7 @@
 - [x] 8.7 Use a private Temporary Workspace for execution transport files and markers.
 - [x] 8.8 Resolve and probe the selected registered Houdini Session before dispatch.
 - [x] 8.9 Acquire the exact-process managed-execution lock around caller Python dispatch.
-- [ ] 8.10 Expose a History preflight/finalization boundary without letting Execution directly own History tables.
+- [x] 8.10 Expose a History preflight/finalization boundary without letting Execution directly own History tables.
 - [x] 8.11 Materialize required execution artifacts as Resources and pass the logical synchronous result through the common Output Policy.
 - [x] 8.12 Implement public `exec --file PATH [--purpose TEXT] [--async] [--session N] [-- SCRIPT_ARGS...]` parsing with no `--code` source path.
 - [x] 8.13 Keep Async operational persistence out of Execution and hand asynchronous submission to Task.
@@ -236,9 +236,9 @@
 - [x] 14.8 Capture a lightweight invocation-local baseline around caller Python rather than persisting snapshots.
 - [x] 14.9 Record exactly `node_created`, `node_deleted`, `node_renamed`, `parm_changed`, `input_rewired`, and `flag_changed` and compact them to net Before/After changes.
 - [x] 14.10 Store parameter raw unevaluated Before/After values; spill values over the UTF-8 byte threshold to Resource references with token count.
-- [ ] 14.11 Persist one minimal terminal History entry only for executions whose caller Python actually started, including failed Python executions when finalization is possible.
-- [ ] 14.12 Hash exact executed source, store/reuse embeddings by source-hash/profile, pin one profile per History DB, and never persist source bodies.
-- [ ] 14.13 Fail closed on enabled-History preflight before Python starts; after Python starts never replay caller Python solely because History finalization failed.
+- [x] 14.11 Persist one minimal terminal History entry only for executions whose caller Python actually started, including failed Python executions when finalization is possible.
+- [x] 14.12 Hash exact executed source, store/reuse embeddings by source-hash/profile, pin one profile per History DB, and never persist source bodies.
+- [x] 14.13 Fail closed on enabled-History preflight before Python starts; after Python starts never replay caller Python solely because History finalization failed.
 - [ ] 14.14 Carry the same History finalization boundary through Async Task using frozen submission context.
 - [ ] 14.15 Implement History search using source semantic embeddings plus lexical purpose/file/args/Action context without Action Change embeddings.
 - [ ] 14.16 Implement History reader/get and chronological newest-first list independently from search ranking.

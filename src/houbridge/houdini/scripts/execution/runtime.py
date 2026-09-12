@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import reprlib
+import runpy
 import sys
 import traceback
 from pathlib import Path
@@ -27,6 +28,21 @@ def run(request_path_value: str) -> None:
     result_json_path = Path(request["result_json_file"])
     result_text_path = Path(request["result_text_file"])
     status_path = Path(request["status_file"])
+
+    history_runtime = None
+    history_context = None
+    history_request = request.get("history")
+    if history_request is not None:
+        if not isinstance(history_request, dict):
+            raise RuntimeError("Execution History request must be a JSON object.")
+        runtime_script = history_request.get("runtime_script")
+        request_file = history_request.get("request_file")
+        if not isinstance(runtime_script, str) or not runtime_script:
+            raise RuntimeError("Execution History runtime script is missing.")
+        if not isinstance(request_file, str) or not request_file:
+            raise RuntimeError("Execution History request file is missing.")
+        history_runtime = runpy.run_path(runtime_script)
+        history_context = history_runtime["prepare"](request_file)
 
     status: dict[str, object] = {"python_ok": False, "result_kind": None}
     namespace = {
@@ -59,6 +75,14 @@ def run(request_path_value: str) -> None:
                 status["result_kind"] = result_kind
         finally:
             sys.argv = previous_argv
+
+    if history_runtime is not None and history_context is not None:
+        try:
+            history_runtime["finalize"](history_context)
+        except Exception:
+            # Caller Python has already reached a terminal outcome. History is
+            # best-effort after start and must not redefine that outcome.
+            pass
 
     _atomic_write_json(status_path, status)
 

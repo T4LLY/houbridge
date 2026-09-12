@@ -1,4 +1,4 @@
-from .history import ExecutionHistoryBoundary
+from .history import ExecutionHistoryBoundary, ExecutionHistoryPreparation
 from .models import DeclaredResult, ExecutionInvocation, ExecutionOutcome
 from .presentation import ExecutionResultPresenter, SynchronousExecutionResult
 from .runtime import ExecutionRuntime
@@ -8,6 +8,7 @@ from .source import prepare_file_invocation, validate_python_source
 __all__ = [
     "DeclaredResult",
     "ExecutionHistoryBoundary",
+    "ExecutionHistoryPreparation",
     "ExecutionInvocation",
     "ExecutionOutcome",
     "ExecutionRuntime",
