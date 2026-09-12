@@ -73,17 +73,17 @@
 
 ## 5. Temporary Workspace and Temporary Artifact boundaries
 
-- [ ] 5.1 Allocate collision-safe private Temporary Workspaces below the operating-system temporary root for managed Execution/Task invocations.
+- [x] 5.1 Allocate collision-safe private Temporary Workspaces below the operating-system temporary root for managed Execution/Task invocations.
 - [ ] 5.2 Publish started markers atomically only after invocation state proves caller Python may have started.
 - [ ] 5.3 Publish completion markers atomically only after Python outcome and stream flush are established.
 - [ ] 5.4 Retain active/recoverable Temporary Workspaces only while Task recovery or terminal finalization may need them.
 - [ ] 5.5 Delete finished private workspaces after authoritative Task/Resource state no longer depends on them.
-- [ ] 5.6 Implement one shared Temporary Artifact namespace below the operating-system temporary directory.
-- [ ] 5.7 Reserve collision-safe final artifact paths and publish exact completed bytes/files atomically.
-- [ ] 5.8 Keep MIME/extension classification in the producing feature rather than in Temporary Artifact.
-- [ ] 5.9 Expose shared cleanup mechanics while leaving retention duration and cleanup trigger owned by the producing feature.
-- [ ] 5.10 Keep private Temporary Workspace files completely separate from caller-visible Temporary Artifacts.
-- [ ] 5.11 Add temporary-boundary tests for atomic publication, collision safety, exact bytes, cleanup scope, and Workspace/Artifact separation.
+- [x] 5.6 Implement one shared Temporary Artifact namespace below the operating-system temporary directory.
+- [x] 5.7 Reserve collision-safe final artifact paths and publish exact completed bytes/files atomically.
+- [x] 5.8 Keep MIME/extension classification in the producing feature rather than in Temporary Artifact.
+- [x] 5.9 Expose shared cleanup mechanics while leaving retention duration and cleanup trigger owned by the producing feature.
+- [x] 5.10 Keep private Temporary Workspace files completely separate from caller-visible Temporary Artifacts.
+- [x] 5.11 Add temporary-boundary tests for atomic publication, collision safety, exact bytes, cleanup scope, and Workspace/Artifact separation.
 
 ## 6. Resource persistence and inspection
 
