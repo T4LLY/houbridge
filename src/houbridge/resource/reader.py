@@ -8,6 +8,7 @@ from typing import Any
 
 from houbridge.config import HARD_EMIT_LIMIT_BYTES, HARD_RESOURCE_SEARCH_LIMIT
 from houbridge.errors import BridgeError
+from houbridge.output.json import public_json_size
 from houbridge.output.tokens import FallbackTokenEstimator, TokenEstimator
 from houbridge.resource.models import Resource
 from houbridge.resource.store import ResourceStore
@@ -160,19 +161,6 @@ def _utf8_prefix(text: str, max_bytes: int) -> str:
     return encoded[:max_bytes].decode("utf-8", errors="ignore")
 
 
-def _public_json_size(payload: dict[str, object]) -> int:
-    # Resource-get payloads contain only ordinary JSON values, so this compact
-    # encoding is byte-for-byte equivalent to the Phase 1 public serializer for
-    # the purpose of the fixed 65536-byte emission check.
-    serialized = json.dumps(
-        payload,
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-    )
-    return len(serialized.encode("utf-8"))
-
-
 def _parse_json_resource(text: str) -> Any:
     try:
         return json.loads(text, parse_constant=_reject_non_finite_json_constant)
@@ -232,7 +220,7 @@ class ResourceReader:
             else text
         )
         response: dict[str, object] = {"truncated": False, "result": result}
-        if _public_json_size(response) > HARD_EMIT_LIMIT_BYTES:
+        if public_json_size(response) > HARD_EMIT_LIMIT_BYTES:
             return {"truncated": True, "next_offset": 0}
         return response
 

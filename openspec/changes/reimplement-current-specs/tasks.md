@@ -105,16 +105,16 @@
 - [x] 6.16 Reject invalid inspection/search/slice operations with shared Resource errors.
 - [x] 6.17 Implement Resource dump as exact stored bytes published through Temporary Artifact with feature-selected extension and fallback `.bin`.
 - [x] 6.18 Wire `resource info`, `dump`, `get`, `slice`, and `search` to the configured global Resource store.
-- [ ] 6.19 Keep Resource inspection operations out of recursive whole-result Resource fallback.
+- [x] 6.19 Keep Resource inspection operations out of recursive whole-result Resource fallback.
 - [x] 6.20 Add Resource schema, classifier, identity, semantic-id, transaction/concurrency, retention, reader, dump, and CLI tests.
 
 ## 7. Common Output Policy
 
-- [ ] 7.1 Implement one shared token estimator/inline threshold used by public command payloads.
-- [ ] 7.2 Implement whole-result Resource fallback for oversized logical command results.
-- [ ] 7.3 Store Output fallback Resources in the configured global Resource store and return only the bounded fallback envelope.
-- [ ] 7.4 Enforce fixed absolute token/serialized-byte limits even after fallback/serialization.
-- [ ] 7.5 Keep Resource inspection bounded by its own requested inspection semantics rather than recursively applying generic fallback.
+- [x] 7.1 Implement one shared token estimator/inline threshold used by public command payloads.
+- [x] 7.2 Implement whole-result Resource fallback for oversized logical command results.
+- [x] 7.3 Store Output fallback Resources in the configured global Resource store and return only the bounded fallback envelope.
+- [x] 7.4 Enforce fixed absolute token/serialized-byte limits even after fallback/serialization.
+- [x] 7.5 Keep Resource inspection bounded by its own requested inspection semantics rather than recursively applying generic fallback.
 - [ ] 7.6 Remove feature-specific token thresholds, truncation rules, cursor workarounds, and duplicate Output Policy implementations.
 - [ ] 7.7 Add Output tests covering inline success, Resource fallback, hard boundaries, canonical JSON serialization, and Search/OCR/Task fallback reuse.
 

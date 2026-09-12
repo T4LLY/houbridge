@@ -49,7 +49,7 @@ def _dumper() -> ResourceDumper:
 
 def _emit_resource(operation: Callable[[], Mapping[str, Any]]) -> None:
     try:
-        emit_result(operation())
+        emit_result(operation(), allow_resource_fallback=False)
     except BridgeError as exc:
         terminate_with_bridge_error(exc)
 
