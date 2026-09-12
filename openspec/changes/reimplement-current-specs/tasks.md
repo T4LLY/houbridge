@@ -231,11 +231,11 @@
 - [x] 14.3 Retire stale History directories when the owning Houdini process incarnation is no longer current.
 - [x] 14.4 Create a database-complete History schema for entries, six Action Changes, source embedding/profile state, and History search state without graph/recipe/checkpoint/Task/output/source-body tables.
 - [x] 14.5 Allocate session-local History ids monotonically.
-- [ ] 14.6 Use `hou.Node.sessionId()` only as identity inside the owning process-incarnation History and keep path/type as human-readable context.
+- [x] 14.6 Use `hou.Node.sessionId()` only as identity inside the owning process-incarnation History and keep path/type as human-readable context.
 - [x] 14.7 Honor effective `[history].enabled`, default-on, without initializing recorder/embedding/write work when disabled.
-- [ ] 14.8 Capture a lightweight invocation-local baseline around caller Python rather than persisting snapshots.
-- [ ] 14.9 Record exactly `node_created`, `node_deleted`, `node_renamed`, `parm_changed`, `input_rewired`, and `flag_changed` and compact them to net Before/After changes.
-- [ ] 14.10 Store parameter raw unevaluated Before/After values; spill values over the UTF-8 byte threshold to Resource references with token count.
+- [x] 14.8 Capture a lightweight invocation-local baseline around caller Python rather than persisting snapshots.
+- [x] 14.9 Record exactly `node_created`, `node_deleted`, `node_renamed`, `parm_changed`, `input_rewired`, and `flag_changed` and compact them to net Before/After changes.
+- [x] 14.10 Store parameter raw unevaluated Before/After values; spill values over the UTF-8 byte threshold to Resource references with token count.
 - [ ] 14.11 Persist one minimal terminal History entry only for executions whose caller Python actually started, including failed Python executions when finalization is possible.
 - [ ] 14.12 Hash exact executed source, store/reuse embeddings by source-hash/profile, pin one profile per History DB, and never persist source bodies.
 - [ ] 14.13 Fail closed on enabled-History preflight before Python starts; after Python starts never replay caller Python solely because History finalization failed.
