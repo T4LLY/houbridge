@@ -237,6 +237,33 @@ class ResourceStore:
             ).fetchone()
         return bytes(row["payload"]) if row is not None else None
 
+    def get_payload(self, resource_id: str) -> tuple[Resource, bytes] | None:
+        """Read active metadata and exact payload bytes from one DB snapshot."""
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    r.canonical_id,
+                    a.semantic_alias,
+                    r.content_class,
+                    r.mime,
+                    r.byte_size,
+                    r.token_count,
+                    r.created_at,
+                    r.expires_at,
+                    r.payload
+                FROM resource_semantic_aliases AS a
+                JOIN resources AS r USING(canonical_id)
+                WHERE a.canonical_id = ? OR a.semantic_alias = ?
+                LIMIT 1
+                """,
+                (resource_id, resource_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return _row_to_resource(row), bytes(row["payload"])
+
     def cleanup_expired(self, *, now: datetime | None = None) -> int:
         cutoff = _as_utc(now or self._now()).isoformat()
         with self._connect() as connection:

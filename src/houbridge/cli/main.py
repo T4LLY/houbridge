@@ -6,6 +6,7 @@ from houbridge.cli.common import (
     terminate_with_internal_error,
 )
 from houbridge.errors import BridgeError
+from houbridge.cli.resource_cmd import resource_app
 from houbridge.cli.session_cmd import session_app
 
 
@@ -16,6 +17,7 @@ app = create_cli_app(
 
 
 app.add_typer(session_app, name="session", help="Create and inspect registered Houdini sessions.")
+app.add_typer(resource_app, name="resource", help="Inspect and materialize stored Resources.")
 
 
 @app.callback()

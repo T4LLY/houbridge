@@ -99,14 +99,14 @@
 - [x] 6.10 Implement 72-hour active Resource retention with refresh on write/rewrite and no retention extension on reads.
 - [x] 6.11 Keep generic Resource metadata minimal and free of Task, Execution, History, target, or dispatch-specific fields.
 - [ ] 6.12 Allow Execution/Task output payloads to be stored as Resources without changing generic Resource metadata.
-- [ ] 6.13 Implement bounded Resource metadata inspection and full-get behavior using final serialized size limits.
-- [ ] 6.14 Implement UTF-8-safe bounded slicing with explicit offset/limit validation.
-- [ ] 6.15 Implement bounded literal text search and structural JSON context for JSON matches.
-- [ ] 6.16 Reject invalid inspection/search/slice operations with shared Resource errors.
-- [ ] 6.17 Implement Resource dump as exact stored bytes published through Temporary Artifact with feature-selected extension and fallback `.bin`.
-- [ ] 6.18 Wire `resource info`, `dump`, `get`, `slice`, and `search` to the configured global Resource store.
+- [x] 6.13 Implement bounded Resource metadata inspection and full-get behavior using final serialized size limits.
+- [x] 6.14 Implement UTF-8-safe bounded slicing with explicit offset/limit validation.
+- [x] 6.15 Implement bounded literal text search and structural JSON context for JSON matches.
+- [x] 6.16 Reject invalid inspection/search/slice operations with shared Resource errors.
+- [x] 6.17 Implement Resource dump as exact stored bytes published through Temporary Artifact with feature-selected extension and fallback `.bin`.
+- [x] 6.18 Wire `resource info`, `dump`, `get`, `slice`, and `search` to the configured global Resource store.
 - [ ] 6.19 Keep Resource inspection operations out of recursive whole-result Resource fallback.
-- [ ] 6.20 Add Resource schema, classifier, identity, semantic-id, transaction/concurrency, retention, reader, dump, and CLI tests.
+- [x] 6.20 Add Resource schema, classifier, identity, semantic-id, transaction/concurrency, retention, reader, dump, and CLI tests.
 
 ## 7. Common Output Policy
 
