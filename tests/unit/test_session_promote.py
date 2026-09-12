@@ -188,6 +188,37 @@ def test_stale_cleanup_removes_reused_pid_and_unsets_primary(tmp_path: Path) -> 
     assert set(registry.load().sessions) == {1}
 
 
+@pytest.mark.parametrize(
+    "identity_error",
+    [PermissionError("access denied"), OSError("identity read failed")],
+    ids=["permission-error", "os-error"],
+)
+def test_stale_cleanup_preserves_session_when_identity_read_is_inconclusive(
+    tmp_path: Path,
+    identity_error: OSError,
+) -> None:
+    registry = SessionRegistry(tmp_path / "sessions.json")
+    record = SessionRecord(1, 49152, 1001, "start-1")
+    registry.save(SessionRegistryState(primary=1, sessions={1: record}))
+    retired: list[SessionRecord] = []
+
+    def unreadable_identity(_pid: int) -> ProcessIdentity:
+        raise identity_error
+
+    cleanup = SessionStaleCleanupService(
+        registry,
+        identity_reader=unreadable_identity,
+        on_stale=retired.append,
+    )
+
+    state = cleanup.cleanup()
+
+    assert state.primary == 1
+    assert state.sessions == {1: record}
+    assert registry.load() == state
+    assert retired == []
+
+
 def test_promote_preserves_registry_changes_made_during_target_probe(tmp_path: Path) -> None:
     path = tmp_path / "sessions.json"
     registry = SessionRegistry(path)

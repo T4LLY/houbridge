@@ -45,8 +45,12 @@ class SessionStaleCleanupService:
     def _record_is_live(self, record: SessionRecord) -> bool:
         try:
             identity = self._identity_reader(record.pid)
-        except (ProcessLookupError, PermissionError, OSError):
+        except ProcessLookupError:
             return False
+        except OSError:
+            # Cleanup is destructive. An identity read failure does not prove
+            # that the recorded process is dead, so preserve the registration.
+            return True
 
         if identity.pid != record.pid:
             return False
