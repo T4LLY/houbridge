@@ -8,6 +8,7 @@ version = "0.2.0"
 description = "CLI bridge for controlling a running Houdini session."
 requires-python = ">=3.11"
 dependencies = [
+  "platformdirs>=4,<5",
   "typer>=0.12,<1",
 ]
 

@@ -22,21 +22,21 @@
 
 ## 2. Configuration and state-path resolution
 
-- [ ] 2.1 Define generated defaults for storage, Houdini launch/transport, Resource inspection, Task concurrency, History enablement, screenshot limits/retention, Search, and Output.
-- [ ] 2.2 Load global configuration and optionally merge the current directory `.houbridge.toml` override.
-- [ ] 2.3 Allow local overrides only for settings explicitly permitted by OpenSpec.
-- [ ] 2.4 Reject local overrides of global-only operational settings instead of silently ignoring them.
-- [ ] 2.5 Resolve `[storage].data_dir` as the single global operational data directory.
-- [ ] 2.6 Keep bridge-port selection out of persistent configuration and Houdini-facing invocation options.
-- [ ] 2.7 Resolve Houdini launch/transport timeout and executable settings independently from Session registry state.
-- [ ] 2.8 Resolve workspace Script Search enablement and workspace-local persistence settings.
-- [ ] 2.9 Resolve embedding profile and hybrid-ranking settings for Search.
-- [ ] 2.10 Resolve bounded Resource inspection settings and reject values above fixed hard limits.
-- [ ] 2.11 Resolve `[task].max_concurrency` as Async-Task-only concurrency with generated default `1`.
-- [ ] 2.12 Resolve effective `[history].enabled` with generated default `true`.
-- [ ] 2.13 Resolve screenshot size limits and Capture retention independently from Resource TTL.
-- [ ] 2.14 Resolve the shared `[output].inline_max_tokens` threshold and reject configuration above absolute Output limits.
-- [ ] 2.15 Cache unchanged TOML parsing while detecting actual config file changes.
+- [x] 2.1 Define generated defaults for storage, Houdini launch/transport, Resource inspection, Task concurrency, History enablement, screenshot limits/retention, Search, and Output.
+- [x] 2.2 Load global configuration and optionally merge the current directory `.houbridge.toml` override.
+- [x] 2.3 Allow local overrides only for settings explicitly permitted by OpenSpec.
+- [x] 2.4 Reject local overrides of global-only operational settings instead of silently ignoring them.
+- [x] 2.5 Resolve `[storage].data_dir` as the single global operational data directory.
+- [x] 2.6 Keep bridge-port selection out of persistent configuration and Houdini-facing invocation options.
+- [x] 2.7 Resolve Houdini launch/transport timeout and executable settings independently from Session registry state.
+- [x] 2.8 Resolve workspace Script Search enablement and workspace-local persistence settings.
+- [x] 2.9 Resolve embedding profile and hybrid-ranking settings for Search.
+- [x] 2.10 Resolve bounded Resource inspection settings and reject values above fixed hard limits.
+- [x] 2.11 Resolve `[task].max_concurrency` as Async-Task-only concurrency with generated default `1`.
+- [x] 2.12 Resolve effective `[history].enabled` with generated default `true`.
+- [x] 2.13 Resolve screenshot size limits and Capture retention independently from Resource TTL.
+- [x] 2.14 Resolve the shared `[output].inline_max_tokens` threshold and reject configuration above absolute Output limits.
+- [x] 2.15 Cache unchanged TOML parsing while detecting actual config file changes.
 - [ ] 2.16 Implement `GlobalDataPaths` for shared Session/Task/Resource/History operational state.
 - [ ] 2.17 Implement `WorkspaceSearchPaths` for `<cwd>/.houbridge/python` and `<cwd>/.houbridge/search.db` only.
 - [ ] 2.18 Add configuration and path-resolution tests covering global/local precedence, invalid local overrides, defaults, hard limits, and cwd separation.
