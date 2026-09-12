@@ -29,6 +29,15 @@ class _Resolver:
         return SimpleNamespace(target=HoudiniTarget("127.0.0.1", 49152))
 
 
+class _TurntableService:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def capture(self, resolved, **kwargs):
+        self.calls.append((resolved, kwargs))
+        return {"path": "D:/Temp/turntable.mp4"}
+
+
 class _ScreenshotService:
     def __init__(self) -> None:
         self.viewport_calls = []
@@ -68,26 +77,36 @@ def _install(monkeypatch):
     resolver = _Resolver()
     transport = object()
     service = _ScreenshotService()
+    turntable = _TurntableService()
     monkeypatch.setattr(capture_cmd, "load_config", lambda: settings)
     monkeypatch.setattr(capture_cmd, "_resolver_and_transport", lambda _settings: (resolver, transport))
     monkeypatch.setattr(capture_cmd, "_screenshot_service", lambda _settings, _transport: service)
+    monkeypatch.setattr(capture_cmd, "_turntable_service", lambda _settings, _transport: turntable)
     monkeypatch.setattr(capture_cmd, "ViewportInfoService", _ViewportInfo)
     monkeypatch.setattr(capture_cmd.OutputPolicy, "from_config", lambda _settings: _Policy())
-    return resolver, service
+    return resolver, service, turntable
 
 
-def test_capture_help_exposes_phase25_commands_and_current_options() -> None:
+def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     root = runner.invoke(app, ["--help"])
     capture = runner.invoke(app, ["capture", "--help"])
     viewport = runner.invoke(app, ["capture", "viewport", "--help"])
     window = runner.invoke(app, ["capture", "window", "--help"])
+    turntable = runner.invoke(app, ["capture", "turntable", "--help"])
 
-    assert root.exit_code == capture.exit_code == viewport.exit_code == window.exit_code == 0
+    assert (
+        root.exit_code
+        == capture.exit_code
+        == viewport.exit_code
+        == window.exit_code
+        == turntable.exit_code
+        == 0
+    )
     assert "capture" in root.stdout
     assert "viewport" in capture.stdout
     assert "window" in capture.stdout
     assert "ocr" in capture.stdout
-    assert "turntable" not in capture.stdout
+    assert "turntable" in capture.stdout
     for option in (
         "--info", "--top", "--bottom", "--front", "--back", "--left", "--right",
         "--persp", "--uv", "--quad", "--scale", "--preset", "--session",
@@ -95,13 +114,16 @@ def test_capture_help_exposes_phase25_commands_and_current_options() -> None:
         assert option in viewport.stdout
     for option in ("--scale", "--crop", "--preset", "--session"):
         assert option in window.stdout
-    for output in (viewport.stdout, window.stdout):
+    for option in ("--frames", "--fps", "--scale", "--pivot", "--distance", "--preset", "--session"):
+        assert option in turntable.stdout
+    assert "--ffmpeg" not in turntable.stdout
+    for output in (viewport.stdout, window.stdout, turntable.stdout):
         for forbidden in ("--root", "--port", "--hcommand"):
             assert forbidden not in output
 
 
 def test_viewport_info_uses_selected_session_and_exact_public_shape(monkeypatch) -> None:
-    resolver, _service = _install(monkeypatch)
+    resolver, _service, _turntable = _install(monkeypatch)
 
     result = runner.invoke(app, ["capture", "viewport", "--info", "--session", "3"])
 
@@ -111,7 +133,7 @@ def test_viewport_info_uses_selected_session_and_exact_public_shape(monkeypatch)
 
 
 def test_viewport_capture_passes_multiple_directions_and_scale(monkeypatch) -> None:
-    _resolver, service = _install(monkeypatch)
+    _resolver, service, _turntable = _install(monkeypatch)
 
     result = runner.invoke(
         app,
@@ -139,7 +161,7 @@ def test_viewport_info_conflict_and_quad_conflict_use_spec_codes() -> None:
 
 
 def test_window_command_passes_explicit_crop_and_returns_inline_bounds(monkeypatch) -> None:
-    _resolver, service = _install(monkeypatch)
+    _resolver, service, _turntable = _install(monkeypatch)
 
     result = runner.invoke(
         app,
@@ -192,3 +214,47 @@ def test_ocr_command_missing_image_uses_spec_error_after_dispatch(monkeypatch, t
 
     assert result.exit_code == 1
     assert '"code":"ocr_image_not_found"' in result.stdout
+
+def test_turntable_command_uses_defaults_explicit_options_session_and_common_output(monkeypatch) -> None:
+    resolver, _screenshot, service = _install(monkeypatch)
+
+    default_result = runner.invoke(app, ["capture", "turntable"])
+    assert default_result.exit_code == 0
+    assert service.calls[0][1]["frames"] == 160
+    assert service.calls[0][1]["fps"] == 30
+    assert service.calls[0][1]["distance"] is None
+
+    result = runner.invoke(
+        app,
+        [
+            "capture", "turntable",
+            "--frames", "8",
+            "--fps", "24",
+            "--scale", "0.5",
+            "--pivot", "1,2,3",
+            "--distance", "5",
+            "--session", "6",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout == '{"path":"D:/Temp/turntable.mp4"}\n'
+    assert resolver.calls == [None, 6]
+    assert service.calls[1][1] == {
+        "frames": 8,
+        "fps": 24,
+        "scale": 0.5,
+        "pivot": (1.0, 2.0, 3.0),
+        "distance": 5.0,
+        "preset_path": None,
+    }
+
+
+def test_turntable_invalid_pivot_fails_before_session_resolution(monkeypatch) -> None:
+    resolver, _screenshot, _service = _install(monkeypatch)
+
+    result = runner.invoke(app, ["capture", "turntable", "--pivot", "1,2"])
+
+    assert result.exit_code == 1
+    assert '"code":"invalid_turntable_pivot"' in result.stdout
+    assert resolver.calls == []

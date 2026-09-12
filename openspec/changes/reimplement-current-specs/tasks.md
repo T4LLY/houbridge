@@ -218,11 +218,11 @@
 - [x] 13.13 Implement OCR detection/recognition result normalization, duplicate-string grouping, scores, and compact bounding boxes.
 - [x] 13.14 Keep OCR initialization quiet, use the standard Hugging Face assets cache hierarchy, and use the specified RapidOCR/ONNX tiny PP-OCRv6 profile with classification disabled.
 - [x] 13.15 Pass complete OCR logical results to common Output Policy without OCR-specific thresholds.
-- [ ] 13.16 Implement clockwise 360-degree turntable orbit from the current Perspective camera with optional positive finite pivot distance.
-- [ ] 13.17 Treat turntable PNG frames as private encoding intermediates and remove them after successful/failed finalization as specified.
-- [ ] 13.18 Encode turntable output only as MP4 through external ffmpeg and do not expose an `--ffmpeg` public option.
-- [ ] 13.19 Wire viewport/info, window, OCR, and turntable CLI contracts with their exact success JSON shapes.
-- [ ] 13.20 Add Capture tests for view selection, cloned-view preservation, quad layout, preset validation, scale/clamp, window bounds/crop, temp publication/retention, OCR, turntable orbit/distance/ffmpeg/frame cleanup, and CLI output.
+- [x] 13.16 Implement clockwise 360-degree turntable orbit from the current Perspective camera with optional positive finite pivot distance.
+- [x] 13.17 Treat turntable PNG frames as private encoding intermediates and remove them after successful/failed finalization as specified.
+- [x] 13.18 Encode turntable output only as MP4 through external ffmpeg and do not expose an `--ffmpeg` public option.
+- [x] 13.19 Wire viewport/info, window, OCR, and turntable CLI contracts with their exact success JSON shapes.
+- [x] 13.20 Add Capture tests for view selection, cloned-view preservation, quad layout, preset validation, scale/clamp, window bounds/crop, temp publication/retention, OCR, turntable orbit/distance/ffmpeg/frame cleanup, and CLI output.
 
 ## 14. Session Action History
 

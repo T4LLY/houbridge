@@ -48,6 +48,76 @@ def constrained_size(width, height, scale, max_width, max_height):
     )
 
 
+
+
+def _resize_pixmap(pixmap, *, scale, max_width, max_height, QtCore):
+    width, height = constrained_size(
+        pixmap.width(),
+        pixmap.height(),
+        scale,
+        max_width,
+        max_height,
+    )
+    if width == pixmap.width() and height == pixmap.height():
+        return pixmap
+    return pixmap.scaled(
+        width,
+        height,
+        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+        QtCore.Qt.TransformationMode.SmoothTransformation,
+    )
+
+
+def save_pixmap(pixmap, path, *, scale, max_width, max_height, QtCore):
+    final = _resize_pixmap(
+        pixmap,
+        scale=scale,
+        max_width=max_width,
+        max_height=max_height,
+        QtCore=QtCore,
+    )
+    if not final.save(str(path), "PNG"):
+        raise RuntimeError("Qt failed to save capture PNG.")
+
+
+def flipbook_pixmap(scene, viewport, path, *, hou, QtGui):
+    settings = scene.flipbookSettings().stash()
+    frame = hou.frame()
+    settings.frameRange((frame, frame))
+    settings.outputToMPlay(False)
+    settings.output(str(path))
+    scene.flipbook(viewport, settings)
+    if not path.is_file():
+        raise RuntimeError("Viewport flipbook did not produce a PNG.")
+    pixmap = QtGui.QPixmap(str(path))
+    if pixmap.isNull():
+        raise RuntimeError("Qt failed to load viewport flipbook PNG.")
+    path.unlink(missing_ok=True)
+    return pixmap
+
+
+def flipbook_png(
+    scene,
+    viewport,
+    path,
+    *,
+    scale,
+    max_width,
+    max_height,
+    hou,
+    QtCore,
+    QtGui,
+):
+    pixmap = flipbook_pixmap(scene, viewport, path, hou=hou, QtGui=QtGui)
+    save_pixmap(
+        pixmap,
+        path,
+        scale=scale,
+        max_width=max_width,
+        max_height=max_height,
+        QtCore=QtCore,
+    )
+
 def process_events(hou, QtWidgets):
     QtWidgets.QApplication.processEvents()
     hou.ui.triggerUpdate()

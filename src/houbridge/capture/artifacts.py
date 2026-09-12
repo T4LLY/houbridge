@@ -65,3 +65,33 @@ class CaptureArtifactPublisher:
             "screenshot_failed",
             f"No screenshot sequence number remains for {prefix}DDD.png.",
         )
+
+    def publish_turntable_mp4(
+        self,
+        source: Path,
+        *,
+        captured_at: datetime | None = None,
+    ) -> Path:
+        at = captured_at or self.now_datetime()
+        prefix = f"turntable{at:%Y%m%d-%H%M}-"
+        for sequence in range(1, 1000):
+            stem = f"{prefix}{sequence:03d}"
+            try:
+                return self.artifacts.publish_file_exact(
+                    source,
+                    namespace=_CAPTURE_NAMESPACE,
+                    stem=stem,
+                    extension=".mp4",
+                )
+            except FileExistsError:
+                continue
+            except (OSError, ValueError) as exc:
+                raise BridgeError(
+                    "turntable_failed",
+                    "Unable to publish completed turntable MP4.",
+                    f"{type(exc).__name__}: {exc}",
+                ) from exc
+        raise BridgeError(
+            "turntable_failed",
+            f"No turntable sequence number remains for {prefix}DDD.mp4.",
+        )

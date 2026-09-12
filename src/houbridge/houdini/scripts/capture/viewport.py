@@ -21,53 +21,6 @@ def _view_types(hou):
     }
 
 
-def _resize_pixmap(pixmap, *, scale, max_width, max_height, QtCore, constrained_size):
-    width, height = constrained_size(
-        pixmap.width(),
-        pixmap.height(),
-        scale,
-        max_width,
-        max_height,
-    )
-    if width == pixmap.width() and height == pixmap.height():
-        return pixmap
-    return pixmap.scaled(
-        width,
-        height,
-        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-        QtCore.Qt.TransformationMode.SmoothTransformation,
-    )
-
-
-def _save_pixmap(pixmap, path, *, scale, max_width, max_height, QtCore, constrained_size):
-    final = _resize_pixmap(
-        pixmap,
-        scale=scale,
-        max_width=max_width,
-        max_height=max_height,
-        QtCore=QtCore,
-        constrained_size=constrained_size,
-    )
-    if not final.save(str(path), "PNG"):
-        raise RuntimeError("Qt failed to save screenshot PNG.")
-
-
-def _flipbook_pixmap(scene, viewport, path, hou, QtGui):
-    settings = scene.flipbookSettings().stash()
-    frame = hou.frame()
-    settings.frameRange((frame, frame))
-    settings.outputToMPlay(False)
-    settings.output(str(path))
-    scene.flipbook(viewport, settings)
-    if not path.is_file():
-        raise RuntimeError("Viewport flipbook did not produce a PNG.")
-    pixmap = QtGui.QPixmap(str(path))
-    if pixmap.isNull():
-        raise RuntimeError("Qt failed to load viewport flipbook PNG.")
-    path.unlink(missing_ok=True)
-    return pixmap
-
-
 def _draw_caption(pixmap, label, QtGui):
     painter = QtGui.QPainter(pixmap)
     painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
@@ -104,7 +57,10 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
     runtime = _runtime()
     process_events = runtime["process_events"]
     clone_scene_viewer = runtime["clone_scene_viewer"]
+    flipbook_png = runtime["flipbook_png"]
     constrained_size = runtime["constrained_size"]
+    flipbook_pixmap = runtime["flipbook_pixmap"]
+    save_pixmap = runtime["save_pixmap"]
     apply_preset = runtime["apply_preset"]
     create_attribute_visualizers = runtime["create_attribute_visualizers"]
     destroy_visualizers = runtime["destroy_visualizers"]
@@ -128,15 +84,16 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
         visualizers = create_attribute_visualizers(viewport, preset, hou)
         try:
             process_events(hou, QtWidgets)
-            pixmap = _flipbook_pixmap(scene, viewport, output_path, hou, QtGui)
-            _save_pixmap(
-                pixmap,
+            flipbook_png(
+                scene,
+                viewport,
                 output_path,
                 scale=scale,
                 max_width=max_width,
                 max_height=max_height,
+                hou=hou,
                 QtCore=QtCore,
-                constrained_size=constrained_size,
+                QtGui=QtGui,
             )
         finally:
             destroy_visualizers(visualizers)
@@ -150,15 +107,16 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
     )
     if not needs_temporary:
         viewport = source_scene.curViewport()
-        pixmap = _flipbook_pixmap(source_scene, viewport, png_paths[0], hou, QtGui)
-        _save_pixmap(
-            pixmap,
+        flipbook_png(
+            source_scene,
+            viewport,
             png_paths[0],
             scale=scale,
             max_width=max_width,
             max_height=max_height,
+            hou=hou,
             QtCore=QtCore,
-            constrained_size=constrained_size,
+            QtGui=QtGui,
         )
         return
 
@@ -180,7 +138,13 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
                 process_events(hou, QtWidgets)
                 for label in labels:
                     temp_path = png_paths[0].with_name("quad-" + label + ".png")
-                    pixmaps[label] = _flipbook_pixmap(scene, layout[label], temp_path, hou, QtGui)
+                    pixmaps[label] = flipbook_pixmap(
+                        scene,
+                        layout[label],
+                        temp_path,
+                        hou=hou,
+                        QtGui=QtGui,
+                    )
             finally:
                 destroy_visualizers(visualizers)
 
@@ -216,14 +180,13 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
                 painter = QtGui.QPainter(canvas)
                 painter.drawPixmap(col * cell_width, row * cell_height, cell)
                 painter.end()
-            _save_pixmap(
+            save_pixmap(
                 canvas,
                 png_paths[0],
                 scale=scale,
                 max_width=max_width,
                 max_height=max_height,
                 QtCore=QtCore,
-                constrained_size=constrained_size,
             )
             return
 
