@@ -34,7 +34,7 @@ class SessionProbe:
         self._transport_factory = transport_factory
         self._workspaces = workspaces or TemporaryWorkspaceService()
         self._probe_script = probe_script or (
-            Path(__file__).parents[1] / "houdini" / "scripts" / "session_probe.py"
+            Path(__file__).parents[1] / "houdini" / "scripts" / "session" / "probe.py"
         )
 
     def inspect(self, port: int) -> SessionProbeResult:

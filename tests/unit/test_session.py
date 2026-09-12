@@ -385,7 +385,7 @@ def test_session_probe_uses_physical_script_and_private_workspace(tmp_path: Path
 
 
 def test_physical_probe_reports_native_session_values(tmp_path: Path, monkeypatch) -> None:
-    source = Path(__file__).parents[2] / "src" / "houbridge" / "houdini" / "scripts" / "session_probe.py"
+    source = Path(__file__).parents[2] / "src" / "houbridge" / "houdini" / "scripts" / "session" / "probe.py"
     script = tmp_path / "session_probe.py"
     shutil.copyfile(source, script)
 

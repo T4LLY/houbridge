@@ -58,16 +58,16 @@
 - [x] 4.2 Validate registered Sessions using live PID/process-incarnation information and a probe of the recorded port.
 - [x] 4.3 Resolve a target from explicit `--session` or the registry primary without silently selecting another Session.
 - [x] 4.4 Implement generic Session inspection and expose only the OpenSpec public Session fields.
-- [ ] 4.5 Resolve `session new` launch executable precedence as invocation `--hcommand` → global `[houdini].hcommand` → default `houdini`.
-- [ ] 4.6 Make `session new` always create a new Houdini process rather than probing for a reusable process.
-- [ ] 4.7 Bootstrap the launched process with Houdini `openport -a` and record Houdini's selected port.
-- [ ] 4.8 Validate `session new --file` before launch and load that HIP only into the newly created process.
-- [ ] 4.9 Support the specified GUI/headless process modes without choosing a license edition.
-- [ ] 4.10 Bound startup polling with configured timeout/interval and terminate failed launches that never establish a usable bridge port.
-- [ ] 4.11 On Windows, isolate an intentionally launched Houdini GUI process from unrelated later console Ctrl+C handling.
+- [x] 4.5 Resolve `session new` launch executable precedence as invocation `--hcommand` → global `[houdini].hcommand` → default `houdini`.
+- [x] 4.6 Make `session new` always create a new Houdini process rather than probing for a reusable process.
+- [x] 4.7 Bootstrap the launched process with Houdini `openport -a` and record Houdini's selected port.
+- [x] 4.8 Validate `session new --file` before launch and load that HIP only into the newly created process.
+- [x] 4.9 Support the specified GUI/headless process modes without choosing a license edition.
+- [x] 4.10 Bound startup polling with configured timeout/interval and terminate failed launches that never establish a usable bridge port.
+- [x] 4.11 On Windows, isolate an intentionally launched Houdini GUI process from unrelated later console Ctrl+C handling.
 - [ ] 4.12 Implement stale Session cleanup without automatically promoting another Session when the primary disappears.
 - [ ] 4.13 Implement explicit `session promote` and require the target Session to be registered and live.
-- [ ] 4.14 Keep Session bootstrap/probe injected helpers under `houbridge/houdini/scripts/session/`.
+- [x] 4.14 Keep Session bootstrap/probe injected helpers under `houbridge/houdini/scripts/session/`.
 - [ ] 4.15 Wire `session info`, `session new`, and `session promote` to the Session services and shared error/output boundaries.
 - [ ] 4.16 Add Session registry, info, new, stale-cleanup, promotion, bootstrap, and CLI tests.
 

@@ -9,6 +9,7 @@ from houbridge.errors import BridgeError
 from houbridge.houdini.installations import (
     HoudiniInstallation,
     discover_houdini_installations,
+    resolve_session_launch_executable,
     resolve_transport_hcommand,
     subprocess_environment_for,
 )
@@ -20,6 +21,7 @@ def _make_installation(root: Path, *, platform: str = "win32") -> None:
     bin_dir.mkdir(parents=True)
     (bin_dir / f"houdini{suffix}").write_bytes(b"")
     (bin_dir / f"hcommand{suffix}").write_bytes(b"")
+    (bin_dir / f"hython{suffix}").write_bytes(b"")
 
 
 def test_discovers_newest_standard_windows_installation(tmp_path: Path) -> None:
@@ -92,3 +94,59 @@ def test_subprocess_environment_matches_selected_bin(tmp_path: Path) -> None:
 
     assert env["HFS"] == str(root.resolve())
     assert env["PATH"].split(os.pathsep)[0] == str(bin_dir)
+
+
+def test_session_launch_resolution_prefers_explicit_then_config_then_default(tmp_path: Path) -> None:
+    explicit_root = tmp_path / "Houdini21.0.1"
+    configured_root = tmp_path / "Houdini20.5.1"
+    _make_installation(explicit_root)
+    _make_installation(configured_root)
+
+    explicit = explicit_root / "bin" / "houdini.exe"
+    configured = configured_root / "bin" / "houdini.exe"
+
+    assert resolve_session_launch_executable(
+        explicit,
+        str(configured),
+        headless=False,
+        environ={"PATH": ""},
+        platform="win32",
+    ) == explicit.resolve()
+    assert resolve_session_launch_executable(
+        None,
+        str(configured),
+        headless=False,
+        environ={"PATH": ""},
+        platform="win32",
+    ) == configured.resolve()
+
+
+def test_session_headless_resolution_uses_matching_hython(tmp_path: Path) -> None:
+    root = tmp_path / "Houdini21.0.1"
+    _make_installation(root)
+
+    resolved = resolve_session_launch_executable(
+        root / "bin" / "houdini.exe",
+        None,
+        headless=True,
+        environ={"PATH": ""},
+        platform="win32",
+    )
+
+    assert resolved == (root / "bin" / "hython.exe").resolve()
+
+
+def test_session_launch_override_does_not_accept_argument_string(tmp_path: Path) -> None:
+    root = tmp_path / "Houdini21.0.1"
+    _make_installation(root)
+
+    with pytest.raises(BridgeError) as caught:
+        resolve_session_launch_executable(
+            f'{root / "bin" / "houdini.exe"} -foreground',
+            None,
+            headless=False,
+            environ={"PATH": ""},
+            platform="win32",
+        )
+
+    assert caught.value.code == "houdini_executable_not_found"

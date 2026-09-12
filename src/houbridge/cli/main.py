@@ -15,7 +15,7 @@ app = create_cli_app(
 )
 
 
-app.add_typer(session_app, name="session", help="Inspect registered Houdini sessions.")
+app.add_typer(session_app, name="session", help="Create and inspect registered Houdini sessions.")
 
 
 @app.callback()

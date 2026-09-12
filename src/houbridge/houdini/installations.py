@@ -114,6 +114,111 @@ def resolve_transport_hcommand(
     )
 
 
+
+def resolve_session_launch_executable(
+    explicit: str | Path | None,
+    configured: str | None,
+    *,
+    headless: bool,
+    environ: Mapping[str, str] | None = None,
+    platform: str | None = None,
+) -> Path:
+    """Resolve the Session launch executable without transport-config leakage.
+
+    Resolution order is invocation override, global configuration, then the
+    default ``houdini`` executable.  Headless mode resolves the corresponding
+    ``hython`` from the selected Houdini installation and never launches the GUI
+    executable visibly.
+    """
+
+    env = os.environ if environ is None else environ
+    platform_name = sys.platform if platform is None else platform
+    selected = explicit if explicit is not None else (configured or None)
+
+    if selected is not None:
+        gui = _resolve_named_or_path_executable(
+            selected,
+            environ=env,
+            platform_name=platform_name,
+            error_code="houdini_executable_not_found",
+            error_message="Selected Houdini launch executable does not exist.",
+        )
+    else:
+        default_name = _executable_name("houdini", platform_name)
+        discovered = shutil.which(default_name, path=env.get("PATH", ""))
+        if discovered:
+            gui = Path(discovered).resolve()
+        else:
+            installations = discover_houdini_installations(
+                environ=env,
+                platform=platform_name,
+            )
+            if not installations:
+                raise BridgeError(
+                    "houdini_executable_not_found",
+                    "Unable to locate the default Houdini launch executable.",
+                )
+            gui = installations[0].houdini.resolve()
+
+    if not headless:
+        return gui
+
+    hython_name = _executable_name("hython", platform_name)
+    if gui.name.casefold() == hython_name.casefold():
+        return gui
+    sibling = gui.parent / hython_name
+    if sibling.is_file():
+        return sibling.resolve()
+    raise BridgeError(
+        "houdini_headless_executable_not_found",
+        "Unable to locate the headless Houdini runtime corresponding to the selected launch executable.",
+    )
+
+
+def _resolve_named_or_path_executable(
+    value: str | Path,
+    *,
+    environ: Mapping[str, str],
+    platform_name: str,
+    error_code: str,
+    error_message: str,
+) -> Path:
+    raw = str(value).strip()
+    if not raw or "\x00" in raw or "\n" in raw or "\r" in raw:
+        raise BridgeError(error_code, error_message)
+
+    candidate = Path(raw).expanduser()
+    if candidate.is_file():
+        return candidate.resolve()
+
+    # A bare executable name is accepted; command-line arguments are not.
+    if candidate.name == raw and not any(sep in raw for sep in ("/", "\\")):
+        discovered = shutil.which(raw, path=environ.get("PATH", ""))
+        if discovered:
+            return Path(discovered).resolve()
+
+    raise BridgeError(
+        error_code,
+        error_message,
+        detail=raw,
+    )
+
+
+def resolve_transport_hcommand_for_launch(
+    launch_executable: str | Path,
+    *,
+    environ: Mapping[str, str] | None = None,
+    platform: str | None = None,
+) -> Path:
+    """Prefer transport tooling from the installation selected for Session launch."""
+
+    platform_name = sys.platform if platform is None else platform
+    launch_path = Path(launch_executable).expanduser()
+    sibling = launch_path.parent / _executable_name("hcommand", platform_name)
+    if sibling.is_file():
+        return sibling.resolve()
+    return resolve_transport_hcommand(environ=environ, platform=platform_name)
+
 def subprocess_environment_for(
     executable: str | Path,
     *,
