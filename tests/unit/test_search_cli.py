@@ -40,16 +40,16 @@ def _install(monkeypatch, service: _Service) -> None:
     monkeypatch.setattr(search_cmd.OutputPolicy, "from_config", lambda _settings: _Policy())
 
 
-def test_root_help_exposes_search_and_phase21_exposes_only_script_subcommand() -> None:
+def test_root_help_exposes_search_and_phase22_exposes_live_code_subcommands() -> None:
     root = runner.invoke(app, ["--help"])
     search = runner.invoke(app, ["search", "--help"])
 
     assert root.exit_code == 0
     assert "search" in root.stdout
     assert search.exit_code == 0
-    assert "script" in search.stdout
-    for future_command in ("python", "vex", "node"):
-        assert future_command not in search.stdout
+    for command in ("script", "python", "vex"):
+        assert command in search.stdout
+    assert "node" not in search.stdout
 
 
 def test_search_script_emits_exact_minimal_hit_shape(monkeypatch) -> None:
@@ -125,3 +125,103 @@ def test_search_script_disabled_uses_shared_bridge_error_envelope(monkeypatch) -
         '{"error":true,"code":"local_script_database_disabled",'
         '"message":"Local script database features are disabled by configuration."}\n'
     )
+
+
+class _LiveService:
+    def __init__(self, result):
+        self.result = result
+        self.calls = []
+
+    def search(self, **kwargs):
+        self.calls.append(kwargs)
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
+
+def _install_live(monkeypatch, service: _LiveService) -> None:
+    settings = SimpleNamespace()
+    monkeypatch.setattr(search_cmd, "load_config", lambda: settings)
+    monkeypatch.setattr(search_cmd, "_live_code_service", lambda _settings: service)
+    monkeypatch.setattr(search_cmd.OutputPolicy, "from_config", lambda _settings: _Policy())
+
+
+def test_python_and_vex_commands_share_identical_live_code_options(monkeypatch) -> None:
+    hit = {
+        "hits": [
+            {
+                "path": "/obj/geo1/python1",
+                "node_type": "python",
+                "resource": "resource-code-001",
+                "score": CanonicalJsonNumber("317.540323"),
+            }
+        ]
+    }
+    service = _LiveService(hit)
+    _install_live(monkeypatch, service)
+
+    python = runner.invoke(
+        app,
+        [
+            "search", "python", "geometry", "--top-k", "7",
+            "--path", "/obj/geo*", "--recursive", "--session", "2",
+        ],
+    )
+    vex = runner.invoke(
+        app,
+        ["search", "vex", "--like", "/obj/geo1/wrangle1", "--session", "3"],
+    )
+
+    assert python.exit_code == 0
+    assert python.stdout == (
+        '{"hits":[{"path":"/obj/geo1/python1","node_type":"python",'
+        '"resource":"resource-code-001","score":317.540323}]}\n'
+    )
+    assert vex.exit_code == 0
+    assert service.calls == [
+        {
+            "language": "python",
+            "query": "geometry",
+            "like": None,
+            "top_k": 7,
+            "path": "/obj/geo*",
+            "recursive": True,
+            "session": 2,
+        },
+        {
+            "language": "vex",
+            "query": None,
+            "like": "/obj/geo1/wrangle1",
+            "top_k": 10,
+            "path": None,
+            "recursive": False,
+            "session": 3,
+        },
+    ]
+
+
+def test_live_code_query_mode_errors_use_specified_code(monkeypatch) -> None:
+    service = _LiveService(
+        BridgeError(
+            "invalid_code_search_query",
+            "Exactly one of QUERY or --like NODE_PATH must be supplied.",
+        )
+    )
+    _install_live(monkeypatch, service)
+
+    result = runner.invoke(app, ["search", "python"])
+
+    assert result.exit_code == 1
+    assert '"code":"invalid_code_search_query"' in result.stdout
+
+
+def test_live_code_help_exposes_only_current_options() -> None:
+    python = runner.invoke(app, ["search", "python", "--help"])
+    vex = runner.invoke(app, ["search", "vex", "--help"])
+
+    assert python.exit_code == vex.exit_code == 0
+    for output in (python.stdout, vex.stdout):
+        for option in ("--top-k", "--like", "--path", "--recursive", "--session"):
+            assert option in output
+        for forbidden in ("--root", "--port", "--hcommand"):
+            assert forbidden not in output

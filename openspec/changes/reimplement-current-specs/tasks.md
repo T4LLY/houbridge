@@ -189,12 +189,12 @@
 
 ## 12. Live Houdini Search
 
-- [ ] 12.1 Keep reusable live-search capture helpers under `houbridge/houdini/scripts/search/`.
-- [ ] 12.2 Implement the explicit built-in VEX/Python node-type → source-parameter extractor registry.
-- [ ] 12.3 Read live code with `parm.rawValue()`, ignore missing/failed/empty sources, and deduplicate overlapping node scopes by session id.
-- [ ] 12.4 Build live Python/VEX semantic indexes transiently from current Houdini state and never persist them as workspace/session search state.
-- [ ] 12.5 Support path scoping and mutually exclusive positional query vs `--like NODE_PATH` live-code similarity search.
-- [ ] 12.6 Store matched live source bodies as Resources and return Resource-backed hits without inline source bodies.
+- [x] 12.1 Keep reusable live-search capture helpers under `houbridge/houdini/scripts/search/`.
+- [x] 12.2 Implement the explicit built-in VEX/Python node-type → source-parameter extractor registry.
+- [x] 12.3 Read live code with `parm.rawValue()`, ignore missing/failed/empty sources, and deduplicate overlapping node scopes by session id.
+- [x] 12.4 Build live Python/VEX semantic indexes transiently from current Houdini state and never persist them as workspace/session search state.
+- [x] 12.5 Support path scoping and mutually exclusive positional query vs `--like NODE_PATH` live-code similarity search.
+- [x] 12.6 Store matched live source bodies as Resources and return Resource-backed hits without inline source bodies.
 - [ ] 12.7 Capture current Houdini node instances for live Node Search without persistent indexing.
 - [ ] 12.8 Rank Node Search by case-insensitive exact → prefix → substring match class with stable path tie-break and no numeric public score.
 - [ ] 12.9 Apply common Output fallback to oversized live-code/node result envelopes.
