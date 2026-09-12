@@ -139,6 +139,44 @@ def test_directed_viewport_capture_uses_readable_sequential_names(tmp_path: Path
     assert transport.requests[0]["requested_views"] == ["front", "right"]
 
 
+def test_capture_sequence_is_not_reused_after_published_output_is_removed(tmp_path: Path) -> None:
+    artifacts = TemporaryArtifactService(temp_root=tmp_path / "os-temp")
+    publisher = CaptureArtifactPublisher(
+        artifacts,
+        1,
+        now_timestamp=lambda: 10_000.0,
+        now_datetime=lambda: datetime(2026, 9, 11, 19, 42),
+    )
+    source = tmp_path / "source.png"
+    source.write_bytes(b"png")
+
+    first = publisher.publish_png(source, kind="viewport")
+    first.unlink()
+    second = publisher.publish_png(source, kind="viewport")
+
+    assert first.name == "viewport20260911-1942-001.png"
+    assert second.name == "viewport20260911-1942-002.png"
+
+
+def test_capture_sequence_continues_beyond_three_digits(tmp_path: Path) -> None:
+    artifacts = TemporaryArtifactService(temp_root=tmp_path / "os-temp")
+    capture_dir = artifacts.root / "capture"
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    (capture_dir / "viewport20260911-1942-999.png").write_bytes(b"old")
+    publisher = CaptureArtifactPublisher(
+        artifacts,
+        1,
+        now_timestamp=lambda: 10_000.0,
+        now_datetime=lambda: datetime(2026, 9, 11, 19, 42),
+    )
+    source = tmp_path / "source.png"
+    source.write_bytes(b"png")
+
+    published = publisher.publish_png(source, kind="viewport")
+
+    assert published.name == "viewport20260911-1942-1000.png"
+
+
 def test_preset_view_is_used_but_explicit_direction_overrides_it(tmp_path: Path) -> None:
     preset = tmp_path / "preset.json"
     preset.write_text('{"view":"uv","shading":"smoothwire"}', encoding="utf-8")
