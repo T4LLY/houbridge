@@ -163,13 +163,13 @@
 
 ## 10. Shared Search primitives
 
-- [ ] 10.1 Implement embedding provider/profile handling with profile identity kept separable across indexes.
-- [ ] 10.2 Implement dense cosine-similarity primitives without feature ownership.
-- [ ] 10.3 Implement lexical FTS/BM25 primitives without feature ownership.
-- [ ] 10.4 Implement RRF/hybrid candidate fusion using configured ranking parameters.
-- [ ] 10.5 Implement reusable SQLite vector/filter/cache helpers without coupling them to Script Search or History.
-- [ ] 10.6 Route every public Search score through the shared canonical score formatter.
-- [ ] 10.7 Add Search-primitive tests for dense, lexical, hybrid/RRF, profile separation, cache/filter behavior, and public score formatting.
+- [x] 10.1 Implement embedding provider/profile handling with profile identity kept separable across indexes.
+- [x] 10.2 Implement dense cosine-similarity primitives without feature ownership.
+- [x] 10.3 Implement lexical FTS/BM25 primitives without feature ownership.
+- [x] 10.4 Implement RRF/hybrid candidate fusion using configured ranking parameters.
+- [x] 10.5 Implement reusable SQLite vector/filter/cache helpers without coupling them to Script Search or History.
+- [x] 10.6 Route every public Search score through the shared canonical score formatter.
+- [x] 10.7 Add Search-primitive tests for dense, lexical, hybrid/RRF, profile separation, cache/filter behavior, and public score formatting.
 
 ## 11. Workspace Script Search
 

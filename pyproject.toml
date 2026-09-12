@@ -12,6 +12,7 @@ dependencies = [
   "model2vec>=0.9,<1",
   "numpy>=1.26,<3",
   "platformdirs>=4,<5",
+  "sqlite-vec>=0.1.9,<0.2",
   "typer>=0.12,<1",
 ]
 
