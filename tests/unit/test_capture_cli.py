@@ -76,7 +76,7 @@ def _install(monkeypatch):
     return resolver, service
 
 
-def test_capture_help_exposes_only_phase24_commands_and_current_options() -> None:
+def test_capture_help_exposes_phase25_commands_and_current_options() -> None:
     root = runner.invoke(app, ["--help"])
     capture = runner.invoke(app, ["capture", "--help"])
     viewport = runner.invoke(app, ["capture", "viewport", "--help"])
@@ -86,7 +86,7 @@ def test_capture_help_exposes_only_phase24_commands_and_current_options() -> Non
     assert "capture" in root.stdout
     assert "viewport" in capture.stdout
     assert "window" in capture.stdout
-    assert "ocr" not in capture.stdout
+    assert "ocr" in capture.stdout
     assert "turntable" not in capture.stdout
     for option in (
         "--info", "--top", "--bottom", "--front", "--back", "--left", "--right",
@@ -154,3 +154,41 @@ def test_window_command_passes_explicit_crop_and_returns_inline_bounds(monkeypat
         "crop": "network_editor",
         "preset_path": None,
     }
+
+
+def test_ocr_command_uses_required_image_and_common_output_policy(monkeypatch, tmp_path) -> None:
+    image = tmp_path / "window.png"
+    image.write_bytes(b"image")
+    logical = {"ocr": {"File": [{"score": 0.99, "bbox": [1, 2, 100, 20]}]}}
+    recognized = []
+
+    class _OCRService:
+        def recognize(self, received):
+            recognized.append(received)
+            return logical
+
+    class _OCRPolicy:
+        def render(self, payload, *, allow_resource_fallback=True):
+            assert payload is logical
+            assert allow_resource_fallback is True
+            return '{"resource":"ocr-output-000"}'
+
+    monkeypatch.setattr(capture_cmd, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(capture_cmd, "ScreenshotOCRService", _OCRService)
+    monkeypatch.setattr(capture_cmd.OutputPolicy, "from_config", lambda _settings: _OCRPolicy())
+
+    result = runner.invoke(app, ["capture", "ocr", str(image)])
+
+    assert result.exit_code == 0
+    assert result.stdout == '{"resource":"ocr-output-000"}\n'
+    assert recognized == [image]
+
+
+def test_ocr_command_missing_image_uses_spec_error_after_dispatch(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(capture_cmd, "load_config", lambda: SimpleNamespace())
+
+    missing = tmp_path / "missing.png"
+    result = runner.invoke(app, ["capture", "ocr", str(missing)])
+
+    assert result.exit_code == 1
+    assert '"code":"ocr_image_not_found"' in result.stdout

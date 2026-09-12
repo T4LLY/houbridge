@@ -4,7 +4,12 @@ from pathlib import Path
 
 import typer
 
-from houbridge.capture import CaptureArtifactPublisher, ScreenshotService, ViewportInfoService
+from houbridge.capture import (
+    CaptureArtifactPublisher,
+    ScreenshotOCRService,
+    ScreenshotService,
+    ViewportInfoService,
+)
 from houbridge.cli.common import create_cli_app, emit_result, terminate_with_bridge_error
 from houbridge.config import HoubridgeConfig, load_config
 from houbridge.errors import BridgeError
@@ -141,6 +146,18 @@ def window_command(
             crop=crop,
             preset_path=preset,
         )
+        emit_result(payload, policy=OutputPolicy.from_config(settings))
+    except BridgeError as exc:
+        terminate_with_bridge_error(exc)
+
+
+@capture_app.command("ocr")
+def ocr_command(
+    image: Path = typer.Argument(...),
+) -> None:
+    try:
+        settings = load_config()
+        payload = ScreenshotOCRService().recognize(image)
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:
         terminate_with_bridge_error(exc)

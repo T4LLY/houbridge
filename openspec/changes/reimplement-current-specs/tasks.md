@@ -116,7 +116,7 @@
 - [x] 7.4 Enforce fixed absolute token/serialized-byte limits even after fallback/serialization.
 - [x] 7.5 Keep Resource inspection bounded by its own requested inspection semantics rather than recursively applying generic fallback.
 - [ ] 7.6 Remove feature-specific token thresholds, truncation rules, cursor workarounds, and duplicate Output Policy implementations.
-- [ ] 7.7 Add Output tests covering inline success, Resource fallback, hard boundaries, canonical JSON serialization, and Search/OCR/Task fallback reuse.
+- [x] 7.7 Add Output tests covering inline success, Resource fallback, hard boundaries, canonical JSON serialization, and Search/OCR/Task fallback reuse.
 
 ## 8. Synchronous Execution
 
@@ -215,9 +215,9 @@
 - [x] 13.10 Capture the Houdini main application window through the supported OS/window path.
 - [x] 13.11 Transform pane-tab/viewport UI bounds into coordinates relative to the final cropped/scaled image.
 - [x] 13.12 Resolve unambiguous supported window crop selectors and reject ambiguous/unsupported crop requests.
-- [ ] 13.13 Implement OCR detection/recognition result normalization, duplicate-string grouping, scores, and compact bounding boxes.
-- [ ] 13.14 Keep OCR initialization quiet, use the standard Hugging Face assets cache hierarchy, and use the specified RapidOCR/ONNX tiny PP-OCRv6 profile with classification disabled.
-- [ ] 13.15 Pass complete OCR logical results to common Output Policy without OCR-specific thresholds.
+- [x] 13.13 Implement OCR detection/recognition result normalization, duplicate-string grouping, scores, and compact bounding boxes.
+- [x] 13.14 Keep OCR initialization quiet, use the standard Hugging Face assets cache hierarchy, and use the specified RapidOCR/ONNX tiny PP-OCRv6 profile with classification disabled.
+- [x] 13.15 Pass complete OCR logical results to common Output Policy without OCR-specific thresholds.
 - [ ] 13.16 Implement clockwise 360-degree turntable orbit from the current Perspective camera with optional positive finite pivot distance.
 - [ ] 13.17 Treat turntable PNG frames as private encoding intermediates and remove them after successful/failed finalization as specified.
 - [ ] 13.18 Encode turntable output only as MP4 through external ffmpeg and do not expose an `--ffmpeg` public option.
