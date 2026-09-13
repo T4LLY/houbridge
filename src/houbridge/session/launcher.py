@@ -6,6 +6,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -213,8 +214,26 @@ class HoudiniSessionLauncher:
         finally:
             workspace.remove()
 
+    def release(self, result: SessionLaunchResult) -> None:
+        """Keep ownership of the Popen handle until the launched process exits."""
+
+        thread = threading.Thread(
+            target=self._reap,
+            args=(result.process,),
+            name=f"houbridge-session-reaper-{result.pid}",
+            daemon=True,
+        )
+        thread.start()
+
     def terminate(self, result: SessionLaunchResult) -> None:
         self._terminate(result.process, result.pid)
+
+    @staticmethod
+    def _reap(process: _Process) -> None:
+        try:
+            process.wait()
+        except OSError:
+            pass
 
     @staticmethod
     def _terminate(process: _Process, bootstrap_pid: int | None) -> None:

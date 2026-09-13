@@ -64,6 +64,7 @@ class SessionNewService:
             self._launcher.terminate(launch)
             raise
 
+        self._launcher.release(launch)
         self._stale_cleanup.retire_best_effort(cleanup.stale_records)
         return {"session": number, "port": launch.port, "pid": launch.pid}
 

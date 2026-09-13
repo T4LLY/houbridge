@@ -86,11 +86,15 @@ class FakeLauncher:
     def __init__(self, result: SessionLaunchResult) -> None:
         self.result = result
         self.calls: list[dict[str, object]] = []
+        self.released: list[SessionLaunchResult] = []
         self.terminated: list[SessionLaunchResult] = []
 
     def launch(self, **kwargs) -> SessionLaunchResult:
         self.calls.append(kwargs)
         return self.result
+
+    def release(self, result: SessionLaunchResult) -> None:
+        self.released.append(result)
 
     def terminate(self, result: SessionLaunchResult) -> None:
         self.terminated.append(result)
@@ -108,6 +112,7 @@ def test_first_session_becomes_session_one_and_primary(tmp_path: Path) -> None:
     assert state.primary == 1
     assert state.sessions[1].process_start_identity == "start-18744"
     assert len(launcher.calls) == 1
+    assert launcher.released == [launcher.result]
 
 
 def test_concurrent_new_calls_allocate_distinct_sessions(tmp_path: Path) -> None:
@@ -231,6 +236,46 @@ def test_existing_registry_without_primary_does_not_promote_new_session(tmp_path
     SessionNewService(registry, launcher).create()  # type: ignore[arg-type]
 
     assert registry.load().primary is None
+
+
+def test_launcher_release_reaps_successful_process_in_background(tmp_path: Path) -> None:
+    executable = tmp_path / "houdini"
+    executable.write_bytes(b"")
+    waited = threading.Event()
+
+    class WaitProcess(FakeProcess):
+        def wait(self, timeout: float | None = None) -> int:
+            waited.set()
+            return 0
+
+    process = WaitProcess(pid=18744)
+    launcher = HoudiniSessionLauncher(
+        _config(),
+        lambda _executable: FakeProbe(
+            SessionProbeResult(
+                pid=18744,
+                version="22.0.429",
+                license="Commercial",
+                file=None,
+                headless=False,
+                open_ports=(49153,),
+            )
+        ),
+        popen=lambda *args, **kwargs: process,
+        executable_resolver=lambda *args, **kwargs: executable,
+    )
+    result = _launch_result(pid=18744, port=49153)
+    result = SessionLaunchResult(
+        pid=result.pid,
+        port=result.port,
+        identity=result.identity,
+        probe=result.probe,
+        process=process,
+    )
+
+    launcher.release(result)
+
+    assert waited.wait(timeout=1.0)
 
 
 def test_launcher_passes_b_flag_to_matching_headless_runtime(tmp_path: Path) -> None:

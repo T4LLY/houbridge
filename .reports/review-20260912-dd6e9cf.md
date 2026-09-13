@@ -275,7 +275,7 @@ Verified against the implementation and SQLite's FTS5 documentation: `contentles
 
 Re-verified against the current Phase 1–7 source. The test defects remain: selected CLI/output tests can read the machine-global config through the shared output emitter, the home-expansion test patches `HOME` but not Windows `USERPROFILE`, and task-stream recovery fixtures use text writes whose newline translation changes persisted bytes on Windows. The affected tests now isolate the shared output emitter from host configuration, set both home environment variables, and write exact stream bytes. No production behavior or configuration compatibility was changed.
 
-### [ ] C19. Successful GUI session launch never waits the launched Popen
+### [Fixed] C19. Successful GUI session launch never waits the launched Popen
 
 - **Severity:** Low
 - **Confidence:** Investigation lead
@@ -286,6 +286,10 @@ Re-verified against the current Phase 1–7 source. The test defects remain: sel
 - **Expected impact:** Transient zombie entries; no functional harm (bootstrap pid handles liveness separately).
 - **Trigger conditions:** POSIX, GUI launch, long-lived CLI process.
 - **Suggested verification direction:** `Popen.poll()`-and-release or double-fork style detach; verify no zombies after `session new` on Linux.
+
+#### Update — 2026-09-12 15:50 — Base b37e757
+
+Verified that a successful `SessionNewService.create()` dropped the launcher-owned `Popen` handle immediately after registry persistence, while the failure path explicitly terminated and waited for it. The successful path now transfers the handle to a daemon reaper thread only after the Session has been persisted; registry failures still terminate synchronously through the existing rollback path. Added regression coverage that successful Session creation releases the launch result and that the launcher reaper calls `wait()` without blocking the caller.
 
 ---
 
