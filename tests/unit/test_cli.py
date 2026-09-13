@@ -73,3 +73,48 @@ def test_root_help_exposes_all_seven_public_command_families() -> None:
     assert result.exit_code == 0
     for command in ("session", "capture", "resource", "search", "exec", "task", "history"):
         assert command in result.stdout
+
+
+def test_subcommand_help_has_concise_descriptions() -> None:
+    expected = {
+        "resource": (
+            "Show resource metadata.",
+            "Retrieve a resource.",
+            "Retrieve a byte or text range from a resource.",
+            "Search within a resource.",
+            "Write a resource to a temporary file.",
+        ),
+        "task": (
+            "Show task details.",
+            "List tasks.",
+            "Reset terminal task state and task numbering.",
+        ),
+        "search": (
+            "Search live Houdini Python code.",
+            "Search live Houdini VEX code.",
+            "Search live Houdini nodes.",
+            "Search indexed workspace scripts.",
+        ),
+        "capture": (
+            "Capture a Houdini viewport image.",
+            "Capture a Houdini window image.",
+            "Extract text from an image.",
+            "Capture a Houdini turntable animation.",
+        ),
+        "history": (
+            "Search execution history.",
+            "Show a history entry.",
+            "List history entries.",
+        ),
+        "session": (
+            "Show active Houdini sessions.",
+            "Start a new Houdini session.",
+            "Set a session as the primary session.",
+        ),
+    }
+
+    for family, descriptions in expected.items():
+        result = runner.invoke(app, [family, "--help"])
+        assert result.exit_code == 0
+        for description in descriptions:
+            assert description in result.stdout

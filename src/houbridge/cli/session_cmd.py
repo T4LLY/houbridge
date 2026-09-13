@@ -25,7 +25,7 @@ from houbridge.session.stale import SessionStaleCleanupService
 session_app = create_cli_app(no_args_is_help=True)
 
 
-@session_app.command("info")
+@session_app.command("info", help="Show active Houdini sessions.")
 def info_command(
     session_number: int | None = typer.Option(None, "--session"),
 ) -> None:
@@ -49,7 +49,7 @@ def info_command(
     emit_result(payload)
 
 
-@session_app.command("new")
+@session_app.command("new", help="Start a new Houdini session.")
 def new_command(
     hip_file: Path | None = typer.Option(None, "--file"),
     headless: bool = typer.Option(False, "--headless"),
@@ -86,7 +86,7 @@ def new_command(
     emit_result(payload)
 
 
-@session_app.command("promote")
+@session_app.command("promote", help="Set a session as the primary session.")
 def promote_command(
     session_number: int = typer.Argument(..., metavar="SESSION"),
 ) -> None:

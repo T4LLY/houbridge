@@ -23,7 +23,7 @@ def _service(settings: HoubridgeConfig) -> TaskCommandService:
     )
 
 
-@task_app.command("get")
+@task_app.command("get", help="Show task details.")
 def task_get(task_id: str) -> None:
     try:
         settings = load_config()
@@ -35,7 +35,7 @@ def task_get(task_id: str) -> None:
         terminate_with_bridge_error(exc)
 
 
-@task_app.command("list")
+@task_app.command("list", help="List tasks.")
 def task_list() -> None:
     try:
         settings = load_config()
@@ -47,7 +47,7 @@ def task_list() -> None:
         terminate_with_bridge_error(exc)
 
 
-@task_app.command("reset")
+@task_app.command("reset", help="Reset terminal task state and task numbering.")
 def task_reset() -> None:
     try:
         settings = load_config()

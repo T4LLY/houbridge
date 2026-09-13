@@ -68,7 +68,7 @@ def _turntable_service(
     )
 
 
-@capture_app.command("viewport")
+@capture_app.command("viewport", help="Capture a Houdini viewport image.")
 def viewport_command(
     info: bool = typer.Option(False, "--info"),
     top: bool = typer.Option(False, "--top"),
@@ -139,7 +139,7 @@ def viewport_command(
         terminate_with_bridge_error(exc)
 
 
-@capture_app.command("window")
+@capture_app.command("window", help="Capture a Houdini window image.")
 def window_command(
     scale: float = typer.Option(1.0, "--scale"),
     crop: str | None = typer.Option(None, "--crop"),
@@ -168,7 +168,7 @@ def window_command(
         terminate_with_bridge_error(exc)
 
 
-@capture_app.command("ocr")
+@capture_app.command("ocr", help="Extract text from an image.")
 def ocr_command(
     image: Path = typer.Argument(...),
 ) -> None:
@@ -179,7 +179,7 @@ def ocr_command(
     except BridgeError as exc:
         terminate_with_bridge_error(exc)
 
-@capture_app.command("turntable")
+@capture_app.command("turntable", help="Capture a Houdini turntable animation.")
 def turntable_command(
     frames: int = typer.Option(160, "--frames", min=2),
     fps: int = typer.Option(30, "--fps", min=1),

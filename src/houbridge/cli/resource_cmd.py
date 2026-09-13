@@ -54,12 +54,12 @@ def _emit_resource(operation: Callable[[], Mapping[str, Any]]) -> None:
         terminate_with_bridge_error(exc)
 
 
-@resource_app.command("info")
+@resource_app.command("info", help="Show resource metadata.")
 def info_command(resource_id: str) -> None:
     _emit_resource(lambda: _reader().info(resource_id))
 
 
-@resource_app.command("get")
+@resource_app.command("get", help="Retrieve a resource.")
 def get_command(
     resource_id: str,
     full: bool = typer.Option(False, "--full"),
@@ -67,7 +67,7 @@ def get_command(
     _emit_resource(lambda: _reader().get(resource_id, full=full))
 
 
-@resource_app.command("slice")
+@resource_app.command("slice", help="Retrieve a byte or text range from a resource.")
 def slice_command(
     resource_id: str,
     offset: int = typer.Option(..., "--offset"),
@@ -76,7 +76,7 @@ def slice_command(
     _emit_resource(lambda: _reader().slice(resource_id, offset=offset, limit=limit))
 
 
-@resource_app.command("search")
+@resource_app.command("search", help="Search within a resource.")
 def search_command(
     resource_id: str,
     query: str,
@@ -85,6 +85,6 @@ def search_command(
     _emit_resource(lambda: _reader().search(resource_id, query, offset=offset))
 
 
-@resource_app.command("dump")
+@resource_app.command("dump", help="Write a resource to a temporary file.")
 def dump_command(resource_id: str) -> None:
     _emit_resource(lambda: _dumper().dump(resource_id))

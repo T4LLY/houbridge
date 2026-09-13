@@ -51,7 +51,7 @@ def _parse_history_id(value: str) -> int:
     return parsed
 
 
-@history_app.command("search")
+@history_app.command("search", help="Search execution history.")
 def search_command(
     query: str = typer.Argument(..., metavar="QUERY"),
     top_k: str = typer.Option("10", "--top-k", metavar="INTEGER"),
@@ -77,7 +77,7 @@ def search_command(
         terminate_with_bridge_error(exc)
 
 
-@history_app.command("get")
+@history_app.command("get", help="Show a history entry.")
 def get_command(
     history_id: str = typer.Argument(..., metavar="HISTORY_ID"),
     session_number: int | None = typer.Option(None, "--session"),
@@ -104,7 +104,7 @@ def get_command(
         terminate_with_bridge_error(exc)
 
 
-@history_app.command("list")
+@history_app.command("list", help="List history entries.")
 def list_command(
     limit: str = typer.Option("20", "--limit", metavar="INTEGER"),
     session_number: int | None = typer.Option(None, "--session"),

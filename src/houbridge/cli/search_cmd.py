@@ -56,7 +56,7 @@ def _live_node_service(settings: HoubridgeConfig) -> LiveNodeSearchService:
     return LiveNodeSearchService(resolver, LiveNodeCapture(transport))
 
 
-@search_app.command("python")
+@search_app.command("python", help="Search live Houdini Python code.")
 def search_python(
     query: str | None = typer.Argument(None),
     top_k: int = typer.Option(10, "--top-k", min=1, max=50),
@@ -76,7 +76,7 @@ def search_python(
     )
 
 
-@search_app.command("vex")
+@search_app.command("vex", help="Search live Houdini VEX code.")
 def search_vex(
     query: str | None = typer.Argument(None),
     top_k: int = typer.Option(10, "--top-k", min=1, max=50),
@@ -122,7 +122,7 @@ def _search_live_code(
         terminate_with_bridge_error(exc)
 
 
-@search_app.command("node")
+@search_app.command("node", help="Search live Houdini nodes.")
 def search_node(
     query: str,
     top_k: int = typer.Option(20, "--top-k", min=1, max=100),
@@ -144,7 +144,7 @@ def search_node(
         terminate_with_bridge_error(exc)
 
 
-@search_app.command("script")
+@search_app.command("script", help="Search indexed workspace scripts.")
 def search_script(
     query: str,
     top_k: int = typer.Option(10, "--top-k", min=1, max=50),
