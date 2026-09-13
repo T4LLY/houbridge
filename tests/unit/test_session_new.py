@@ -227,12 +227,63 @@ def test_stale_session_number_is_reused_and_stale_primary_is_not_replaced(tmp_pa
     assert state.sessions[2].pid == 2002
 
 
-def test_existing_registry_without_primary_does_not_promote_new_session(tmp_path: Path) -> None:
+def test_stale_cleanup_that_removes_all_live_sessions_promotes_new_session(tmp_path: Path) -> None:
+    registry = SessionRegistry(tmp_path / "sessions.json")
+    registry.save(
+        SessionRegistryState(
+            primary=1,
+            sessions={1: SessionRecord(session=1, port=49152, pid=1001)},
+        )
+    )
+    launcher = FakeLauncher(_launch_result(pid=2002, port=49153))
+
+    def identity(pid: int) -> ProcessIdentity:
+        raise ProcessLookupError(pid)
+
+    SessionNewService(
+        registry,
+        launcher,  # type: ignore[arg-type]
+        identity_reader=identity,
+    ).create()
+
+    state = registry.load()
+    assert state.primary == 1
+    assert set(state.sessions) == {1}
+    assert state.sessions[1].pid == 2002
+
+
+def test_existing_registry_without_primary_and_without_live_sessions_promotes_new_session(tmp_path: Path) -> None:
     registry = SessionRegistry(tmp_path / "sessions.json")
     registry.save(SessionRegistryState(primary=None, sessions={}))
     launcher = FakeLauncher(_launch_result())
 
     SessionNewService(registry, launcher).create()  # type: ignore[arg-type]
+
+    assert registry.load().primary == 1
+
+
+def test_existing_registry_without_primary_but_with_live_sessions_does_not_promote_new_session(tmp_path: Path) -> None:
+    registry = SessionRegistry(tmp_path / "sessions.json")
+    registry.save(
+        SessionRegistryState(
+            primary=None,
+            sessions={
+                1: SessionRecord(
+                    session=1,
+                    port=49152,
+                    pid=1001,
+                    process_start_identity="live-1",
+                )
+            },
+        )
+    )
+    launcher = FakeLauncher(_launch_result(pid=2002, port=49153))
+
+    SessionNewService(
+        registry,
+        launcher,  # type: ignore[arg-type]
+        identity_reader=lambda pid: ProcessIdentity(pid, "live-1") if pid == 1001 else ProcessIdentity(pid, f"start-{pid}"),
+    ).create()
 
     assert registry.load().primary is None
 
@@ -513,7 +564,7 @@ def test_session_new_survives_stale_retirement_failure(tmp_path: Path) -> None:
 
     assert payload == {"session": 1, "port": 49154, "pid": 2002}
     state = registry.load()
-    assert state.primary is None
+    assert state.primary == 1
     assert state.sessions[1].pid == 2002
     assert launcher.terminated == []
 

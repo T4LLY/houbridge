@@ -122,10 +122,15 @@ Successful creation SHALL return exactly:
 - **THEN** the stale entry is removed
 - **AND** the new process is registered as session `2`
 
-#### Scenario: Previous primary is stale
+#### Scenario: Previous primary is stale while another live session remains
 - **WHEN** stale cleanup removes the session named by `primary`
+- **AND** at least one other live session remains
 - **THEN** `primary` is unset
 - **AND** the newly created session is not automatically promoted merely because no primary remains
+
+#### Scenario: Previous sessions are all stale
+- **WHEN** stale cleanup removes every previously registered session before `session new` completes
+- **THEN** the newly created session becomes `primary`
 
 #### Scenario: Explicit launch executable is supplied
 - **WHEN** `session new --hcommand PATH` is invoked

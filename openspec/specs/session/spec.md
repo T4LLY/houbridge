@@ -74,7 +74,7 @@ Cross-process Session registry mutation SHALL use a process-coordination lock. W
 
 Before allocating a session number, Session SHALL check the recorded PIDs in the registry and remove entries whose processes are no longer alive. If stale cleanup removes the session referenced by `primary`, Session SHALL unset `primary`. It SHALL NOT promote another existing session automatically.
 
-After stale cleanup, the newly launched process SHALL receive the smallest unused positive session number. On first-ever registry creation, the first successful session SHALL be session `1` and SHALL automatically become primary. If a registry already exists without a primary, later `session new` operations SHALL NOT automatically create a new primary.
+After stale cleanup, the newly launched process SHALL receive the smallest unused positive session number. On first-ever registry creation, the first successful session SHALL be session `1` and SHALL automatically become primary. If stale cleanup leaves zero live sessions, the newly created session SHALL become primary even when the registry file already exists. If a registry already exists without a primary and at least one live session remains, later `session new` operations SHALL NOT automatically create a new primary.
 
 #### Scenario: Start the first registered process
 - **WHEN** no Session registry has previously existed
@@ -85,11 +85,16 @@ After stale cleanup, the newly launched process SHALL receive the smallest unuse
 - **WHEN** stale cleanup makes session number `2` unused while higher live numbers remain
 - **THEN** the next successfully created process is assigned session `2`
 
-#### Scenario: Primary process died
+#### Scenario: Primary process died while other live sessions remain
 - **WHEN** stale cleanup discovers that the primary PID is no longer alive
+- **AND** at least one other live session remains
 - **THEN** its registry entry is removed
 - **AND** `primary` is unset
 - **AND** no remaining or newly created session becomes primary automatically
+
+#### Scenario: Stale cleanup leaves no live sessions
+- **WHEN** stale cleanup removes every previously registered session before `session new` allocates a number
+- **THEN** the newly created session becomes `primary`
 
 ### Requirement: Let Houdini choose the openport
 

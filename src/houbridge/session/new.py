@@ -55,7 +55,7 @@ class SessionNewService:
                     process_start_identity=launch.identity.process_start_identity,
                 )
                 primary = state.primary
-                if not registry_existed:
+                if not registry_existed or not state.sessions:
                     primary = number
                 self._registry.save(
                     SessionRegistryState(primary=primary, sessions=sessions)
