@@ -22,6 +22,10 @@ class ScriptDocument:
         identity = f"workspace-script\0{self.relative_path}"
         return f"script:{_sha256_text(identity)[:32]}"
 
+    @property
+    def lexical_text(self) -> str:
+        return f"{self.public_path}\n{self.semantic_text}"
+
 
 def scan_script_documents(python_root: Path) -> list[ScriptDocument]:
     if not python_root.exists():

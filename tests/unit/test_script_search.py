@@ -7,13 +7,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from houbridge.config import SearchHybridConfig
 from houbridge.db.connection import connection_scope
 from houbridge.errors import BridgeError
 from houbridge.paths import WorkspaceSearchPaths
 from houbridge.search.dense import DenseVectorRecord
 from houbridge.search.embedding import EmbeddingCoordinator
 from houbridge.script_search.documents import module_description, scan_script_documents
-from houbridge.script_search.repository import ScriptIndexRepository
+from houbridge.script_search.repository import IndexedScript, ScriptIndexRepository
 from houbridge.script_search.service import ScriptSearchService
 
 
@@ -87,6 +88,7 @@ def _service(
         paths=paths,
         embedding_profile=profile,
         enabled=enabled,
+        hybrid=SearchHybridConfig(rrf_k=60, candidate_multiplier=8, candidate_min=32),
         embeddings=EmbeddingCoordinator(actual_provider),
         repository=_repository(paths.search_database) if enabled else None,
         dense_index=actual_dense if enabled else None,
@@ -110,7 +112,7 @@ def test_script_search_indexes_exactly_one_document_per_python_file(tmp_path: Pa
 
     assert list(result) == ["hits"]
     assert result["hits"][0]["path"] == ".houbridge/python/build.py"
-    assert result["hits"][0]["score"].token == "301.278910"
+    assert result["hits"][0]["score"].token == "327.868852"
     assert result["hits"][0]["description"] == "Builds preview geometry."
     assert len(dense.records) == 1
     document_text = provider.calls[0][1][0]
@@ -127,7 +129,7 @@ def test_script_search_omits_description_for_existing_undescribed_script(tmp_pat
     result = service.search("legacy", top_k=10)
 
     assert result["hits"][0]["path"] == ".houbridge/python/legacy.py"
-    assert result["hits"][0]["score"].token == "301.278910"
+    assert result["hits"][0]["score"].token == "327.868852"
     assert "description" not in result["hits"][0]
 
 
@@ -145,10 +147,85 @@ def test_script_search_invalid_python_remains_file_level_searchable_without_desc
     result = service.search("unfinished", top_k=10)
 
     assert result["hits"][0]["path"] == ".houbridge/python/draft.py"
-    assert result["hits"][0]["score"].token == "301.278910"
+    assert result["hits"][0]["score"].token == "327.868852"
     assert "description" not in result["hits"][0]
     assert len(dense.records) == 1
     assert provider.calls[0][1][0].endswith("def unfinished(\n")
+
+
+def test_script_search_fuses_dense_and_lexical_rankings(tmp_path: Path) -> None:
+    python_root = tmp_path / ".houbridge" / "python"
+    python_root.mkdir(parents=True)
+    (python_root / "a.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (python_root / "b.py").write_text(
+        "SPECIAL_IDENTIFIER = 2\n",
+        encoding="utf-8",
+    )
+    service, _provider, _dense = _service(tmp_path)
+
+    result = service.search("SPECIAL_IDENTIFIER", top_k=2)
+
+    assert [hit["path"] for hit in result["hits"]] == [
+        ".houbridge/python/b.py",
+        ".houbridge/python/a.py",
+    ]
+    assert result["hits"][0]["score"].token == "325.224749"
+    assert result["hits"][1]["score"].token == "163.934426"
+
+
+def test_script_search_backfills_lexical_index_without_reembedding_current_file(
+    tmp_path: Path,
+) -> None:
+    python_root = tmp_path / ".houbridge" / "python"
+    python_root.mkdir(parents=True)
+    (python_root / "build.py").write_text("BUILD_TOKEN = 1\n", encoding="utf-8")
+    paths = WorkspaceSearchPaths.for_cwd(tmp_path)
+    document = scan_script_documents(python_root)[0]
+    repository = _repository(paths.search_database)
+    repository.replace(
+        [
+            IndexedScript(
+                entry_id=document.entry_id,
+                relative_path=document.relative_path,
+                public_path=document.public_path,
+                content_hash=document.content_hash,
+                semantic_hash=document.semantic_hash,
+                description=document.description,
+                embedding_profile="code-profile",
+            )
+        ]
+    )
+    provider = _Provider()
+    dense = _DenseIndex()
+    dense.upsert(
+        "code-profile",
+        [
+            DenseVectorRecord(
+                document.entry_id,
+                "workspace-script",
+                np.asarray([1.0, 1.0], dtype=np.float32),
+            )
+        ],
+    )
+    service = ScriptSearchService(
+        paths=paths,
+        embedding_profile="code-profile",
+        enabled=True,
+        hybrid=SearchHybridConfig(rrf_k=60, candidate_multiplier=8, candidate_min=32),
+        embeddings=EmbeddingCoordinator(provider),
+        repository=repository,
+        dense_index=dense,
+    )
+
+    result = service.search("BUILD_TOKEN", top_k=10)
+
+    assert result["hits"][0]["path"] == ".houbridge/python/build.py"
+    assert provider.calls == [("code-profile", ("BUILD_TOKEN",))]
+    with sqlite3.connect(paths.search_database) as connection:
+        lexical_ids = connection.execute(
+            "SELECT entry_id FROM script_lexical_entries"
+        ).fetchall()
+    assert lexical_ids == [(document.entry_id,)]
 
 
 def test_script_scan_respects_declared_python_source_encoding(tmp_path: Path) -> None:
@@ -272,6 +349,7 @@ def test_disabled_script_database_does_not_create_workspace_database(tmp_path: P
         paths=paths,
         embedding_profile="code-profile",
         enabled=False,
+        hybrid=SearchHybridConfig(rrf_k=60, candidate_multiplier=8, candidate_min=32),
     )
 
     with pytest.raises(BridgeError) as caught:

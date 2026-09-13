@@ -128,6 +128,21 @@ class SQLiteFtsIndex:
                     (entry_id,),
                 )
 
+    def entry_ids(self, *, namespaces: Sequence[str] | None = None) -> set[str]:
+        with self._connection_factory() as connection:
+            if namespaces:
+                placeholders = ",".join("?" for _ in namespaces)
+                rows = connection.execute(
+                    f"SELECT entry_id FROM {self._entries} "
+                    f"WHERE namespace IN ({placeholders})",
+                    tuple(namespaces),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    f"SELECT entry_id FROM {self._entries}"
+                ).fetchall()
+        return {str(row["entry_id"]) for row in rows}
+
     def search(
         self,
         query: str,

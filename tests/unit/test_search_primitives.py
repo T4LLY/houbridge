@@ -21,6 +21,7 @@ from houbridge.search.embedding import (
     Model2VecEmbeddingProvider,
     SQLiteEmbeddingCache,
 )
+from houbridge.search.hybrid import hybrid_rank
 from houbridge.search.lexical import LexicalDocument, LexicalIndexSchema, SQLiteFtsIndex
 from houbridge.search.rrf import reciprocal_rank_fusion
 
@@ -262,12 +263,32 @@ def test_fts5_bm25_search_supports_namespace_and_membership_filters(tmp_path: Pa
         entry_ids=["b"],
         limit=10,
     ) == ["b"]
+    assert index.entry_ids(namespaces=["python"]) == {"a", "b"}
+    assert index.entry_ids(namespaces=["vex"]) == {"c"}
 
     with sqlite3.connect(database) as connection:
         stored = connection.execute(
             "SELECT content FROM script_fts WHERE rowid = (SELECT fts_id FROM script_lexical_entries WHERE entry_id = 'a')"
         ).fetchone()[0]
     assert stored is None
+
+
+def test_hybrid_rank_applies_one_shared_candidate_policy_before_rrf() -> None:
+    candidate_limits: list[tuple[str, int]] = []
+
+    scores = hybrid_rank(
+        total_count=100,
+        top_k=5,
+        candidate_min=12,
+        candidate_multiplier=3,
+        rrf_k=60,
+        dense_rank=lambda limit: candidate_limits.append(("dense", limit)) or ["a", "b"],
+        lexical_rank=lambda limit: candidate_limits.append(("lexical", limit)) or ["b", "c"],
+    )
+
+    assert candidate_limits == [("dense", 15), ("lexical", 15)]
+    assert scores["b"] > scores["a"]
+    assert scores["b"] > scores["c"]
 
 
 def test_rrf_fuses_rank_positions_without_combining_raw_metric_scores() -> None:

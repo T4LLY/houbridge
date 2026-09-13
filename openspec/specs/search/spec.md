@@ -212,13 +212,19 @@ Workspace script reading SHALL use Python's declared source-encoding rules.
 - **WHEN** `tokenize.open`-compatible encoding metadata is present
 - **THEN** the file is decoded using Python's source encoding rules before building its file-level searchable representation
 
-### Requirement: Search workspace scripts by embedding similarity
+### Requirement: Search workspace scripts through shared hybrid ranking
 
-Workspace script query mode SHALL use the configured code embedding profile and dense cosine similarity over current file-level entries. An empty index SHALL return an empty logical result without attempting an invalid dense query.
+Workspace script query mode SHALL combine dense cosine ranking and lexical FTS5/BM25 ranking through the shared hybrid candidate policy and reciprocal-rank-fusion primitive. The dense branch SHALL embed the query with the configured code embedding profile and compare it against each current file-level semantic representation. The lexical branch SHALL rank a deterministic projection containing the public workspace path, optional normalized module description, and decoded Python source. An empty index SHALL return an empty logical result without attempting an invalid dense query.
 
 #### Scenario: Search current scripts
 - **WHEN** current file-level script entries exist
-- **THEN** the query is embedded with the configured profile and ranked by dense similarity
+- **THEN** the dense and lexical branches rank current file-level entries
+- **AND** their candidate rankings are fused through the shared RRF path
+- **AND** the public score uses the shared RRF score formatting rule
+
+#### Scenario: A script identifier matches lexically
+- **WHEN** the query matches a path, identifier, or source token that the lexical branch can rank
+- **THEN** that lexical rank contributes to the same RRF result as dense semantic similarity
 
 #### Scenario: Workspace has no indexed entries
 - **WHEN** `.houbridge/python` is missing or contains no indexable Python files
@@ -241,9 +247,13 @@ The shared search layer SHALL support Model2Vec-compatible embeddings, sqlite-ve
 - **WHEN** a live-code operation requests both lexical and dense rankings
 - **THEN** rankings are fused by reciprocal-rank fusion rather than by combining incomparable raw score magnitudes
 
+#### Scenario: Workspace Script Search performs hybrid recall
+- **WHEN** Script Search supplies lexical and file-level dense rankings
+- **THEN** it uses the shared hybrid candidate policy and RRF primitive
+
 #### Scenario: Session Action History performs hybrid recall
 - **WHEN** History supplies lexical and executed-source dense rankings
-- **THEN** it may reuse the same low-level RRF primitive without becoming part of workspace script-search persistence
+- **THEN** it uses the same shared hybrid candidate policy and RRF primitive without becoming part of workspace script-search persistence
 
 #### Scenario: Dense vectors already exist for a content/profile pair
 - **WHEN** the same embedding is required again inside a persistence scope that permits caching

@@ -64,7 +64,7 @@ For normal lexical/hybrid search, `score` SHALL use the shared public RRF format
 - **THEN** its code body is stored as a Resource
 - **AND** the hit contains no inline `source` or `code` field
 
-### Requirement: Expose local script semantic search with a minimal result envelope
+### Requirement: Expose local script hybrid search with a minimal result envelope
 
 The syntax SHALL be:
 
@@ -81,7 +81,7 @@ Success SHALL contain exactly one top-level field, `hits`. Each script hit SHALL
   "hits": [
     {
       "path": ".houbridge/python/build.py",
-      "score": 301.278910,
+      "score": 327.868852,
       "description": "Creates preview geometry and configures the material network."
     }
   ]
@@ -91,12 +91,12 @@ Success SHALL contain exactly one top-level field, `hits`. Each script hit SHALL
 `description` SHALL be omitted rather than emitted as `null` when the file has no module description. Internal derived-index metadata such as namespace, entry id, embedding profile, and content hash SHALL NOT be emitted by this command. One current Python file SHALL appear at most once in `hits`.
 
 #### Scenario: Search a described local script
-- **WHEN** a query produces a semantic match from a Python file with a non-empty module description
+- **WHEN** a query produces a hybrid match from a Python file with a non-empty module description
 - **THEN** the result contains only `hits`
 - **AND** the hit contains exactly `path`, `score`, and `description`
 
 #### Scenario: Search an undescribed local script
-- **WHEN** a query produces a semantic match from a Python file without a module description
+- **WHEN** a query produces a hybrid match from a Python file without a module description
 - **THEN** the hit contains exactly `path` and `score`
 - **AND** no `description` field is emitted
 

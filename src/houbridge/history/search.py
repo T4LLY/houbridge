@@ -14,8 +14,8 @@ from houbridge.errors import BridgeError
 from houbridge.formatting import SearchScoreMetric, format_search_score
 from houbridge.search.dense import DenseVectorRecord, SQLiteVecIndex
 from houbridge.search.embedding import EmbeddingProvider, Model2VecEmbeddingProvider, SQLiteEmbeddingCache
+from houbridge.search.hybrid import hybrid_rank
 from houbridge.search.lexical import LexicalDocument, SQLiteFtsIndex
-from houbridge.search.rrf import reciprocal_rank_fusion
 
 from .reader import HistoryEntryRecord, HistoryReader
 from .search_schema import (
@@ -71,37 +71,41 @@ class HistorySearchService:
         try:
             dense, lexical = self._synchronize_indexes(entries, profile)
             query_vector = self._query_vector(normalized_query, profile)
-            candidate_limit = min(
-                len(entries),
-                max(
-                    self._hybrid.candidate_min,
-                    top_k * self._hybrid.candidate_multiplier,
-                ),
-            )
 
             source_groups: dict[str, list[HistoryEntryRecord]] = defaultdict(list)
             for entry in entries:
                 source_groups[entry.source_hash].append(entry)
-            dense_source_ids = dense.search(
-                profile,
-                query_vector,
-                namespaces=[DENSE_NAMESPACE],
-                top_k=min(candidate_limit, len(source_groups)),
-            )
-            dense_entry_ids: list[str] = []
-            for source_hash in dense_source_ids:
-                dense_entry_ids.extend(
-                    str(entry.id)
-                    for entry in sorted(
-                        source_groups.get(source_hash, ()),
-                        key=lambda item: -item.id,
-                    )
-                )
 
-            lexical_entry_ids = lexical.search(
-                normalized_query,
-                namespaces=[LEXICAL_NAMESPACE],
-                limit=candidate_limit,
+            def dense_rank(candidate_limit: int) -> list[str]:
+                dense_source_ids = dense.search(
+                    profile,
+                    query_vector,
+                    namespaces=[DENSE_NAMESPACE],
+                    top_k=min(candidate_limit, len(source_groups)),
+                )
+                dense_entry_ids: list[str] = []
+                for source_hash in dense_source_ids:
+                    dense_entry_ids.extend(
+                        str(entry.id)
+                        for entry in sorted(
+                            source_groups.get(source_hash, ()),
+                            key=lambda item: -item.id,
+                        )
+                    )
+                return dense_entry_ids
+
+            scores = hybrid_rank(
+                total_count=len(entries),
+                top_k=top_k,
+                candidate_min=self._hybrid.candidate_min,
+                candidate_multiplier=self._hybrid.candidate_multiplier,
+                rrf_k=self._hybrid.rrf_k,
+                dense_rank=dense_rank,
+                lexical_rank=lambda candidate_limit: lexical.search(
+                    normalized_query,
+                    namespaces=[LEXICAL_NAMESPACE],
+                    limit=candidate_limit,
+                ),
             )
         except HistoryDatabaseMissingError:
             return {"hits": []}
@@ -114,10 +118,6 @@ class HistorySearchService:
                 str(exc),
             ) from exc
 
-        scores = reciprocal_rank_fusion(
-            [dense_entry_ids, lexical_entry_ids],
-            k=self._hybrid.rrf_k,
-        )
         by_id = {str(entry.id): entry for entry in entries}
         ordered = sorted(
             (

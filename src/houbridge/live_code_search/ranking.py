@@ -8,8 +8,8 @@ from houbridge.config import SearchHybridConfig
 from houbridge.db.connection import connection_scope
 from houbridge.search.dense import DenseIndexSchema, DenseVectorRecord, SQLiteVecIndex
 from houbridge.search.embedding import EmbeddingCoordinator, EmbeddingItem, EmbeddingProvider
+from houbridge.search.hybrid import hybrid_rank
 from houbridge.search.lexical import LexicalDocument, LexicalIndexSchema, SQLiteFtsIndex
-from houbridge.search.rrf import reciprocal_rank_fusion
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
 from .models import LiveCodeEntry, RankedLiveCode
@@ -68,30 +68,26 @@ class TransientLiveCodeRanker:
                     for entry in entries
                 ]
             )
-            candidate_limit = min(
-                len(entries),
-                max(
-                    self._hybrid.candidate_min,
-                    top_k * self._hybrid.candidate_multiplier,
-                ),
-            )
-            dense_ids = [
-                entry_id
-                for entry_id, _ in dense.search_scored(
-                    self._embedding_profile,
-                    query_vector,
+            scores = hybrid_rank(
+                total_count=len(entries),
+                top_k=top_k,
+                candidate_min=self._hybrid.candidate_min,
+                candidate_multiplier=self._hybrid.candidate_multiplier,
+                rrf_k=self._hybrid.rrf_k,
+                dense_rank=lambda candidate_limit: [
+                    entry_id
+                    for entry_id, _ in dense.search_scored(
+                        self._embedding_profile,
+                        query_vector,
+                        namespaces=[_LIVE_NAMESPACE],
+                        top_k=candidate_limit,
+                    )
+                ],
+                lexical_rank=lambda candidate_limit: lexical.search(
+                    query,
                     namespaces=[_LIVE_NAMESPACE],
-                    top_k=candidate_limit,
-                )
-            ]
-            lexical_ids = lexical.search(
-                query,
-                namespaces=[_LIVE_NAMESPACE],
-                limit=candidate_limit,
-            )
-            scores = reciprocal_rank_fusion(
-                [dense_ids, lexical_ids],
-                k=self._hybrid.rrf_k,
+                    limit=candidate_limit,
+                ),
             )
             by_id = {entry.entry_id: entry for entry in entries}
             ordered = sorted(
