@@ -146,16 +146,17 @@ def test_task_service_shapes_and_list_order(tmp_path: Path) -> None:
     supervisor = NoopSupervisor()
     service = TaskCommandService(store, supervisor, lambda _token: None, ttl_hours=72)  # type: ignore[arg-type]
 
+    expected_file = str(Path("/workspace/build.py").resolve())
     assert service.get(queued.id) == {
         "id": queued.id,
         "status": "queued",
-        "file": "/workspace/build.py",
+        "file": expected_file,
         "args": ["--quality", "high"],
     }
     assert service.get(running.id) == {
         "id": running.id,
         "status": "running",
-        "file": "/workspace/build.py",
+        "file": expected_file,
         "args": ["--quality", "high"],
         "stdout": "10%\n",
         "stderr": "",
