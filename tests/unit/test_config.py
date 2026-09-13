@@ -119,6 +119,7 @@ def test_global_data_dir_is_expanded(tmp_path: Path, monkeypatch: pytest.MonkeyP
     config_path = tmp_path / "config.toml"
     _write_default(config_path)
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     _replace(config_path, 'data_dir = ""', 'data_dir = "~/houbridge-data"')
 
     config = load_config(config_path, cwd=tmp_path)

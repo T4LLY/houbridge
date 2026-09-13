@@ -291,8 +291,8 @@ def test_recovery_uses_started_completion_markers_without_redispatch(tmp_path: P
     )
     workspace = workspaces.allocate(prefix="task")
     invocations.create(task_id, workspace.directory)
-    workspace.path_for("stdout.txt").write_text("done\n", encoding="utf-8")
-    workspace.path_for("stderr.txt").write_text("", encoding="utf-8")
+    workspace.path_for("stdout.txt").write_bytes(b"done\n")
+    workspace.path_for("stderr.txt").write_bytes(b"")
     _publish_started(workspace, task_id)
     _publish_completion(workspace, task_id, True)
 
@@ -313,8 +313,8 @@ def test_python_failure_keeps_traceback_in_stderr_without_runtime_failure(tmp_pa
     runner, invocations, workspaces = _runner(store, tmp_path, CompleteSuccess(store))
     workspace = workspaces.allocate(prefix="task")
     invocations.create(task_id, workspace.directory)
-    workspace.path_for("stdout.txt").write_text("before\n", encoding="utf-8")
-    workspace.path_for("stderr.txt").write_text("Traceback...\nRuntimeError: boom\n", encoding="utf-8")
+    workspace.path_for("stdout.txt").write_bytes(b"before\n")
+    workspace.path_for("stderr.txt").write_bytes(b"Traceback...\nRuntimeError: boom\n")
     _publish_started(workspace, task_id)
     _publish_completion(workspace, task_id, False)
 
@@ -341,8 +341,8 @@ def test_runtime_failure_is_structured_and_does_not_fabricate_stderr(tmp_path: P
     )
     workspace = workspaces.allocate(prefix="task")
     invocations.create(task_id, workspace.directory)
-    workspace.path_for("stdout.txt").write_text("partial\n", encoding="utf-8")
-    workspace.path_for("stderr.txt").write_text("", encoding="utf-8")
+    workspace.path_for("stdout.txt").write_bytes(b"partial\n")
+    workspace.path_for("stderr.txt").write_bytes(b"")
     _publish_started(workspace, task_id)
 
     task = store.get(task_id)

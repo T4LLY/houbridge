@@ -152,6 +152,7 @@ def test_emit_result_converts_final_hard_failure_to_bounded_nonzero_json(monkeyp
         "houbridge.cli.common.OutputPolicy.from_config",
         lambda _config: policy,
     )
+    monkeypatch.setattr("houbridge.cli.common.load_config", lambda: object())
 
     with pytest.raises(SystemExit) as exc_info:
         emit_result(

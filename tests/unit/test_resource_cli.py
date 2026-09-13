@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from typer.testing import CliRunner
 
-from houbridge.cli import resource_cmd
+from houbridge.cli import common, resource_cmd
 from houbridge.cli.main import app
 from houbridge.errors import BridgeError
 
@@ -34,6 +36,11 @@ class _Dumper:
 def _install_services(monkeypatch) -> None:
     monkeypatch.setattr(resource_cmd, "_reader", lambda: _Reader())
     monkeypatch.setattr(resource_cmd, "_dumper", lambda: _Dumper())
+    monkeypatch.setattr(
+        common,
+        "load_config",
+        lambda: SimpleNamespace(output=SimpleNamespace(inline_max_tokens=4096)),
+    )
 
 
 def test_root_help_exposes_resource_family() -> None:

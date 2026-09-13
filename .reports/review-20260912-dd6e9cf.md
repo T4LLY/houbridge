@@ -259,7 +259,7 @@ Verified against the current source and SideFX's documented macOS layout. The Da
 
 Verified against the implementation and SQLite's FTS5 documentation: `contentless_delete=1` is available only from SQLite 3.43.0. Falling back to a contentful FTS table would violate Houbridge's current OpenSpec requirement to keep persisted lexical structures contentless, while legacy contentless FTS5 cannot safely delete or replace a row without the original indexed text. The lexical primitive now feature-checks the runtime SQLite version before creating the index and raises a stable `lexical_index_unsupported` `BridgeError` with the required and detected versions instead of failing later with an opaque SQLite DDL/delete error. Added a regression test for a simulated SQLite 3.42 runtime; current SQLite behavior and the contentless-storage assertion remain covered.
 
-### [ ] C18. Test suite is non-hermetic (reads the machine's real global config) and has 3 Windows-specific defects
+### [Fixed] C18. Test suite is non-hermetic (reads the machine's real global config) and has 3 Windows-specific defects
 
 - **Severity:** Medium (engineering hygiene)
 - **Confidence:** High-confidence candidate (as a test-infra finding; product impact nil)
@@ -270,6 +270,10 @@ Verified against the implementation and SQLite's FTS5 documentation: `contentles
 - **Expected impact:** CI/local divergence; genuine config bugs could hide among expected failures.
 - **Trigger conditions:** Running pytest on Windows with a machine-global config whose schema differs from the current one; running on Windows at all (3 tests).
 - **Suggested verification direction:** Inject a temp config path env var honored by `default_config_path()` (product hook needed or monkeypatch fixture in CLI tests); fix `USERPROFILE` patch and `newline=""` in fixtures.
+
+#### Update — 2026-09-12 15:44 — Base b37e757
+
+Re-verified against the current Phase 1–7 source. The test defects remain: selected CLI/output tests can read the machine-global config through the shared output emitter, the home-expansion test patches `HOME` but not Windows `USERPROFILE`, and task-stream recovery fixtures use text writes whose newline translation changes persisted bytes on Windows. The affected tests now isolate the shared output emitter from host configuration, set both home environment variables, and write exact stream bytes. No production behavior or configuration compatibility was changed.
 
 ### [ ] C19. Successful GUI session launch never waits the launched Popen
 

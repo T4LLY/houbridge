@@ -34,7 +34,7 @@ def test_session_new_help_exposes_only_current_options() -> None:
 def test_session_new_emits_exact_public_success_shape(monkeypatch, tmp_path) -> None:
     from types import SimpleNamespace
 
-    from houbridge.cli import session_cmd
+    from houbridge.cli import common, session_cmd
 
     monkeypatch.setattr(
         session_cmd,
@@ -46,6 +46,11 @@ def test_session_new_emits_exact_public_success_shape(monkeypatch, tmp_path) -> 
                 lock_timeout_seconds=120.0,
             ),
         ),
+    )
+    monkeypatch.setattr(
+        common,
+        "load_config",
+        lambda: SimpleNamespace(output=SimpleNamespace(inline_max_tokens=4096)),
     )
     monkeypatch.setattr(
         session_cmd.SessionNewService,
@@ -62,7 +67,7 @@ def test_session_new_emits_exact_public_success_shape(monkeypatch, tmp_path) -> 
 def test_session_promote_emits_exact_public_success_shape(monkeypatch, tmp_path) -> None:
     from types import SimpleNamespace
 
-    from houbridge.cli import session_cmd
+    from houbridge.cli import common, session_cmd
 
     monkeypatch.setattr(
         session_cmd,
@@ -74,6 +79,11 @@ def test_session_promote_emits_exact_public_success_shape(monkeypatch, tmp_path)
                 lock_timeout_seconds=120.0,
             ),
         ),
+    )
+    monkeypatch.setattr(
+        common,
+        "load_config",
+        lambda: SimpleNamespace(output=SimpleNamespace(inline_max_tokens=4096)),
     )
     monkeypatch.setattr(
         session_cmd.SessionPromoteService,
