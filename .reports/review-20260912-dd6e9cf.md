@@ -167,7 +167,7 @@ Verified against the current source. With two Houbridge SQLite connections to th
 - **Trigger conditions:** A caller mutating nested config values in place.
 - **Suggested verification direction:** Add a cheap defensive deep-copy at the merge boundary or a test asserting cached immutability.
 
-### [ ] C11. `append_transport_chunk` silently drops chunks on offset CAS mismatch
+### [Fixed] C11. `append_transport_chunk` silently drops chunks on offset CAS mismatch
 
 - **Severity:** Low
 - **Confidence:** Investigation lead
@@ -178,6 +178,10 @@ Verified against the current source. With two Houbridge SQLite connections to th
 - **Expected impact:** Missing stream tail in rare duplicate-monitor scenarios.
 - **Trigger conditions:** Concurrent drains of the same invocation (should be prevented by claim adoption, which deletes other-owner claims for running tasks).
 - **Suggested verification direction:** Prove uniqueness: adoption removes competing claims for running tasks; add an assertion/log when CAS misses.
+
+#### Update — 2026-09-12 14:55 — Base b37e757
+
+Verified with a focused stream-drain reproduction: one collector can read six bytes from offset 0 while a competing collector commits only the first three bytes before the compare-and-set append. The existing caller ignored the returned authoritative offset and a final drain could therefore stop with the last three bytes uncommitted. `TaskStreamCollector` now retries from the authoritative invocation offset after a CAS miss, preserving append-only stream tails without weakening the compare-and-set. Added a regression test covering the partial-commit race.
 
 ### [ ] C12. `session new` can leave `primary = None` when the previous primary went stale but the registry file already existed
 

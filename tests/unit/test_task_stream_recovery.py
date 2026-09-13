@@ -407,6 +407,57 @@ def test_stream_collector_keeps_incomplete_utf8_for_next_chunk(tmp_path: Path) -
     assert store.accumulated_stream(task_id, "stdout") == "AあB"
 
 
+def test_stream_collector_retries_after_offset_cas_race(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    invocations = TaskInvocationStore(store.database)
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+    workspace = workspaces.allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    workspace.path_for("stdout.txt").write_bytes(b"abcdef")
+    workspace.path_for("stderr.txt").write_bytes(b"")
+    collector = TaskStreamCollector(invocations)
+    append = invocations.append_transport_chunk
+    raced = False
+
+    def append_with_race(
+        task_id: str,
+        stream: str,
+        *,
+        expected_offset: int,
+        consumed_bytes: int,
+        content: str,
+    ) -> int:
+        nonlocal raced
+        if not raced:
+            raced = True
+            assert expected_offset == 0
+            assert consumed_bytes == 6
+            assert content == "abcdef"
+            append(
+                task_id,
+                stream,
+                expected_offset=0,
+                consumed_bytes=3,
+                content="abc",
+            )
+        return append(
+            task_id,
+            stream,
+            expected_offset=expected_offset,
+            consumed_bytes=consumed_bytes,
+            content=content,
+        )
+
+    monkeypatch.setattr(invocations, "append_transport_chunk", append_with_race)
+    collector.drain(task_id, workspace, final=True)
+
+    assert store.accumulated_stream(task_id, "stdout") == "abcdef"
+
+
 def test_houdini_task_runtime_publishes_started_before_source_and_traceback_to_stderr(
     tmp_path: Path,
     monkeypatch,

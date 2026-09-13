@@ -56,13 +56,15 @@ class TaskStreamCollector:
         text, consumed = _decode_complete_utf8(payload, final=final)
         if consumed == 0:
             return
-        self._invocations.append_transport_chunk(
+        committed_offset = self._invocations.append_transport_chunk(
             task_id,
             stream,
             expected_offset=offset,
             consumed_bytes=consumed,
             content=text,
         )
+        if committed_offset != offset + consumed:
+            self._drain_one(task_id, workspace, stream, final=final)
 
 
 def _decode_complete_utf8(payload: bytes, *, final: bool) -> tuple[str, int]:
