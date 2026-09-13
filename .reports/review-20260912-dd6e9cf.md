@@ -51,7 +51,7 @@ Verified against the current source. A two-session reproduction with one dead re
 
 The finding combines intended behavior with a verified defect. OpenSpec explicitly requires that caller Python may remain `running` indefinitely after the started marker, so no wall-clock timeout or automatic cancellation was added for long-running caller code. The separate post-Python wrapper-failure path was reproduced by forcing `_flush_file` to raise after caller Python returned: `started.json` existed, `completion.json` did not, and the runner previously had no terminal transition while the Houdini target remained live. The wrapper protocol now publishes `python-finished.json` immediately after the Python outcome, best-effort publishes `wrapper-failed.json` for post-Python infrastructure exceptions, and the monitor terminalizes either an observed wrapper-failed marker or an exited hcommand after the Python-finished boundary. Recovery therefore does not replay caller Python. A blocked History-finalize lock remains dependent on C5's unbounded lock wait and is not claimed fixed by this update.
 
-### [ ] C3. Embedding-model download is a hard prerequisite for basic exec/task operation (offline fresh machine cannot run `houbridge exec` or complete async tasks)
+### [False positive] C3. Embedding-model download is a hard prerequisite for basic exec/task operation (offline fresh machine cannot run `houbridge exec` or complete async tasks)
 
 - **Severity:** High
 - **Confidence:** High-confidence candidate (mechanism fully source-verified; offline behavior of model2vec/HF cache not executed)
@@ -62,12 +62,16 @@ The finding combines intended behavior with a verified defect. OpenSpec explicit
 - **Expected impact:** First-use offline: `houbridge exec` errors with `history_preflight_failed`; async tasks complete Python then fail with `task_resource_finalization_failed`; any oversized stdout/stderr/traceback/parm spill fails its command. All resolved only after one successful online model fetch.
 - **Trigger conditions:** Fresh install (no HF cache for the profile, empty embedding cache) without network access at first exec/task; or later, any new-content `put_bytes` while the model directory is unavailable/corrupt.
 - **Suggested verification direction:** Block network (or point HF_HOME at an empty dir with HF_HUB_OFFLINE=1) on a clean data dir and run `houbridge exec` and an async task; confirm failure codes. Consider lazy/best-effort embedding on prepare, a deterministic fallback semantic base, or graceful degradation for oversized-output spill.
+#### Update — 2026-09-12 16:32 — Base d4a897f
+
+Verified against the current History invocation path and OpenSpec contract. With History enabled, source embedding is intentionally a pre-dispatch prerequisite and a preflight failure is required to abort caller Python. Fresh-offline model availability is therefore a product/deployment constraint, not an implementation defect in this revision. No source or test changes made.
+
 
 ---
 
 ## Plausible candidates
 
-### [ ] C4. Config schema evolution hard-fails all commands after upgrade (no migration, no unknown-key tolerance for legacy keys)
+### [False positive] C4. Config schema evolution hard-fails all commands after upgrade (no migration, no unknown-key tolerance for legacy keys)
 
 - **Severity:** High (UX/reliability)
 - **Confidence:** Plausible candidate (observed live on this machine; upgrade path inference)
@@ -78,6 +82,10 @@ The finding combines intended behavior with a verified defect. OpenSpec explicit
 - **Expected impact:** Total CLI outage post-upgrade for users with pre-change configs; confusing failure mode remote from the actual change.
 - **Trigger conditions:** Upgrade from a version whose default/accepted config contained any key removed/renamed in the current schema.
 - **Suggested verification direction:** Add a config containing `storage.root` and run any command. Consider key migration, warn-and-ignore for recognized-legacy keys, or an error message naming the offending key with a suggested fix (it does name the key — add remediation).
+#### Update — 2026-09-12 16:32 — Base d4a897f
+
+Verified the strict config validator and existing compatibility tests. Legacy/unknown keys are intentionally rejected by the current reimplementation contract rather than migrated or tolerated. The upgrade UX concern is valid as a product decision, but changing it would alter the accepted configuration format and requires a specification change. No source or test changes made.
+
 
 ### [Fixed] C5. InterprocessFileLock default infinite wait can deadlock CLI/Houdini on a held history DB lock; lifecycle hip-event handler has no timeout at all
 
@@ -127,7 +135,7 @@ Verified the ordering defect after C5: the synchronous wrapper still published `
 
 Verified against the current source. With two Houbridge SQLite connections to the same database, holding `BEGIN IMMEDIATE` on one caused the second writer to raise `sqlite3.OperationalError: database is locked` after approximately 5.01 seconds, confirming that the shared connection helper inherited Python sqlite3's default busy timeout. The fix does not introduce a new timeout setting: shared Task, Resource, and History writer connections now receive the existing `[houdini].lock_timeout_seconds` value, while the low-level connection helper keeps its existing 5-second default for callers that do not opt into the Houbridge coordination policy. Task worker construction propagates the frozen lock timeout to Task/Runtime/Invocation/Resource stores, and History forwards its existing database-lock timeout to SQLite. Regression coverage verifies the explicit SQLite busy timeout and config-derived propagation.
 
-### [ ] C8. sqlite-vec KNN applies `k` before WHERE filters — namespace/entry-filtered dense searches can silently return fewer (or zero) results
+### [False positive] C8. sqlite-vec KNN applies `k` before WHERE filters — namespace/entry-filtered dense searches can silently return fewer (or zero) results
 
 - **Severity:** Medium
 - **Confidence:** Plausible candidate
@@ -138,8 +146,12 @@ Verified against the current source. With two Houbridge SQLite connections to th
 - **Expected impact:** Missing search hits in filtered dense/hybrid searches; degraded RRF quality when the dense leg returns a short list.
 - **Trigger conditions:** Vector table containing many rows across namespaces/entry sets where qualifying matches rank below the global top-k for the query.
 - **Suggested verification direction:** Insert 1000 vectors in namespace B near a decoy set in namespace A; search with `namespace = B`, small k; compare against brute-force filtered top-k. Fix direction: k' = k * estimated_selectivity over-fetch, or per-namespace indexes.
+#### Update — 2026-09-12 16:32 — Base d4a897f
 
-### [ ] C9. Supervisor/worker ownership handoff race causes transient worker churn
+Verified the dense-index schema and sqlite-vec query shape. `namespace` is a vec0 metadata column and `entry_id` is the vec0 primary key; these native constraints participate in vec0 filtering rather than being ordinary post-KNN relational filters. The reported post-`k` starvation path therefore does not match this implementation. No source or test changes made.
+
+
+### [Deferred] C9. Supervisor/worker ownership handoff race causes transient worker churn
 
 - **Severity:** Low
 - **Confidence:** Plausible candidate
@@ -150,12 +162,16 @@ Verified against the current source. With two Houbridge SQLite connections to th
 - **Expected impact:** Occasional duplicate worker process for seconds; no task loss (recovery/adoption paths verified safe).
 - **Trigger conditions:** CLI process that triggered worker spawn dies within the launch/poll window.
 - **Suggested verification direction:** Kill the submitting CLI immediately after submit; trace ownership rows and worker processes over the next seconds. Consider a short grace period before clearing rows whose starter died but whose token lacks runtime_identity.
+#### Update — 2026-09-12 16:32 — Base d4a897f
+
+Verified that the ownership-handoff race can cause a replacement worker to be launched while the first worker is still starting. Token-checked ownership claiming appears to make the losing worker exit before it owns work, but the full operational impact has not been established. Avoiding the churn would require a new handoff/grace-period policy, so final judgment and production changes are deferred.
+
 
 ---
 
 ## Investigation leads
 
-### [ ] C10. `_read_toml_cached` returns shared nested dicts — future mutation corrupts the cross-call cache
+### [Deferred] C10. `_read_toml_cached` returns shared nested dicts — future mutation corrupts the cross-call cache
 
 - **Severity:** Low
 - **Confidence:** Investigation lead
@@ -166,6 +182,10 @@ Verified against the current source. With two Houbridge SQLite connections to th
 - **Expected impact:** None today; future bug class.
 - **Trigger conditions:** A caller mutating nested config values in place.
 - **Suggested verification direction:** Add a cheap defensive deep-copy at the merge boundary or a test asserting cached immutability.
+#### Update — 2026-09-12 16:32 — Base d4a897f
+
+Verified that `_read_toml_cached` can expose shared nested dictionaries across calls. Current callers inspected so far treat the resulting configuration as read-only, and no mutation-triggered corruption path has been reproduced. Because the finding is a latent-risk claim rather than a demonstrated current failure, final judgment and production changes are deferred.
+
 
 ### [Fixed] C11. `append_transport_chunk` silently drops chunks on offset CAS mismatch
 
@@ -183,7 +203,7 @@ Verified against the current source. With two Houbridge SQLite connections to th
 
 Verified with a focused stream-drain reproduction: one collector can read six bytes from offset 0 while a competing collector commits only the first three bytes before the compare-and-set append. The existing caller ignored the returned authoritative offset and a final drain could therefore stop with the last three bytes uncommitted. `TaskStreamCollector` now retries from the authoritative invocation offset after a CAS miss, preserving append-only stream tails without weakening the compare-and-set. Added a regression test covering the partial-commit race.
 
-### [ ] C12. `session new` can leave `primary = None` when the previous primary went stale but the registry file already existed
+### [False positive] C12. `session new` can leave `primary = None` when the previous primary went stale but the registry file already existed
 
 - **Severity:** Low
 - **Confidence:** Investigation lead
@@ -194,8 +214,12 @@ Verified with a focused stream-drain reproduction: one collector can read six by
 - **Expected impact:** Extra manual promote step; possible perception that session creation half-failed.
 - **Trigger conditions:** Registry exists, its primary is dead, user runs `session new`.
 - **Suggested verification direction:** Confirm intended semantics with design docs; if undesired, auto-promote when cleanup leaves zero live sessions.
+#### Update — 2026-09-12 16:32 — Base d4a897f
 
-### [ ] C13. `resource_semantic_aliases` rows are orphaned forever by TTL cleanup
+Verified against the current session lifecycle contract. When a previous primary becomes stale, creating a new session must not implicitly promote it merely because no primary remains; explicit promotion is required. The reported behavior is intentional. No source or test changes made.
+
+
+### [False positive] C13. `resource_semantic_aliases` rows are orphaned forever by TTL cleanup
 
 - **Severity:** Low
 - **Confidence:** Investigation lead
@@ -206,8 +230,12 @@ Verified with a focused stream-drain reproduction: one collector can read six by
 - **Expected impact:** Negligible near-term; unbounded row growth over months of use.
 - **Trigger conditions:** Normal operation with resource TTL cleanup enabled.
 - **Suggested verification direction:** Decide and document alias lifetime; if kept forever, cap ordinal reuse semantics in docs; consider deleting aliases whose canonical_id has no live resource after a grace period (breaking change — needs product decision).
+#### Update — 2026-09-12 16:32 — Base d4a897f
 
-### [ ] C14. ActionRecorder takes a full-scene baseline snapshot on every recorded execution
+Verified against the resource identity/retention contract. Semantic aliases and ordinal reservations intentionally outlive TTL deletion of resource payload rows so aliases remain stable and ordinals are not reassigned to different content. The retained alias rows are therefore expected persisted identity state, not leaked resource rows. No source or test changes made.
+
+
+### [Deferred] C14. ActionRecorder takes a full-scene baseline snapshot on every recorded execution
 
 - **Severity:** Low (perf)
 - **Confidence:** Investigation lead
@@ -218,8 +246,12 @@ Verified with a focused stream-drain reproduction: one collector can read six by
 - **Expected impact:** Multi-second overhead per exec on large scenes.
 - **Trigger conditions:** History enabled (default) + large scenes.
 - **Suggested verification direction:** Time exec prepare on a heavy scene; consider lazy baselining (snapshot only nodes touched, keyed by generation) or event-driven diffing.
+#### Update — 2026-09-12 16:32 — Base d4a897f
 
-### [ ] C15. ffmpeg encode runs without a timeout
+Verified that ActionRecorder currently captures a full pre-execution scene baseline. The cost concern is plausible, but no representative large-scene benchmark has been run and no behavior-preserving replacement has been established for reconstructing pre-change values from post-change callbacks. Final severity and any recorder redesign are deferred pending measurement and design work.
+
+
+### [Deferred] C15. ffmpeg encode runs without a timeout
 
 - **Severity:** Low
 - **Confidence:** Investigation lead
@@ -230,6 +262,10 @@ Verified with a focused stream-drain reproduction: one collector can read six by
 - **Expected impact:** Long (or infinite) hangs on pathological encodes.
 - **Trigger conditions:** Large `frames` × resolution, or ffmpeg stall.
 - **Suggested verification direction:** Add a generous timeout derived from frame count, and a clear error including partial output path.
+#### Update — 2026-09-12 16:32 — Base d4a897f
+
+Verified that ffmpeg encoding uses an unbounded `subprocess.run`. No existing config/OpenSpec contract defines an encode deadline or cancellation policy, and choosing a fixed or frame-derived timeout would introduce new user-visible behavior. Final policy and production changes are deferred.
+
 
 ### [Fixed] C16. macOS has no standard-roots installation discovery
 
