@@ -171,6 +171,8 @@ For `session new`, the Houdini launch executable SHALL resolve in this order:
 
 SideFX transport tooling required after bootstrap MAY be resolved from the selected Houdini installation, a usable `HFS`, or `PATH`; normal commands SHALL not expose a per-invocation transport-executable override.
 
+Standard installation discovery SHALL include the platform-default Houdini installation roots used by supported desktop platforms. On macOS, Houbridge SHALL inspect `/Applications/Houdini/HoudiniX.Y.ZZZ` installations through their Houdini framework HFS resource directory (`Frameworks/Houdini.framework/Versions/Current/Resources`, including the equivalent framework `Resources` symlink when present).
+
 #### Scenario: Explicit launch executable is supplied
 - **WHEN** `session new --hcommand PATH` supplies a valid executable path
 - **THEN** that executable takes precedence over global configuration and the default

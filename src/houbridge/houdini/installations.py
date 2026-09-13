@@ -12,6 +12,7 @@ from houbridge.errors import BridgeError
 
 
 _VERSION_RE = re.compile(r"(?:Houdini\s*)?(\d+)\.(\d+)(?:\.(\d+))?", re.IGNORECASE)
+_MACOS_HOUDINI_ROOT = Path("/Applications/Houdini")
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,10 @@ def discover_houdini_installations(
                 roots.extend(sidefx_root.glob("Houdini*"))
     elif platform_name.startswith("linux"):
         roots.extend(Path("/opt").glob("hfs*"))
+    elif platform_name == "darwin":
+        if _MACOS_HOUDINI_ROOT.is_dir():
+            for installation_root in _MACOS_HOUDINI_ROOT.glob("Houdini*"):
+                roots.extend(_macos_hfs_roots(installation_root))
 
     search_path = env.get("PATH") if environ is None else env.get("PATH", "")
     path_hcommand = shutil.which(_executable_name("hcommand", platform_name), path=search_path)
@@ -240,6 +245,14 @@ def subprocess_environment_for(
     if normalized_bin not in {os.path.normcase(part) for part in parts}:
         env["PATH"] = str(bin_dir) + (os.pathsep + current_path if current_path else "")
     return env
+
+
+def _macos_hfs_roots(installation_root: Path) -> tuple[Path, ...]:
+    framework = installation_root / "Frameworks" / "Houdini.framework"
+    return (
+        framework / "Versions" / "Current" / "Resources",
+        framework / "Resources",
+    )
 
 
 def _installation_from_root(

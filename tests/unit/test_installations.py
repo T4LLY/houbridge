@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import houbridge.houdini.installations as installations_module
 from houbridge.errors import BridgeError
 from houbridge.houdini.installations import (
     HoudiniInstallation,
@@ -22,6 +23,33 @@ def _make_installation(root: Path, *, platform: str = "win32") -> None:
     (bin_dir / f"houdini{suffix}").write_bytes(b"")
     (bin_dir / f"hcommand{suffix}").write_bytes(b"")
     (bin_dir / f"hython{suffix}").write_bytes(b"")
+
+
+def test_discovers_standard_macos_installation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    applications_root = tmp_path / "Applications" / "Houdini"
+    install_root = applications_root / "Houdini21.0.777"
+    hfs_root = (
+        install_root
+        / "Frameworks"
+        / "Houdini.framework"
+        / "Versions"
+        / "Current"
+        / "Resources"
+    )
+    _make_installation(hfs_root, platform="darwin")
+    monkeypatch.setattr(installations_module, "_MACOS_HOUDINI_ROOT", applications_root)
+
+    found = discover_houdini_installations(
+        environ={"PATH": ""},
+        platform="darwin",
+    )
+
+    assert len(found) == 1
+    assert found[0].version == (21, 0, 777)
+    assert found[0].root == hfs_root.resolve()
+    assert found[0].hcommand == (hfs_root / "bin" / "hcommand").resolve()
 
 
 def test_discovers_newest_standard_windows_installation(tmp_path: Path) -> None:

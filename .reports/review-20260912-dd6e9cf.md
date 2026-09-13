@@ -227,7 +227,7 @@ Verified against the current source. With two Houbridge SQLite connections to th
 - **Trigger conditions:** Large `frames` × resolution, or ffmpeg stall.
 - **Suggested verification direction:** Add a generous timeout derived from frame count, and a clear error including partial output path.
 
-### [ ] C16. macOS has no standard-roots installation discovery
+### [Fixed] C16. macOS has no standard-roots installation discovery
 
 - **Severity:** Low
 - **Confidence:** Investigation lead
@@ -238,6 +238,10 @@ Verified against the current source. With two Houbridge SQLite connections to th
 - **Expected impact:** `houdini_install_not_found` on stock macOS setups.
 - **Trigger conditions:** macOS, no `HFS`, no configured executable.
 - **Suggested verification direction:** Add `/Applications` + `/Applications/Houdini/HoudiniXX.Y.Z` glob patterns behind the existing version-sort logic.
+
+#### Update — 2026-09-12 14:38 — Base dd6e9cf
+
+Verified against the current source and SideFX's documented macOS layout. The Darwin branch had no standard installation roots, so stock `/Applications/Houdini/HoudiniX.Y.ZZZ` installs were invisible unless `HFS`, `PATH`, or an explicit/configured executable supplied the location. The original suggested fix was incomplete because Houbridge's installation parser expects an HFS-style root containing `bin/houdini` and `bin/hcommand`; on macOS that root is inside `Frameworks/Houdini.framework/Versions/Current/Resources` (with the framework `Resources` symlink also accepted), not the outer application installation directory. Standard discovery now scans those HFS roots and keeps the existing version sorting and selected-installation behavior. Added a Darwin discovery regression test and documented the macOS standard-root contract.
 
 ### [ ] C17. Contentless FTS5 with `contentless_delete=1` requires SQLite ≥ 3.43
 
