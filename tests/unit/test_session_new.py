@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import runpy
 import shutil
 import sys
 import threading
@@ -323,6 +322,8 @@ def test_launcher_passes_b_flag_to_matching_headless_runtime(tmp_path: Path) -> 
     assert captured["args"][0] == str(executable)
     assert captured["args"][1:3] == ["-b", "-i"]
     assert "--port" not in captured["args"]
+    launch_env = captured["kwargs"]["env"]
+    assert Path(launch_env["HOUBRIDGE_SESSION_BOOTSTRAP_DIR"]).name.startswith("session-new-")
 
 
 def test_launcher_timeout_terminates_launched_process(tmp_path: Path) -> None:
@@ -459,9 +460,12 @@ def test_physical_bootstrap_loads_file_and_uses_automatic_openport(tmp_path: Pat
     )
     monkeypatch.setitem(sys.modules, "hou", fake_hou)
     monkeypatch.setattr(os, "getpid", lambda: 18744)
+    monkeypatch.setenv("HOUBRIDGE_SESSION_BOOTSTRAP_DIR", str(tmp_path))
 
-    runpy.run_path(str(script), run_name="__main__")
+    namespace = {"__name__": "__main__"}
+    exec(compile(script.read_text(encoding="utf-8"), str(script), "exec"), namespace)
 
+    assert "__file__" not in namespace
     payload = json.loads(script.with_name("bootstrap.result.json").read_text(encoding="utf-8"))
     assert payload == {"pid": 18744, "port": 49153}
     assert calls == ["openport -a -q"]

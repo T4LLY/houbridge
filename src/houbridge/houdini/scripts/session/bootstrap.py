@@ -7,9 +7,10 @@ from pathlib import Path
 import hou
 
 
-_SCRIPT = Path(__file__)
-_REQUEST = _SCRIPT.with_name("bootstrap.request.json")
-_RESULT = _SCRIPT.with_name("bootstrap.result.json")
+_BOOTSTRAP_DIR_ENV = "HOUBRIDGE_SESSION_BOOTSTRAP_DIR"
+_BOOTSTRAP_DIR = Path(os.environ[_BOOTSTRAP_DIR_ENV])
+_REQUEST = _BOOTSTRAP_DIR / "bootstrap.request.json"
+_RESULT = _BOOTSTRAP_DIR / "bootstrap.result.json"
 _HEADLESS_STDIN_HOLD: int | None = None
 
 

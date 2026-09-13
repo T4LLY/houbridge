@@ -121,8 +121,10 @@ class HoudiniSessionLauncher:
                 args.extend(("-b", "-i"))
             args.append(str(script_path))
 
+            launch_env = subprocess_environment_for(executable, environ=self._environ)
+            launch_env["HOUBRIDGE_SESSION_BOOTSTRAP_DIR"] = str(workspace.directory)
             kwargs: dict[str, object] = {
-                "env": subprocess_environment_for(executable, environ=self._environ),
+                "env": launch_env,
                 "stdin": subprocess.DEVNULL,
                 "stdout": subprocess.DEVNULL,
                 "stderr": subprocess.DEVNULL,
