@@ -243,7 +243,7 @@ Verified against the current source. With two Houbridge SQLite connections to th
 
 Verified against the current source and SideFX's documented macOS layout. The Darwin branch had no standard installation roots, so stock `/Applications/Houdini/HoudiniX.Y.ZZZ` installs were invisible unless `HFS`, `PATH`, or an explicit/configured executable supplied the location. The original suggested fix was incomplete because Houbridge's installation parser expects an HFS-style root containing `bin/houdini` and `bin/hcommand`; on macOS that root is inside `Frameworks/Houdini.framework/Versions/Current/Resources` (with the framework `Resources` symlink also accepted), not the outer application installation directory. Standard discovery now scans those HFS roots and keeps the existing version sorting and selected-installation behavior. Added a Darwin discovery regression test and documented the macOS standard-root contract.
 
-### [ ] C17. Contentless FTS5 with `contentless_delete=1` requires SQLite ≥ 3.43
+### [Resolved] C17. Contentless FTS5 with `contentless_delete=1` requires SQLite ≥ 3.43
 
 - **Severity:** Low
 - **Confidence:** Investigation lead
@@ -254,6 +254,10 @@ Verified against the current source and SideFX's documented macOS layout. The Da
 - **Expected impact:** `sqlite3.OperationalError` on first reconcile for affected builds.
 - **Trigger conditions:** Python with sqlite3 < 3.43 (check `sqlite3.sqlite_version` at runtime).
 - **Suggested verification direction:** Feature-detect at startup (`sqlite3.sqlite_version_info`) and fall back to regular (contentful) FTS5 or plain LIKE index.
+
+#### Update — 2026-09-12 14:59 — Base dd6e9cf
+
+Verified against the implementation and SQLite's FTS5 documentation: `contentless_delete=1` is available only from SQLite 3.43.0. Falling back to a contentful FTS table would violate Houbridge's current OpenSpec requirement to keep persisted lexical structures contentless, while legacy contentless FTS5 cannot safely delete or replace a row without the original indexed text. The lexical primitive now feature-checks the runtime SQLite version before creating the index and raises a stable `lexical_index_unsupported` `BridgeError` with the required and detected versions instead of failing later with an opaque SQLite DDL/delete error. Added a regression test for a simulated SQLite 3.42 runtime; current SQLite behavior and the contentless-storage assertion remain covered.
 
 ### [ ] C18. Test suite is non-hermetic (reads the machine's real global config) and has 3 Windows-specific defects
 

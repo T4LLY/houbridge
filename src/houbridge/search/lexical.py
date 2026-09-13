@@ -11,6 +11,7 @@ from houbridge.search.sqlite_filter import append_membership_filter, quote_ident
 
 
 ConnectionFactory = Callable[[], AbstractContextManager[sqlite3.Connection]]
+_MIN_CONTENTLESS_DELETE_SQLITE = (3, 43, 0)
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,13 @@ class SQLiteFtsIndex:
         self._initialize()
 
     def _initialize(self) -> None:
+        if sqlite3.sqlite_version_info < _MIN_CONTENTLESS_DELETE_SQLITE:
+            required = ".".join(str(part) for part in _MIN_CONTENTLESS_DELETE_SQLITE)
+            raise BridgeError(
+                "lexical_index_unsupported",
+                f"SQLite {required} or newer is required for contentless lexical indexes.",
+                detail=f"runtime SQLite is {sqlite3.sqlite_version}",
+            )
         with self._connection_factory() as connection:
             connection.execute(
                 f"""

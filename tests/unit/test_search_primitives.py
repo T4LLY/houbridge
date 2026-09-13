@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from houbridge.db.connection import connection_scope
+from houbridge.errors import BridgeError
 from houbridge.formatting import SearchScoreMetric, format_search_score
 from houbridge.search.dense import DenseIndexSchema, SQLiteVecIndex
 from houbridge.search.embedding import (
@@ -223,6 +224,21 @@ def test_dense_search_uses_sqlite_vec_cosine_distance_without_public_scaling(
     assert "k = ?" in knn_sql
     assert "ORDER BY distance" in knn_sql
     assert knn_params is not None and knn_params[1] == 2
+
+
+def test_fts5_contentless_delete_requires_sqlite_343(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(sqlite3, "sqlite_version_info", (3, 42, 0))
+    monkeypatch.setattr(sqlite3, "sqlite_version", "3.42.0")
+
+    with pytest.raises(BridgeError) as exc_info:
+        SQLiteFtsIndex(
+            _factory(tmp_path / "search.db"),
+            schema=LexicalIndexSchema(entry_table="script_lexical_entries", fts_table="script_fts"),
+        )
+
+    assert exc_info.value.code == "lexical_index_unsupported"
+    assert "SQLite 3.43.0 or newer" in exc_info.value.message
+    assert exc_info.value.detail == "runtime SQLite is 3.42.0"
 
 
 def test_fts5_bm25_search_supports_namespace_and_membership_filters(tmp_path: Path) -> None:
