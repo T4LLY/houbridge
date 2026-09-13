@@ -26,7 +26,7 @@ from houbridge.temporary_artifact import TemporaryArtifactService
 
 capture_app = create_cli_app(
     no_args_is_help=True,
-    help="Capture Houdini viewports, windows, and turntables.",
+    help="Capture Houdini images and turntables, or OCR an image.",
 )
 
 
@@ -70,17 +70,29 @@ def _turntable_service(
 
 @capture_app.command("viewport", help="Capture a Houdini viewport image.")
 def viewport_command(
-    info: bool = typer.Option(False, "--info"),
-    top: bool = typer.Option(False, "--top"),
-    bottom: bool = typer.Option(False, "--bottom"),
-    front: bool = typer.Option(False, "--front"),
-    back: bool = typer.Option(False, "--back"),
-    left: bool = typer.Option(False, "--left"),
-    right: bool = typer.Option(False, "--right"),
-    persp: bool = typer.Option(False, "--persp"),
-    uv: bool = typer.Option(False, "--uv"),
-    quad: bool = typer.Option(False, "--quad"),
-    scale: float = typer.Option(1.0, "--scale"),
+    info: bool = typer.Option(
+        False,
+        "--info",
+        help="List available Scene Viewer viewports instead of capturing.",
+    ),
+    top: bool = typer.Option(False, "--top", help="Capture the top view."),
+    bottom: bool = typer.Option(False, "--bottom", help="Capture the bottom view."),
+    front: bool = typer.Option(False, "--front", help="Capture the front view."),
+    back: bool = typer.Option(False, "--back", help="Capture the back view."),
+    left: bool = typer.Option(False, "--left", help="Capture the left view."),
+    right: bool = typer.Option(False, "--right", help="Capture the right view."),
+    persp: bool = typer.Option(False, "--persp", help="Capture the perspective view."),
+    uv: bool = typer.Option(False, "--uv", help="Capture the UV view."),
+    quad: bool = typer.Option(
+        False,
+        "--quad",
+        help="Capture top, perspective, front, and right views as a quad.",
+    ),
+    scale: float = typer.Option(
+        1.0,
+        "--scale",
+        help="Scale the captured image dimensions by this factor.",
+    ),
     preset: Path | None = typer.Option(
         None,
         "--preset",
@@ -88,8 +100,14 @@ def viewport_command(
         file_okay=True,
         dir_okay=False,
         readable=True,
+        help="Apply settings from a screenshot preset JSON file.",
     ),
-    session: int | None = typer.Option(None, "--session", min=1),
+    session: int | None = typer.Option(
+        None,
+        "--session",
+        min=1,
+        help="Target this registered session instead of the primary session.",
+    ),
 ) -> None:
     selected = tuple(
         name
@@ -141,8 +159,16 @@ def viewport_command(
 
 @capture_app.command("window", help="Capture a Houdini window image.")
 def window_command(
-    scale: float = typer.Option(1.0, "--scale"),
-    crop: str | None = typer.Option(None, "--crop"),
+    scale: float = typer.Option(
+        1.0,
+        "--scale",
+        help="Scale the captured image dimensions by this factor.",
+    ),
+    crop: str | None = typer.Option(
+        None,
+        "--crop",
+        help="Crop to a pane or viewport selector; append :N when ambiguous.",
+    ),
     preset: Path | None = typer.Option(
         None,
         "--preset",
@@ -150,8 +176,14 @@ def window_command(
         file_okay=True,
         dir_okay=False,
         readable=True,
+        help="Apply settings from a screenshot preset JSON file.",
     ),
-    session: int | None = typer.Option(None, "--session", min=1),
+    session: int | None = typer.Option(
+        None,
+        "--session",
+        min=1,
+        help="Target this registered session instead of the primary session.",
+    ),
 ) -> None:
     try:
         settings = load_config()
@@ -170,7 +202,7 @@ def window_command(
 
 @capture_app.command("ocr", help="Extract text from an image.")
 def ocr_command(
-    image: Path = typer.Argument(...),
+    image: Path = typer.Argument(..., help="Image file to recognize."),
 ) -> None:
     try:
         settings = load_config()
@@ -181,9 +213,23 @@ def ocr_command(
 
 @capture_app.command("turntable", help="Capture a Houdini turntable animation.")
 def turntable_command(
-    frames: int = typer.Option(160, "--frames", min=2),
-    fps: int = typer.Option(30, "--fps", min=1),
-    scale: float = typer.Option(1.0, "--scale"),
+    frames: int = typer.Option(
+        160,
+        "--frames",
+        min=2,
+        help="Number of frames in one full rotation.",
+    ),
+    fps: int = typer.Option(
+        30,
+        "--fps",
+        min=1,
+        help="Frame rate of the encoded turntable video.",
+    ),
+    scale: float = typer.Option(
+        1.0,
+        "--scale",
+        help="Scale each captured frame by this factor.",
+    ),
     pivot: str = typer.Option(
         "0,0,0",
         "--pivot",
@@ -201,8 +247,14 @@ def turntable_command(
         file_okay=True,
         dir_okay=False,
         readable=True,
+        help="Apply shading, overlay, and attribute preset settings.",
     ),
-    session: int | None = typer.Option(None, "--session", min=1),
+    session: int | None = typer.Option(
+        None,
+        "--session",
+        min=1,
+        help="Target this registered session instead of the primary session.",
+    ),
 ) -> None:
     try:
         settings = load_config()

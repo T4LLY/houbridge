@@ -80,7 +80,7 @@ def test_subcommand_help_has_concise_descriptions() -> None:
         "resource": (
             "Show resource metadata.",
             "Retrieve a resource.",
-            "Retrieve a byte or text range from a resource.",
+            "Retrieve a text range from a resource.",
             "Search within a resource.",
             "Write a resource to a temporary file.",
         ),
@@ -93,7 +93,7 @@ def test_subcommand_help_has_concise_descriptions() -> None:
             "Search live Houdini Python code.",
             "Search live Houdini VEX code.",
             "Search live Houdini nodes.",
-            "Search indexed workspace scripts.",
+            "Search indexed workspace Python scripts.",
         ),
         "capture": (
             "Capture a Houdini viewport image.",

@@ -27,10 +27,23 @@ from houbridge.task.control import build_task_runtime_control
 
 def exec_command(
     ctx: typer.Context,
-    source_file: Path = typer.Option(..., "--file"),
-    purpose: str | None = typer.Option(None, "--purpose"),
-    async_mode: bool = typer.Option(False, "--async"),
-    session_number: int | None = typer.Option(None, "--session", min=1),
+    source_file: Path = typer.Option(..., "--file", help="Python file to execute in Houdini."),
+    purpose: str | None = typer.Option(
+        None,
+        "--purpose",
+        help="Attach a purpose label to the execution history.",
+    ),
+    async_mode: bool = typer.Option(
+        False,
+        "--async",
+        help="Submit the execution as an asynchronous Task.",
+    ),
+    session_number: int | None = typer.Option(
+        None,
+        "--session",
+        min=1,
+        help="Target this registered session instead of the primary session.",
+    ),
 ) -> None:
     try:
         invocation = prepare_file_invocation(

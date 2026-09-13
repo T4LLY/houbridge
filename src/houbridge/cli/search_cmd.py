@@ -58,12 +58,16 @@ def _live_node_service(settings: HoubridgeConfig) -> LiveNodeSearchService:
 
 @search_app.command("python", help="Search live Houdini Python code.")
 def search_python(
-    query: str | None = typer.Argument(None),
-    top_k: int = typer.Option(10, "--top-k", min=1, max=50),
-    like: str | None = typer.Option(None, "--like"),
-    path: str | None = typer.Option(None, "--path"),
-    recursive: bool = typer.Option(False, "--recursive"),
-    session: int | None = typer.Option(None, "--session", min=1),
+    query: str | None = typer.Argument(None, help="Text query for hybrid code search."),
+    top_k: int = typer.Option(10, "--top-k", min=1, max=50, help="Return at most this many matches."),
+    like: str | None = typer.Option(
+        None, "--like", help="Use code from this Houdini node path as the similarity query."
+    ),
+    path: str | None = typer.Option(None, "--path", help="Limit capture to this Houdini node path or glob."),
+    recursive: bool = typer.Option(False, "--recursive", help="Search recursively below matched paths."),
+    session: int | None = typer.Option(
+        None, "--session", min=1, help="Target this registered session instead of the primary session."
+    ),
 ) -> None:
     _search_live_code(
         language="python",
@@ -78,12 +82,16 @@ def search_python(
 
 @search_app.command("vex", help="Search live Houdini VEX code.")
 def search_vex(
-    query: str | None = typer.Argument(None),
-    top_k: int = typer.Option(10, "--top-k", min=1, max=50),
-    like: str | None = typer.Option(None, "--like"),
-    path: str | None = typer.Option(None, "--path"),
-    recursive: bool = typer.Option(False, "--recursive"),
-    session: int | None = typer.Option(None, "--session", min=1),
+    query: str | None = typer.Argument(None, help="Text query for hybrid code search."),
+    top_k: int = typer.Option(10, "--top-k", min=1, max=50, help="Return at most this many matches."),
+    like: str | None = typer.Option(
+        None, "--like", help="Use code from this Houdini node path as the similarity query."
+    ),
+    path: str | None = typer.Option(None, "--path", help="Limit capture to this Houdini node path or glob."),
+    recursive: bool = typer.Option(False, "--recursive", help="Search recursively below matched paths."),
+    session: int | None = typer.Option(
+        None, "--session", min=1, help="Target this registered session instead of the primary session."
+    ),
 ) -> None:
     _search_live_code(
         language="vex",
@@ -124,11 +132,13 @@ def _search_live_code(
 
 @search_app.command("node", help="Search live Houdini nodes.")
 def search_node(
-    query: str,
-    top_k: int = typer.Option(20, "--top-k", min=1, max=100),
-    path: str | None = typer.Option(None, "--path"),
-    recursive: bool = typer.Option(False, "--recursive"),
-    session: int | None = typer.Option(None, "--session", min=1),
+    query: str = typer.Argument(..., help="Node name, type, or category text to match."),
+    top_k: int = typer.Option(20, "--top-k", min=1, max=100, help="Return at most this many matches."),
+    path: str | None = typer.Option(None, "--path", help="Limit capture to this Houdini node path or glob."),
+    recursive: bool = typer.Option(False, "--recursive", help="Search recursively below matched paths."),
+    session: int | None = typer.Option(
+        None, "--session", min=1, help="Target this registered session instead of the primary session."
+    ),
 ) -> None:
     try:
         settings = load_config()
@@ -144,10 +154,10 @@ def search_node(
         terminate_with_bridge_error(exc)
 
 
-@search_app.command("script", help="Search indexed workspace scripts.")
+@search_app.command("script", help="Search indexed workspace Python scripts.")
 def search_script(
-    query: str,
-    top_k: int = typer.Option(10, "--top-k", min=1, max=50),
+    query: str = typer.Argument(..., help="Semantic query for indexed workspace Python scripts."),
+    top_k: int = typer.Option(10, "--top-k", min=1, max=50, help="Return at most this many matches."),
 ) -> None:
     try:
         settings = load_config()

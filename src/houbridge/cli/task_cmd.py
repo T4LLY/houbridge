@@ -24,7 +24,9 @@ def _service(settings: HoubridgeConfig) -> TaskCommandService:
 
 
 @task_app.command("get", help="Show task details.")
-def task_get(task_id: str) -> None:
+def task_get(
+    task_id: str = typer.Argument(..., help="Task ID to inspect."),
+) -> None:
     try:
         settings = load_config()
         emit_result(

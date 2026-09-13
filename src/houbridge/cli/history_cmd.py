@@ -53,9 +53,15 @@ def _parse_history_id(value: str) -> int:
 
 @history_app.command("search", help="Search execution history.")
 def search_command(
-    query: str = typer.Argument(..., metavar="QUERY"),
-    top_k: str = typer.Option("10", "--top-k", metavar="INTEGER"),
-    session_number: int | None = typer.Option(None, "--session"),
+    query: str = typer.Argument(
+        ..., metavar="QUERY", help="Query for hybrid Action History search."
+    ),
+    top_k: str = typer.Option(
+        "10", "--top-k", metavar="INTEGER", help="Return at most this many matches."
+    ),
+    session_number: int | None = typer.Option(
+        None, "--session", help="Target this registered session instead of the primary session."
+    ),
 ) -> None:
     try:
         parsed_top_k = _parse_positive_integer(top_k, option="top_k", maximum=50)
@@ -79,8 +85,12 @@ def search_command(
 
 @history_app.command("get", help="Show a history entry.")
 def get_command(
-    history_id: str = typer.Argument(..., metavar="HISTORY_ID"),
-    session_number: int | None = typer.Option(None, "--session"),
+    history_id: str = typer.Argument(
+        ..., metavar="HISTORY_ID", help="History entry ID to retrieve."
+    ),
+    session_number: int | None = typer.Option(
+        None, "--session", help="Target this registered session instead of the primary session."
+    ),
 ) -> None:
     try:
         parsed_history_id = _parse_history_id(history_id)
@@ -106,8 +116,12 @@ def get_command(
 
 @history_app.command("list", help="List history entries.")
 def list_command(
-    limit: str = typer.Option("20", "--limit", metavar="INTEGER"),
-    session_number: int | None = typer.Option(None, "--session"),
+    limit: str = typer.Option(
+        "20", "--limit", metavar="INTEGER", help="Maximum number of history entries to return."
+    ),
+    session_number: int | None = typer.Option(
+        None, "--session", help="Target this registered session instead of the primary session."
+    ),
 ) -> None:
     try:
         parsed_limit = _parse_positive_integer(limit, option="limit")

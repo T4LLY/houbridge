@@ -27,7 +27,11 @@ session_app = create_cli_app(no_args_is_help=True)
 
 @session_app.command("info", help="Show active Houdini sessions.")
 def info_command(
-    session_number: int | None = typer.Option(None, "--session"),
+    session_number: int | None = typer.Option(
+        None,
+        "--session",
+        help="Show only this registered session.",
+    ),
 ) -> None:
     settings = load_config()
     paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
@@ -51,9 +55,21 @@ def info_command(
 
 @session_app.command("new", help="Start a new Houdini session.")
 def new_command(
-    hip_file: Path | None = typer.Option(None, "--file"),
-    headless: bool = typer.Option(False, "--headless"),
-    hcommand: Path | None = typer.Option(None, "--hcommand"),
+    hip_file: Path | None = typer.Option(
+        None,
+        "--file",
+        help="Open this HIP file in the new session.",
+    ),
+    headless: bool = typer.Option(
+        False,
+        "--headless",
+        help="Launch the corresponding headless Houdini runtime.",
+    ),
+    hcommand: Path | None = typer.Option(
+        None,
+        "--hcommand",
+        help="Override the configured Houdini launch executable.",
+    ),
 ) -> None:
     settings = load_config()
     paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
@@ -88,7 +104,11 @@ def new_command(
 
 @session_app.command("promote", help="Set a session as the primary session.")
 def promote_command(
-    session_number: int = typer.Argument(..., metavar="SESSION"),
+    session_number: int = typer.Argument(
+        ...,
+        metavar="SESSION",
+        help="Registered session number to make primary.",
+    ),
 ) -> None:
     settings = load_config()
     paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)

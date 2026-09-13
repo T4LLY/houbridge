@@ -55,36 +55,48 @@ def _emit_resource(operation: Callable[[], Mapping[str, Any]]) -> None:
 
 
 @resource_app.command("info", help="Show resource metadata.")
-def info_command(resource_id: str) -> None:
+def info_command(
+    resource_id: str = typer.Argument(..., help="Resource semantic alias or canonical ID."),
+) -> None:
     _emit_resource(lambda: _reader().info(resource_id))
 
 
 @resource_app.command("get", help="Retrieve a resource.")
 def get_command(
-    resource_id: str,
-    full: bool = typer.Option(False, "--full"),
+    resource_id: str = typer.Argument(..., help="Resource semantic alias or canonical ID."),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Bypass the configured inline-size threshold.",
+    ),
 ) -> None:
     _emit_resource(lambda: _reader().get(resource_id, full=full))
 
 
-@resource_app.command("slice", help="Retrieve a byte or text range from a resource.")
+@resource_app.command("slice", help="Retrieve a text range from a resource.")
 def slice_command(
-    resource_id: str,
-    offset: int = typer.Option(..., "--offset"),
-    limit: int = typer.Option(..., "--limit"),
+    resource_id: str = typer.Argument(..., help="Resource semantic alias or canonical ID."),
+    offset: int = typer.Option(..., "--offset", help="Zero-based text offset to start from."),
+    limit: int = typer.Option(
+        ...,
+        "--limit",
+        help="Maximum characters to read before the UTF-8 byte cap.",
+    ),
 ) -> None:
     _emit_resource(lambda: _reader().slice(resource_id, offset=offset, limit=limit))
 
 
 @resource_app.command("search", help="Search within a resource.")
 def search_command(
-    resource_id: str,
-    query: str,
-    offset: int = typer.Option(0, "--offset"),
+    resource_id: str = typer.Argument(..., help="Resource semantic alias or canonical ID."),
+    query: str = typer.Argument(..., help="Case-insensitive substring to search for."),
+    offset: int = typer.Option(0, "--offset", help="Skip this many matching hits."),
 ) -> None:
     _emit_resource(lambda: _reader().search(resource_id, query, offset=offset))
 
 
 @resource_app.command("dump", help="Write a resource to a temporary file.")
-def dump_command(resource_id: str) -> None:
+def dump_command(
+    resource_id: str = typer.Argument(..., help="Resource semantic alias or canonical ID."),
+) -> None:
     _emit_resource(lambda: _dumper().dump(resource_id))

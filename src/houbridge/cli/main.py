@@ -22,12 +22,20 @@ app = create_cli_app(
 
 
 app.add_typer(session_app, name="session", help="Create and inspect registered Houdini sessions.")
-app.add_typer(capture_app, name="capture", help="Capture Houdini viewports and windows.")
+app.add_typer(
+    capture_app,
+    name="capture",
+    help="Capture Houdini images and turntables, or OCR an image.",
+)
 app.add_typer(resource_app, name="resource", help="Inspect and materialize stored Resources.")
 app.add_typer(search_app, name="search", help="Search local scripts and current Houdini state.")
 app.add_typer(task_app, name="task", help="Inspect and reset asynchronous Tasks.")
 app.add_typer(history_app, name="history", help="Recall and search current-session Action History.")
-app.command("exec", context_settings={"allow_extra_args": True})(exec_command)
+app.command(
+    "exec",
+    help="Execute a Python file in Houdini. Trailing arguments are passed to the script.",
+    context_settings={"allow_extra_args": True},
+)(exec_command)
 
 
 @app.callback()
