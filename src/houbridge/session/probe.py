@@ -44,8 +44,15 @@ class SessionProbe:
         failed = False
         try:
             script_path = workspace.path_for("session_probe.py")
+            implementation_path = workspace.path_for("session_probe_impl.py")
+            result_path = script_path.with_suffix(".json")
             try:
-                shutil.copyfile(self._probe_script, script_path)
+                shutil.copyfile(self._probe_script, implementation_path)
+                script_path.write_text(
+                    _probe_runner_source(implementation_path, result_path),
+                    encoding="utf-8",
+                    newline="\n",
+                )
             except OSError as exc:
                 raise BridgeError(
                     "session_probe_unavailable",
@@ -53,7 +60,6 @@ class SessionProbe:
                     f"{type(exc).__name__}: {exc}",
                 ) from exc
 
-            result_path = script_path.with_suffix(".json")
             workspace.publish_marker(
                 "probe.context.json",
                 json.dumps(
@@ -100,6 +106,17 @@ class SessionProbe:
         finally:
             if not failed:
                 workspace.remove()
+
+
+def _probe_runner_source(implementation_path: Path, result_path: Path) -> str:
+    implementation = repr(str(implementation_path.resolve()))
+    result = repr(str(result_path.resolve()))
+    return (
+        "from pathlib import Path\n"
+        "import runpy\n\n"
+        f"_namespace = runpy.run_path({implementation}, run_name='_houbridge_session_probe_impl')\n"
+        f"_namespace['main'](Path({result}))\n"
+    )
 
 
 def _parse_probe_result(raw: object) -> SessionProbeResult:

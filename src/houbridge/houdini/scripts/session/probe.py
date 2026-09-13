@@ -25,7 +25,7 @@ def _open_ports(hou: object) -> list[int]:
     return sorted(set(ports))
 
 
-def main() -> None:
+def main(result_path: str | os.PathLike[str]) -> None:
     import hou
 
     try:
@@ -42,7 +42,7 @@ def main() -> None:
         "headless": not bool(hou.isUIAvailable()),
         "open_ports": _open_ports(hou),
     }
-    result_path = Path(__file__).with_suffix(".json")
+    result_path = Path(result_path)
     staging = result_path.with_suffix(".json.tmp")
     staging.write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
@@ -52,4 +52,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise RuntimeError("Session probe requires an explicit result path from Houbridge.")

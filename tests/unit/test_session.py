@@ -403,26 +403,48 @@ def test_session_info_one_adds_only_primary_boolean(tmp_path: Path) -> None:
     }
 
 
-def test_session_probe_uses_physical_script_and_private_workspace(tmp_path: Path) -> None:
+def test_session_probe_uses_physical_script_and_private_workspace(
+    tmp_path: Path, monkeypatch
+) -> None:
     captured: dict[str, object] = {}
+
+    class License:
+        def name(self) -> str:
+            return "Commercial"
+
+    class HipFile:
+        @staticmethod
+        def isNewFile() -> bool:
+            return True
+
+        @staticmethod
+        def path() -> str:
+            return "C:/unused.hip"
+
+    fake_hou = SimpleNamespace(
+        hipFile=HipFile,
+        applicationVersionString=lambda: "22.0.429",
+        licenseCategory=lambda: License(),
+        isUIAvailable=lambda: False,
+        hscript=lambda command: ("49152\n", "") if command == "openport" else ("", ""),
+    )
+    monkeypatch.setitem(sys.modules, "hou", fake_hou)
+    monkeypatch.setattr(os, "getpid", lambda: 42)
 
     class FakeTransport:
         def execute_script(self, target: HoudiniTarget, script_path: Path) -> TransportResult:
             captured["target"] = target
             captured["script"] = script_path.read_text(encoding="utf-8")
-            script_path.with_suffix(".json").write_text(
-                json.dumps(
-                    {
-                        "pid": 42,
-                        "version": "22.0.429",
-                        "license": "Commercial",
-                        "file": None,
-                        "headless": True,
-                        "open_ports": [49152],
-                    }
-                ),
-                encoding="utf-8",
+            captured["implementation"] = script_path.with_name(
+                "session_probe_impl.py"
+            ).read_text(encoding="utf-8")
+            namespace = {"__name__": "__main__"}
+            exec(
+                compile(captured["script"], str(script_path), "exec"),
+                namespace,
+                namespace,
             )
+            assert "__file__" not in namespace
             return TransportResult(stdout="probe stdout\n", stderr="", returncode=0)
 
     workspaces = TemporaryWorkspaceService(temp_root=tmp_path)
@@ -434,7 +456,8 @@ def test_session_probe_uses_physical_script_and_private_workspace(tmp_path: Path
     assert result.file is None
     assert result.headless is True
     assert captured["target"] == HoudiniTarget(host="127.0.0.1", port=49152)
-    assert "import hou" in str(captured["script"])
+    assert "runpy.run_path" in str(captured["script"])
+    assert "import hou" in str(captured["implementation"])
     assert list(workspaces.root.iterdir()) == []
 
 
@@ -466,9 +489,17 @@ def test_physical_probe_reports_native_session_values(tmp_path: Path, monkeypatc
     monkeypatch.setitem(sys.modules, "hou", fake_hou)
     monkeypatch.setattr(os, "getpid", lambda: 18744)
 
-    runpy.run_path(str(script), run_name="__main__")
+    result_path = tmp_path / "session_probe.json"
+    namespace = {"__name__": "_houbridge_session_probe_impl"}
+    exec(
+        compile(script.read_text(encoding="utf-8"), str(script), "exec"),
+        namespace,
+        namespace,
+    )
+    assert "__file__" not in namespace
+    namespace["main"](result_path)
 
-    payload = json.loads(script.with_suffix(".json").read_text(encoding="utf-8"))
+    payload = json.loads(result_path.read_text(encoding="utf-8"))
     assert payload == {
         "pid": 18744,
         "version": "22.0.429",
