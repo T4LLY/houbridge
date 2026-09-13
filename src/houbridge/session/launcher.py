@@ -21,6 +21,7 @@ from houbridge.houdini.installations import (
 from houbridge.process_coordination import ProcessIdentity, process_identity_for_pid
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
+from .diagnostics import append_diagnostic_path, write_failure
 from .probe import SessionProbe, SessionProbeResult
 
 
@@ -95,6 +96,7 @@ class HoudiniSessionLauncher:
         workspace = self._workspaces.allocate(prefix="session-new")
         process: _Process | None = None
         bootstrap_pid: int | None = None
+        failed = False
         try:
             script_path = workspace.path_for("bootstrap.py")
             try:
@@ -123,6 +125,18 @@ class HoudiniSessionLauncher:
 
             launch_env = subprocess_environment_for(executable, environ=self._environ)
             launch_env["HOUBRIDGE_SESSION_BOOTSTRAP_DIR"] = str(workspace.directory)
+            workspace.publish_marker(
+                "launch.context.json",
+                json.dumps(
+                    {
+                        "executable": str(executable),
+                        "headless": bool(headless),
+                        "file": str(requested_file) if requested_file is not None else None,
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode("utf-8"),
+            )
             kwargs: dict[str, object] = {
                 "env": launch_env,
                 "stdin": subprocess.DEVNULL,
@@ -209,12 +223,25 @@ class HoudiniSessionLauncher:
                 "Houdini was launched but automatic openport bootstrap did not become usable before the configured timeout.",
                 detail,
             )
-        except BaseException:
+        except BaseException as exc:
+            failed = True
             if process is not None:
                 self._terminate(process, bootstrap_pid)
+            write_failure(workspace.directory, "launch.error.txt", exc)
+            if isinstance(exc, BridgeError):
+                raise BridgeError(
+                    exc.code,
+                    exc.message,
+                    append_diagnostic_path(
+                        exc.detail,
+                        workspace.directory,
+                        label="launch_diagnostics",
+                    ),
+                ) from exc
             raise
         finally:
-            workspace.remove()
+            if not failed:
+                workspace.remove()
 
     def release(self, result: SessionLaunchResult) -> None:
         """Keep ownership of the Popen handle until the launched process exits."""

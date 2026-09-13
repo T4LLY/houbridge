@@ -124,6 +124,7 @@ class HoudiniTransport:
             raise BridgeError(
                 "hcommand_timeout",
                 f"hcommand timed out after {self.timeout_seconds:g} seconds.",
+                _timeout_detail(exc),
             ) from exc
         except OSError as exc:
             raise BridgeError(
@@ -222,3 +223,22 @@ def _clip(value: str, limit: int = 4096) -> str:
     if len(value) <= limit:
         return value
     return value[:limit] + "…"
+
+
+def _timeout_detail(exc: subprocess.TimeoutExpired) -> str | None:
+    parts: list[str] = []
+    stdout = _timeout_text(exc.stdout)
+    stderr = _timeout_text(exc.stderr)
+    if stdout:
+        parts.append(f"stdout: {_clip(stdout.strip())}")
+    if stderr:
+        parts.append(f"stderr: {_clip(stderr.strip())}")
+    return "\n".join(parts) or None
+
+
+def _timeout_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value

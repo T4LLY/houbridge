@@ -35,6 +35,15 @@ Task Runtime SHALL retain an invocation workspace while a Task is queued/running
 - **WHEN** replacement runtime can recover the invocation from Task state and markers
 - **THEN** stale cleanup does not delete that active workspace before recovery completes
 
+### Requirement: Retain failed Session diagnostics as private workspace state
+
+Session bootstrap and Session probe failures SHALL retain their failed Temporary Workspace for diagnosis rather than deleting the evidence immediately. The retained path MAY appear in public error detail so the caller can inspect it, but retained files SHALL remain private diagnostic state and SHALL NOT be presented as Temporary Artifacts or as successful command output. Successful Session bootstrap and probing SHALL remove their workspaces.
+
+#### Scenario: Session bootstrap or probe fails
+- **WHEN** Session startup cannot complete
+- **THEN** its failed diagnostic workspace is retained
+- **AND** the failure response identifies that private workspace
+
 ### Requirement: Keep Temporary Workspace separate from Temporary Artifact
 
 Temporary Workspace SHALL own unpublished execution transport/recovery files. Temporary Artifact SHALL own completed files intentionally returned to callers such as Capture output and Resource dumps. Neither subsystem SHALL silently assume the other's retention or publication semantics.

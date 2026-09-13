@@ -96,7 +96,12 @@ def test_transport_reports_timeout(
     script.write_text("pass", encoding="utf-8")
 
     def timeout(args, **kwargs):
-        raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs["timeout"])
+        raise subprocess.TimeoutExpired(
+            cmd=args,
+            timeout=kwargs["timeout"],
+            output="partial stdout",
+            stderr=b"partial stderr",
+        )
 
     monkeypatch.setattr(subprocess, "run", timeout)
 
@@ -107,6 +112,7 @@ def test_transport_reports_timeout(
         )
 
     assert caught.value.code == "hcommand_timeout"
+    assert caught.value.detail == "stdout: partial stdout\nstderr: partial stderr"
 
 
 def test_transport_reports_missing_hcommand(

@@ -4,8 +4,6 @@ import json
 import os
 from pathlib import Path
 
-import hou
-
 
 _BOOTSTRAP_DIR_ENV = "HOUBRIDGE_SESSION_BOOTSTRAP_DIR"
 _BOOTSTRAP_DIR = Path(os.environ[_BOOTSTRAP_DIR_ENV])
@@ -23,8 +21,8 @@ def _publish(payload: dict[str, object]) -> None:
     os.replace(staging, _RESULT)
 
 
-def _selected_port() -> int:
-    output, errors = hou.hscript("openport -a -q")
+def _selected_port(hou: object) -> int:
+    output, errors = hou.hscript("openport -a -q")  # type: ignore[attr-defined]
     if errors.strip():
         raise RuntimeError(errors.strip())
     value = output.strip()
@@ -52,6 +50,8 @@ def main() -> None:
     pid = os.getpid()
     _publish({"pid": pid, "port": None})
     try:
+        import hou
+
         request = json.loads(_REQUEST.read_text(encoding="utf-8"))
         hip_file = request.get("file")
         headless = request.get("headless")
@@ -64,7 +64,7 @@ def main() -> None:
         if headless:
             _prepare_headless_console_wait()
 
-        port = _selected_port()
+        port = _selected_port(hou)
         _publish({"pid": pid, "port": port})
     except BaseException as exc:
         _publish({"pid": pid, "port": None, "error": f"{type(exc).__name__}: {exc}"})

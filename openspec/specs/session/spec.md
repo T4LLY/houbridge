@@ -202,6 +202,20 @@ When Houbridge resolves SideFX executables from a Houdini installation, subproce
 - **THEN** the newly launched process is terminated
 - **AND** no Session registry entry is created for that failed launch
 
+### Requirement: Preserve Session failure diagnostics
+
+If Session bootstrap or post-bootstrap Session probing fails, Houbridge SHALL preserve the failed private Temporary Workspace and SHALL include its path in the returned error detail. The retained workspace SHALL contain the generated Session script/request context and a concise error record; Session probing SHALL also preserve captured synchronous hcommand stdout/stderr when available. Successful Session bootstrap and probing SHALL continue to remove their private Temporary Workspaces.
+
+#### Scenario: Session probe fails before publishing its result
+- **WHEN** the injected Session probe or its synchronous hcommand invocation fails
+- **THEN** the failed probe workspace remains available below the managed Temporary Workspace root
+- **AND** the public error detail identifies that diagnostic workspace
+- **AND** captured hcommand stdout/stderr are retained when hcommand returned them
+
+#### Scenario: Session bootstrap and probe succeed
+- **WHEN** `session new` completes Session bootstrap and probing successfully
+- **THEN** the private bootstrap and probe workspaces are removed
+
 ### Requirement: Preserve launched Houdini across unrelated CLI interruption on Windows
 
 A Houdini GUI process intentionally launched by `session new` on Windows SHALL be isolated from later console Ctrl+C handling so that interrupting another Houbridge CLI process does not terminate the GUI session.

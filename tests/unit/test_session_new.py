@@ -516,3 +516,80 @@ def test_session_new_survives_stale_retirement_failure(tmp_path: Path) -> None:
     assert state.primary is None
     assert state.sessions[1].pid == 2002
     assert launcher.terminated == []
+
+
+def test_launcher_failure_preserves_session_diagnostics(tmp_path: Path) -> None:
+    executable = tmp_path / "houdini.exe"
+    executable.write_bytes(b"")
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+    process = FakeProcess(pid=18744, returncode=1)
+    launcher = HoudiniSessionLauncher(
+        _config(),
+        lambda executable: FakeProbe(  # unused
+            SessionProbeResult(18744, "22.0.429", "Commercial", None, False, (49153,))
+        ),  # type: ignore[arg-type]
+        workspaces=workspaces,
+        popen=lambda *args, **kwargs: process,
+        executable_resolver=lambda *args, **kwargs: executable,
+        platform="win32",
+        environ={"PATH": ""},
+    )
+
+    with pytest.raises(BridgeError) as caught:
+        launcher.launch()
+
+    assert caught.value.code == "houdini_launch_failed"
+    diagnostics = next(workspaces.root.iterdir())
+    assert f"launch_diagnostics={diagnostics}" in (caught.value.detail or "")
+    assert (diagnostics / "bootstrap.py").is_file()
+    assert json.loads((diagnostics / "bootstrap.request.json").read_text(encoding="utf-8")) == {
+        "file": None,
+        "headless": False,
+    }
+    context = json.loads((diagnostics / "launch.context.json").read_text(encoding="utf-8"))
+    assert context["executable"] == str(executable)
+    assert context["headless"] is False
+    assert "houdini_launch_failed" in (diagnostics / "launch.error.txt").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_launcher_success_removes_session_diagnostics_workspace(tmp_path: Path) -> None:
+    executable = tmp_path / "houdini.exe"
+    executable.write_bytes(b"")
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+    process = FakeProcess(pid=18744)
+
+    class Probe:
+        def inspect(self, port: int) -> SessionProbeResult:
+            return SessionProbeResult(
+                pid=18744,
+                version="22.0.429",
+                license="Commercial",
+                file=None,
+                headless=False,
+                open_ports=(port,),
+            )
+
+    def popen(args, **kwargs):
+        script = Path(args[-1])
+        script.with_name("bootstrap.result.json").write_text(
+            json.dumps({"pid": 18744, "port": 49153}),
+            encoding="utf-8",
+        )
+        return process
+
+    launcher = HoudiniSessionLauncher(
+        _config(),
+        lambda executable: Probe(),  # type: ignore[arg-type]
+        workspaces=workspaces,
+        popen=popen,
+        identity_reader=lambda pid: ProcessIdentity(pid, "start"),
+        executable_resolver=lambda *args, **kwargs: executable,
+        platform="win32",
+        environ={"PATH": ""},
+    )
+
+    launcher.launch()
+
+    assert list(workspaces.root.iterdir()) == []

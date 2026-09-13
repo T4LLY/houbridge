@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from houbridge.errors import BridgeError
-from houbridge.houdini.transport import HoudiniTarget
+from houbridge.houdini.transport import HoudiniTarget, TransportResult
 from houbridge.process_coordination import ProcessIdentity, process_identity_for_pid
 from houbridge.session.info import SessionInfoService
 from houbridge.session.probe import SessionProbe, SessionProbeResult
@@ -407,7 +407,7 @@ def test_session_probe_uses_physical_script_and_private_workspace(tmp_path: Path
     captured: dict[str, object] = {}
 
     class FakeTransport:
-        def execute_script(self, target: HoudiniTarget, script_path: Path) -> None:
+        def execute_script(self, target: HoudiniTarget, script_path: Path) -> TransportResult:
             captured["target"] = target
             captured["script"] = script_path.read_text(encoding="utf-8")
             script_path.with_suffix(".json").write_text(
@@ -423,6 +423,7 @@ def test_session_probe_uses_physical_script_and_private_workspace(tmp_path: Path
                 ),
                 encoding="utf-8",
             )
+            return TransportResult(stdout="probe stdout\n", stderr="", returncode=0)
 
     workspaces = TemporaryWorkspaceService(temp_root=tmp_path)
     probe = SessionProbe(lambda: FakeTransport(), workspaces=workspaces)  # type: ignore[arg-type]
@@ -511,3 +512,40 @@ def test_session_registry_lock_wait_is_bounded(tmp_path: Path) -> None:
         release.set()
         thread.join(timeout=2)
     assert not thread.is_alive()
+
+
+def test_session_probe_missing_result_preserves_diagnostics(tmp_path: Path) -> None:
+    class MissingResultTransport:
+        def execute_script(self, target: HoudiniTarget, script_path: Path) -> TransportResult:
+            return TransportResult(
+                stdout="Error running Python code:\n",
+                stderr="NameError: __file__ is not defined\n",
+                returncode=0,
+            )
+
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path)
+    probe = SessionProbe(
+        lambda: MissingResultTransport(),  # type: ignore[arg-type]
+        workspaces=workspaces,
+    )
+
+    with pytest.raises(BridgeError) as caught:
+        probe.inspect(49152)
+
+    assert caught.value.code == "session_probe_missing"
+    diagnostics = next(workspaces.root.iterdir())
+    assert f"probe_diagnostics={diagnostics}" in (caught.value.detail or "")
+    assert (diagnostics / "session_probe.py").is_file()
+    assert json.loads((diagnostics / "probe.context.json").read_text(encoding="utf-8")) == {
+        "host": "127.0.0.1",
+        "port": 49152,
+    }
+    assert (diagnostics / "hcommand.stdout.log").read_text(encoding="utf-8") == (
+        "Error running Python code:\n"
+    )
+    assert (diagnostics / "hcommand.stderr.log").read_text(encoding="utf-8") == (
+        "NameError: __file__ is not defined\n"
+    )
+    assert "session_probe_missing" in (diagnostics / "probe.error.txt").read_text(
+        encoding="utf-8"
+    )

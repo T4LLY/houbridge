@@ -10,6 +10,8 @@ from houbridge.errors import BridgeError
 from houbridge.houdini.transport import HoudiniTarget, HoudiniTransport
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
+from .diagnostics import append_diagnostic_path, write_failure, write_text
+
 
 @dataclass(frozen=True, slots=True)
 class SessionProbeResult:
@@ -39,6 +41,7 @@ class SessionProbe:
 
     def inspect(self, port: int) -> SessionProbeResult:
         workspace = self._workspaces.allocate(prefix="session-probe")
+        failed = False
         try:
             script_path = workspace.path_for("session_probe.py")
             try:
@@ -51,10 +54,21 @@ class SessionProbe:
                 ) from exc
 
             result_path = script_path.with_suffix(".json")
-            self._transport_factory().execute_script(
+            workspace.publish_marker(
+                "probe.context.json",
+                json.dumps(
+                    {"host": "127.0.0.1", "port": port},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode("utf-8"),
+            )
+            transport_result = self._transport_factory().execute_script(
                 HoudiniTarget(host="127.0.0.1", port=port),
                 script_path,
             )
+            if transport_result is not None:
+                write_text(workspace.directory, "hcommand.stdout.log", transport_result.stdout)
+                write_text(workspace.directory, "hcommand.stderr.log", transport_result.stderr)
             try:
                 raw = json.loads(result_path.read_text(encoding="utf-8"))
             except FileNotFoundError as exc:
@@ -69,8 +83,23 @@ class SessionProbe:
                     f"{type(exc).__name__}: {exc}",
                 ) from exc
             return _parse_probe_result(raw)
+        except BaseException as exc:
+            failed = True
+            write_failure(workspace.directory, "probe.error.txt", exc)
+            if isinstance(exc, BridgeError):
+                raise BridgeError(
+                    exc.code,
+                    exc.message,
+                    append_diagnostic_path(
+                        exc.detail,
+                        workspace.directory,
+                        label="probe_diagnostics",
+                    ),
+                ) from exc
+            raise
         finally:
-            workspace.remove()
+            if not failed:
+                workspace.remove()
 
 
 def _parse_probe_result(raw: object) -> SessionProbeResult:
