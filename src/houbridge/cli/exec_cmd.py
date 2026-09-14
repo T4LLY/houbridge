@@ -4,10 +4,17 @@ from pathlib import Path
 
 import typer
 
-from houbridge.cli.common import emit_result, terminate_with_bridge_error
+from houbridge.cli.common import (
+    emit_result,
+    serialize_result,
+    terminate_with_bridge_error,
+)
 from houbridge.config import HoubridgeConfig, load_config
 from houbridge.errors import BridgeError
-from houbridge.execution.presentation import ExecutionResultPresenter
+from houbridge.execution.presentation import (
+    ExecutionPresentationMode,
+    ExecutionResultPresenter,
+)
 from houbridge.execution.runtime import ExecutionRuntime
 from houbridge.execution.service import SynchronousExecutionService
 from houbridge.execution.source import prepare_file_invocation
@@ -33,6 +40,11 @@ def exec_command(
         "--purpose",
         help="Attach a purpose label to the execution history.",
     ),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Return the complete synchronous execution envelope without output size limits.",
+    ),
     async_mode: bool = typer.Option(
         False,
         "--async",
@@ -45,6 +57,9 @@ def exec_command(
         help="Target this registered session instead of the primary session.",
     ),
 ) -> None:
+    if full and async_mode:
+        raise typer.BadParameter("--full cannot be combined with --async.")
+
     try:
         invocation = prepare_file_invocation(
             source_file,
@@ -61,9 +76,21 @@ def exec_command(
             emit_result({"task": task_id}, policy=output_policy)
             return
 
-        service = _build_sync_execution_service(settings, output_policy)
+        presentation_mode = (
+            ExecutionPresentationMode.FULL
+            if full
+            else ExecutionPresentationMode.NORMAL
+        )
+        service = _build_sync_execution_service(
+            settings,
+            output_policy,
+            presentation_mode=presentation_mode,
+        )
         result = service.execute(invocation, session=session_number)
-        emit_result(result.payload, policy=output_policy)
+        if full:
+            typer.echo(serialize_result(result.payload))
+        else:
+            emit_result(result.payload, policy=output_policy)
         if result.exit_code:
             raise typer.Exit(result.exit_code)
     except BridgeError as exc:
@@ -73,6 +100,8 @@ def exec_command(
 def _build_sync_execution_service(
     settings: HoubridgeConfig,
     output_policy: OutputPolicy,
+    *,
+    presentation_mode: ExecutionPresentationMode = ExecutionPresentationMode.NORMAL,
 ) -> SynchronousExecutionService:
     paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
     registry = SessionRegistry(paths.sessions_registry)
@@ -99,7 +128,7 @@ def _build_sync_execution_service(
     return SynchronousExecutionService(
         resolver,
         runtime,
-        ExecutionResultPresenter(output_policy),
+        ExecutionResultPresenter(output_policy, mode=presentation_mode),
     )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
 
 from houbridge.output.policy import OutputPolicy
@@ -10,6 +11,13 @@ from .models import DeclaredResult, ExecutionOutcome
 
 
 _EXECUTION_FAILURE_MESSAGE = "Python execution failed inside Houdini."
+
+
+class ExecutionPresentationMode(str, Enum):
+    """Select only how synchronous execution artifacts cross the CLI boundary."""
+
+    NORMAL = "normal"
+    FULL = "full"
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,8 +31,14 @@ class SynchronousExecutionResult:
 class ExecutionResultPresenter:
     """Build the command-specific sync envelope using Resource/Output boundaries."""
 
-    def __init__(self, output_policy: OutputPolicy) -> None:
+    def __init__(
+        self,
+        output_policy: OutputPolicy,
+        *,
+        mode: ExecutionPresentationMode = ExecutionPresentationMode.NORMAL,
+    ) -> None:
         self._output_policy = output_policy
+        self._mode = mode
         self._resource_store: ResourceStore | None = None
 
     def present(self, outcome: ExecutionOutcome) -> SynchronousExecutionResult:
@@ -53,7 +67,7 @@ class ExecutionResultPresenter:
         result: DeclaredResult,
     ) -> None:
         serialized_body = result.payload.decode("utf-8", errors="strict")
-        if self._output_policy.permits_inline_text(serialized_body):
+        if self._keeps_artifact_inline(serialized_body):
             payload["result"] = result.inline_value()
             return
 
@@ -71,12 +85,18 @@ class ExecutionResultPresenter:
     ) -> None:
         if not body:
             return
-        if self._output_policy.permits_inline_text(body):
+        if self._keeps_artifact_inline(body):
             payload[field] = body
             return
 
         resource = self._store().put_text(body)
         payload[f"{field}_resource"] = resource.semantic_alias
+
+    def _keeps_artifact_inline(self, serialized_body: str) -> bool:
+        return (
+            self._mode is ExecutionPresentationMode.FULL
+            or self._output_policy.permits_inline_text(serialized_body)
+        )
 
     def _store(self) -> ResourceStore:
         if self._resource_store is None:
