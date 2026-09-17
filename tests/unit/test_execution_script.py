@@ -18,15 +18,17 @@ def _request_for(
     tmp_path: Path,
     source: str,
     *,
-    source_path: str = "caller.py",
+    source_path: str | None = "caller.py",
     argv: tuple[str, ...] | None = None,
     purpose: str | None = None,
 ) -> tuple[Path, object]:
     workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="exec")
+    if argv is None:
+        argv = (source_path,) if source_path is not None else ()
     invocation = ExecutionInvocation(
         source=source,
         source_path=source_path,
-        argv=argv or (source_path,),
+        argv=argv,
         purpose=purpose,
         origin_cwd=str(tmp_path),
     )
@@ -60,6 +62,30 @@ def test_runtime_preserves_file_main_argv_and_purpose_is_not_injected(
         "file": "relative/tool.py",
         "name": "__main__",
         "purpose": None,
+    }
+
+
+def test_runtime_direct_source_omits_file_provenance_and_preserves_script_argv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_hou(monkeypatch)
+    request, workspace = _request_for(
+        tmp_path,
+        "import sys\nresult = {'argv': sys.argv, 'has_file': '__file__' in globals(), 'name': __name__}\n",
+        source_path=None,
+        argv=("<houbridge-code>", "--node", "/obj/geo1"),
+    )
+
+    run(str(request))
+    outcome = collect_outcome(workspace)  # type: ignore[arg-type]
+
+    assert outcome.python_ok is True
+    assert outcome.result is not None
+    assert outcome.result.inline_value() == {
+        "argv": ["<houbridge-code>", "--node", "/obj/geo1"],
+        "has_file": False,
+        "name": "__main__",
     }
 
 

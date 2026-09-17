@@ -3,7 +3,7 @@ from .models import DeclaredResult, ExecutionInvocation, ExecutionOutcome
 from .presentation import ExecutionResultPresenter, SynchronousExecutionResult
 from .runtime import ExecutionRuntime
 from .service import SynchronousExecutionService
-from .source import prepare_file_invocation, validate_python_source
+from .source import prepare_code_invocation, prepare_file_invocation, validate_python_source
 
 __all__ = [
     "DeclaredResult",
@@ -15,6 +15,7 @@ __all__ = [
     "ExecutionResultPresenter",
     "SynchronousExecutionResult",
     "SynchronousExecutionService",
+    "prepare_code_invocation",
     "prepare_file_invocation",
     "validate_python_source",
 ]

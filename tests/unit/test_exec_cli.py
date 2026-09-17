@@ -29,6 +29,7 @@ class _Service:
     def __init__(self, result: SynchronousExecutionResult) -> None:
         self.result = result
         self.calls = []
+        self.history_enabled: list[bool] = []
 
     def execute(self, invocation, *, session=None):
         self.calls.append((invocation, session))
@@ -55,10 +56,12 @@ def _install_fake_command_runtime(monkeypatch, result: SynchronousExecutionResul
         received_policy,
         *,
         presentation_mode=ExecutionPresentationMode.NORMAL,
+        history_enabled=True,
     ):
         if received_policy is not policy:
             raise AssertionError("wrong policy")
         presentation_modes.append(presentation_mode)
+        service.history_enabled.append(history_enabled)
         return service
 
     monkeypatch.setattr(exec_cmd, "_build_sync_execution_service", build_sync_service)
@@ -78,6 +81,7 @@ def test_root_help_exposes_exec_and_exec_help_has_current_options() -> None:
     assert "--purpose" in command.stdout
     assert "--session" in command.stdout
     assert "--code" not in command.stdout
+    assert "--no-history" not in command.stdout
     assert "--inline-max-tokens" not in command.stdout
     assert "--port" not in command.stdout
     assert "--root" not in command.stdout
@@ -129,6 +133,7 @@ def test_exec_preserves_script_args_order_duplicates_and_purpose(
     )
     assert invocation.purpose == "build preview geometry"
     assert presentation_modes == [ExecutionPresentationMode.NORMAL]
+    assert service.history_enabled == [True]
 
 
 def test_exec_python_failure_emits_failure_envelope_and_exits_one(
@@ -194,11 +199,96 @@ def test_exec_rejects_nul_before_building_dispatch_runtime(monkeypatch, tmp_path
     assert built is False
 
 
-def test_exec_rejects_removed_code_option_as_framework_usage_error() -> None:
+def test_exec_hidden_code_runs_synchronously_without_history(monkeypatch) -> None:
+    service, _store, presentation_modes = _install_fake_command_runtime(
+        monkeypatch,
+        SynchronousExecutionResult({"result": 1}, 0),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "exec",
+            "--code",
+            "result = 1",
+            "--no-history",
+            "--session",
+            "2",
+            "--",
+            "--quality",
+            "high",
+            "--quality",
+            "low",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout == '{"result":1}\n'
+    invocation, selection = service.calls[0]
+    assert selection == 2
+    assert invocation.source == "result = 1"
+    assert invocation.source_path is None
+    assert invocation.argv == (
+        "<houbridge-code>",
+        "--quality",
+        "high",
+        "--quality",
+        "low",
+    )
+    assert presentation_modes == [ExecutionPresentationMode.NORMAL]
+    assert service.history_enabled == [False]
+
+
+def test_exec_hidden_code_requires_no_history() -> None:
     result = CliRunner().invoke(app, ["exec", "--code", "result = 1"])
 
     assert result.exit_code == 2
-    assert "--code" in result.stderr
+    assert "--code requires --no-history" in result.stderr
+
+
+def test_exec_hidden_no_history_requires_code(tmp_path: Path) -> None:
+    source = tmp_path / "tool.py"
+    source.write_text("result = 1\n", encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["exec", "--file", str(source), "--no-history"])
+
+    assert result.exit_code == 2
+    assert "--no-history requires --code" in result.stderr
+
+
+def test_exec_hidden_code_rejects_async_before_task_submission(monkeypatch) -> None:
+    from houbridge.cli import exec_cmd
+
+    built = False
+
+    def should_not_build(_settings):
+        nonlocal built
+        built = True
+        raise AssertionError("async submitter must not be built")
+
+    monkeypatch.setattr(exec_cmd, "_build_async_execution_submitter", should_not_build)
+
+    result = CliRunner().invoke(
+        app,
+        ["exec", "--code", "result = 1", "--no-history", "--async"],
+    )
+
+    assert result.exit_code == 2
+    assert "--code is synchronous-only" in result.stderr
+    assert built is False
+
+
+def test_exec_rejects_file_and_hidden_code_together(tmp_path: Path) -> None:
+    source = tmp_path / "tool.py"
+    source.write_text("result = 1\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["exec", "--file", str(source), "--code", "result = 2", "--no-history"],
+    )
+
+    assert result.exit_code == 2
+    assert "--file cannot be combined with --code" in result.stderr
 
 
 def test_exec_async_returns_only_task_reference(monkeypatch, tmp_path: Path) -> None:

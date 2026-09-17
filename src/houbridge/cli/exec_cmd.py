@@ -17,7 +17,10 @@ from houbridge.execution.presentation import (
 )
 from houbridge.execution.runtime import ExecutionRuntime
 from houbridge.execution.service import SynchronousExecutionService
-from houbridge.execution.source import prepare_file_invocation
+from houbridge.execution.source import (
+    prepare_code_invocation,
+    prepare_file_invocation,
+)
 from houbridge.history.execution import SynchronousExecutionHistory
 from houbridge.history.service import HistoryStorageService
 from houbridge.houdini.transport import HoudiniTransport
@@ -34,7 +37,11 @@ from houbridge.task.control import build_task_runtime_control
 
 def exec_command(
     ctx: typer.Context,
-    source_file: Path = typer.Option(..., "--file", help="Python file to execute in Houdini."),
+    source_file: Path | None = typer.Option(
+        None,
+        "--file",
+        help="Python file to execute in Houdini. Required for public use.",
+    ),
     purpose: str | None = typer.Option(
         None,
         "--purpose",
@@ -56,16 +63,42 @@ def exec_command(
         min=1,
         help="Target this registered session instead of the primary session.",
     ),
+    # Intentionally hidden from help/completion. This direct-source path exists
+    # only for trusted command wrappers; advertising it would encourage AI/tool
+    # callers to bypass the normal file-backed execution contract.
+    code: str | None = typer.Option(None, "--code", hidden=True),
+    no_history: bool = typer.Option(False, "--no-history", hidden=True),
 ) -> None:
     if full and async_mode:
         raise typer.BadParameter("--full cannot be combined with --async.")
+    if source_file is not None and code is not None:
+        raise typer.BadParameter("--file cannot be combined with --code.")
+    if source_file is None and code is None:
+        raise typer.BadParameter("--file is required for public exec usage.")
+    if code is not None:
+        if async_mode:
+            raise typer.BadParameter(
+                "--code is synchronous-only and cannot be combined with --async."
+            )
+        if not no_history:
+            raise typer.BadParameter("--code requires --no-history.")
+    elif no_history:
+        raise typer.BadParameter("--no-history requires --code.")
 
     try:
-        invocation = prepare_file_invocation(
-            source_file,
-            args=ctx.args,
-            purpose=purpose,
-        )
+        if code is not None:
+            invocation = prepare_code_invocation(
+                code,
+                args=ctx.args,
+                purpose=purpose,
+            )
+        else:
+            assert source_file is not None
+            invocation = prepare_file_invocation(
+                source_file,
+                args=ctx.args,
+                purpose=purpose,
+            )
         settings = load_config()
         output_policy = OutputPolicy.from_config(settings)
         if async_mode:
@@ -85,6 +118,7 @@ def exec_command(
             settings,
             output_policy,
             presentation_mode=presentation_mode,
+            history_enabled=not no_history,
         )
         result = service.execute(invocation, session=session_number)
         if full:
@@ -102,6 +136,7 @@ def _build_sync_execution_service(
     output_policy: OutputPolicy,
     *,
     presentation_mode: ExecutionPresentationMode = ExecutionPresentationMode.NORMAL,
+    history_enabled: bool = True,
 ) -> SynchronousExecutionService:
     paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
     registry = SessionRegistry(paths.sessions_registry)
@@ -109,7 +144,7 @@ def _build_sync_execution_service(
     probe = SessionProbe(lambda: transport)
     resolver = SessionResolver(registry, probe)
     history = None
-    if settings.history.enabled:
+    if history_enabled and settings.history.enabled:
         history = SynchronousExecutionHistory(
             HistoryStorageService(
                 paths,

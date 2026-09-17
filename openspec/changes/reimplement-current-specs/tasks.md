@@ -131,7 +131,7 @@
 - [x] 8.9 Acquire the exact-process managed-execution lock around caller Python dispatch.
 - [x] 8.10 Expose a History preflight/finalization boundary without letting Execution directly own History tables.
 - [x] 8.11 Materialize required execution artifacts as Resources and pass the logical synchronous result through the common Output Policy.
-- [x] 8.12 Implement public `exec --file PATH [--purpose TEXT] [--async] [--session N] [-- SCRIPT_ARGS...]` parsing with no `--code` source path.
+- [x] 8.12 Implement public `exec --file PATH [--purpose TEXT] [--async] [--session N] [-- SCRIPT_ARGS...]` parsing while keeping any direct-source compatibility path out of the advertised public surface.
 - [x] 8.13 Keep Async operational persistence out of Execution and hand asynchronous submission to Task.
 - [x] 8.14 Separate finite dispatch-establishment timeout from unbounded caller-Python run duration.
 - [x] 8.15 Add Execution source, injected-runtime, presentation, service, CLI, transport-failure, locking, argv, and result-classification tests.
@@ -262,7 +262,7 @@
 - [ ] 16.5 Keep Houbridge persistence out of HIP Data Blocks and do not assign persistent Houbridge UUID userData to nodes.
 - [ ] 16.6 Keep generic semantic-base generation feature-agnostic while Resource/Task own their own ordinal allocation/fallback stems.
 - [ ] 16.7 Keep canonical formatting, Output limiting, Temporary Artifact publication, and exact-process execution coordination centralized shared primitives.
-- [ ] 16.8 Guard the public surface against removed `exec --code`, public `--root`, `hip read`, fragment Script Search, `search script --count`, and other removed compatibility entry points.
+- [ ] 16.8 Guard the public surface against advertised/public `exec --code` while permitting only the hidden wrapper-only `--code --no-history` synchronous path; continue guarding public `--root`, `hip read`, fragment Script Search, `search script --count`, and other removed compatibility entry points.
 - [ ] 16.9 Guard source/schema/imports against legacy GraphSnapshot, graph diff, recipe, checkpoint/undo/recovery, embedded History DB, semantic-head/event, execution-usage, and persistent UUID concepts.
 - [ ] 16.10 Keep host orchestration physically separate from reusable injected Houdini code for Session, Execution, Task, Search, Capture, and History.
 - [ ] 16.11 Add static/regression tests that fail if removed legacy symbols, commands, schemas, persistence paths, or dependency directions reappear.

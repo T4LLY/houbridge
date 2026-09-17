@@ -47,11 +47,14 @@ def run(request_path_value: str) -> None:
     status: dict[str, object] = {"python_ok": False, "result_kind": None}
     namespace = {
         "__name__": "__main__",
-        "__file__": source_path,
         # Preserve the useful native-Houdini execution convenience from the
         # previous runtime without importing any History behavior.
         "hou": hou,
     }
+    compile_filename = "<houbridge --code>"
+    if source_path is not None:
+        namespace["__file__"] = source_path
+        compile_filename = source_path
 
     with stdout_path.open("w", encoding="utf-8", newline="") as stdout_file, stderr_path.open(
         "w", encoding="utf-8", newline=""
@@ -60,7 +63,7 @@ def run(request_path_value: str) -> None:
         try:
             sys.argv = list(source_argv)
             with contextlib.redirect_stdout(stdout_file), contextlib.redirect_stderr(stderr_file):
-                exec(compile(source, source_path, "exec"), namespace, namespace)
+                exec(compile(source, compile_filename, "exec"), namespace, namespace)
         except BaseException:
             with traceback_path.open("w", encoding="utf-8", newline="") as traceback_file:
                 traceback.print_exc(file=traceback_file)

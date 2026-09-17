@@ -5,7 +5,34 @@ from pathlib import Path
 import pytest
 
 from houbridge.errors import BridgeError
-from houbridge.execution.source import prepare_file_invocation, validate_python_source
+from houbridge.execution.source import (
+    prepare_code_invocation,
+    prepare_file_invocation,
+    validate_python_source,
+)
+
+
+def test_prepare_code_invocation_has_no_file_provenance_and_preserves_args(
+    tmp_path: Path,
+) -> None:
+    invocation = prepare_code_invocation(
+        "result = 1\n",
+        args=["--name", "box", "--name", "sphere"],
+        purpose="wrapper call",
+        origin_cwd=tmp_path,
+    )
+
+    assert invocation.source == "result = 1\n"
+    assert invocation.source_path is None
+    assert invocation.argv == (
+        "<houbridge-code>",
+        "--name",
+        "box",
+        "--name",
+        "sphere",
+    )
+    assert invocation.purpose == "wrapper call"
+    assert invocation.origin_cwd == str(tmp_path.resolve())
 
 
 def test_prepare_file_invocation_uses_python_source_encoding_rules(tmp_path: Path) -> None:

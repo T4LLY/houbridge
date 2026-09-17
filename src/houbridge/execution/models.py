@@ -15,7 +15,7 @@ class ExecutionInvocation:
     """Caller-side source and metadata for one managed Python invocation."""
 
     source: str
-    source_path: str
+    source_path: str | None
     argv: tuple[str, ...]
     purpose: str | None
     origin_cwd: str

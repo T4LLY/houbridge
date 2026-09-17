@@ -9,6 +9,26 @@ from houbridge.errors import BridgeError
 from .models import ExecutionInvocation, normalized_origin_cwd
 
 
+def prepare_code_invocation(
+    source: str,
+    *,
+    args: Iterable[str] = (),
+    purpose: str | None = None,
+    origin_cwd: Path | None = None,
+) -> ExecutionInvocation:
+    """Build one direct-source synchronous invocation without file provenance."""
+
+    validate_python_source(source)
+    argv = ("<houbridge-code>", *(str(value) for value in args))
+    return ExecutionInvocation(
+        source=source,
+        source_path=None,
+        argv=argv,
+        purpose=purpose,
+        origin_cwd=normalized_origin_cwd(origin_cwd),
+    )
+
+
 def prepare_file_invocation(
     source_path: Path,
     *,
