@@ -72,7 +72,9 @@ Houdini prints the automatically selected local port. Pass that number to Houbri
 houbridge session attach 49153
 ```
 
-`session attach` does not start Houdini and does not open the port for you. It probes the supplied local port, verifies the Houdini PID and process incarnation, confirms that Houdini reports the same openport, removes registry entries proven stale, and then registers the process. Attaching the same registered port again is idempotent. If the same Houdini process is already registered through another port, attach fails instead of creating a duplicate session.
+`session attach` does not start Houdini and does not open the port for you. It probes the supplied local port, verifies the Houdini PID and process incarnation, confirms that Houdini reports the same openport, removes registry entries proven stale, and then registers the process.
+
+Attaching the same registered port again is idempotent. If the same Houdini process is already registered through another port, attach fails instead of creating a duplicate session.
 
 The attached process becomes primary only when no live registered sessions remain. Otherwise the existing primary selection is preserved; use `houbridge session promote <number>` when you want to change it.
 
@@ -129,6 +131,38 @@ Run `--help` at any command level to see its available options:
 ```bash
 houbridge capture viewport --help
 ```
+
+## Related tools
+
+`houbridge`, `houdocs`, and `houlayout` are separate CLIs designed for agent orchestration. Each can be assigned to the agent that needs its capabilities, keeping tool surfaces small and token-efficient.
+
+### Houbridge
+
+`houbridge` provides the general Houdini runtime interface: session management, execution, capture, resources, and scene access.
+
+It exposes raw `exec` for workflows that require direct Houdini Python execution.
+
+### Houdocs
+
+`houdocs` provides structured search and retrieval over Houdini documentation.
+
+It can be assigned to agents that only need Houdini API and documentation access without exposing runtime operations.
+
+### Houlayout
+
+`houlayout` is a node-oriented wrapper around Houbridge for inspecting, selecting, and organizing Houdini networks.
+
+It intentionally does not expose raw `exec`, providing agents with a smaller and more constrained command surface.
+
+Because these tools are ordinary CLIs, Houbridge can also be wrapped to create additional task-specific interfaces. A wrapper can expose only the operations required by an agent while deliberately omitting `exec` or other unrestricted capabilities.
+
+This allows orchestration systems to assign different interfaces to different agents instead of exposing the full Houdini control surface to every agent.
+
+In short:
+
+- `houbridge` — general Houdini runtime and execution
+- `houdocs` — structured Houdini documentation search
+- `houlayout` — constrained node and network operations
 
 ## License
 
