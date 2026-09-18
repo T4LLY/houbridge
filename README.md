@@ -1,0 +1,135 @@
+# Houbridge
+
+Houbridge is a CLI for controlling and inspecting local SideFX Houdini sessions. It can run Houdini Python, manage sessions, capture images, and search scene code or nodes.
+
+## Requirements
+
+- Python 3.11 or later
+- A local SideFX Houdini installation
+- [uv](https://docs.astral.sh/uv/)
+
+### No Houdini-side installation
+
+Houbridge does not require a plug-in, package, or persistent service to be installed inside Houdini. It uses Houdini's built-in local `openport` and `hcommand` interface to send scripts at runtime.
+
+## Installation
+
+Clone the repository and install its `houbridge` command with uv:
+
+```bash
+git clone <repository-url>
+cd houbridge
+uv tool install .
+```
+
+Verify the installation:
+
+```bash
+houbridge --help
+```
+
+For development without installing the command globally, use `uv sync` and prefix commands with `uv run` instead:
+
+```bash
+uv sync
+uv run houbridge --help
+```
+
+### Install AI skills
+
+After the repository is available at `T4LLY/houbridge`, install its bundled Houdini skills with:
+
+```bash
+npx skills add T4LLY/houbridge
+```
+
+This installs the `houdini-cli-bridge` and `houdini-cli-script-writing` skills for supported AI coding tools.
+
+## Usage
+
+### Start a Houdini session
+
+Start Houdini with a HIP file and register the resulting session:
+
+```bash
+houbridge session new --file path/to/scene.hip
+houbridge session info
+```
+
+When several sessions are registered, use `session promote <number>` to select the default session.
+
+### Attach an existing Houdini session
+
+Houbridge does not install a resident plugin into Houdini. To register a Houdini process that was started outside `houbridge session new`, first open Houdini's Textport and run:
+
+```text
+openport -a -q
+```
+
+Houdini prints the automatically selected local port. Pass that number to Houbridge:
+
+```bash
+houbridge session attach 49153
+```
+
+`session attach` does not start Houdini and does not open the port for you. It probes the supplied local port, verifies the Houdini PID and process incarnation, confirms that Houdini reports the same openport, removes registry entries proven stale, and then registers the process. Attaching the same registered port again is idempotent. If the same Houdini process is already registered through another port, attach fails instead of creating a duplicate session.
+
+The attached process becomes primary only when no live registered sessions remain. Otherwise the existing primary selection is preserved; use `houbridge session promote <number>` when you want to change it.
+
+### Run Houdini Python
+
+Create a Python file to execute:
+
+```python
+# example.py
+import hou
+
+result = {"hip_file": hou.hipFile.path()}
+```
+
+Run it in the default registered session:
+
+```bash
+houbridge exec --file example.py
+```
+
+Use `--session` to target a specific session:
+
+```bash
+houbridge exec --file example.py --session 1
+```
+
+### Semantic recall
+
+Houbridge is designed to give AI-assisted workflows a local, searchable memory.
+
+- `houbridge history` records managed Python executions and their scene changes for the current Houdini session. Its semantic search helps recall what was done and why.
+- `houbridge search script` semantically searches reusable Python tools in `.houbridge/python`, helping you find work created in previous sessions instead of recreating it.
+
+Both commands use hybrid semantic and lexical ranking, so they can retrieve related work even when the search terms do not exactly match.
+
+### Common commands
+
+```bash
+# Capture a viewport image.
+houbridge capture viewport
+
+# Search Python code in the current Houdini scene.
+houbridge search python "camera"
+
+# Search reusable Python scripts in the workspace.
+houbridge search script "export"
+
+# List recent actions in the current session.
+houbridge history list
+```
+
+Run `--help` at any command level to see its available options:
+
+```bash
+houbridge capture viewport --help
+```
+
+## License
+
+[MIT License](LICENSE)
