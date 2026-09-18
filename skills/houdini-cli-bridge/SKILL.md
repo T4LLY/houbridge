@@ -9,6 +9,7 @@ houbridge is a CLI for inspecting and controlling a running Houdini instance.
 
 ## Session
 - `houbridge session new [--file <HIP>]` starts a new Houdini session.
+- To register a Houdini process started outside Houbridge, run `openport -a -q` in that Houdini Textport, then run `houbridge session attach <PORT>` with the printed port. Do not assume attach can open a port in an unprepared process.
 - `houbridge session info` shows session numbers. Commands such as `exec` can target a session with `--session <Number>`.
 - `houbridge session promote <Number>` sets the Primary session, allowing the `--session` parameter to be omitted.
 

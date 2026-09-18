@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the public syntax, options, and JSON response contract for creating, inspecting, and selecting registered local Houdini sessions.
+Define the public syntax, options, and JSON response contract for creating, attaching, inspecting, and selecting registered local Houdini sessions.
 
 ## Requirements
 
@@ -136,6 +136,52 @@ Successful creation SHALL return exactly:
 - **WHEN** `session new --hcommand PATH` is invoked
 - **THEN** that executable is used for this launch
 - **AND** persistent configuration is not mutated
+
+### Requirement: Expose session attach
+
+The syntax SHALL be:
+
+```text
+houbridge session attach PORT
+```
+
+`PORT` SHALL be an integer in the range `1..65535`. The target Houdini process SHALL already have a local openport. For the normal manual workflow, the user runs `openport -a -q` in that Houdini Textport and passes the printed port to `session attach`. Houbridge SHALL NOT attempt to inject `openport` into an unprepared existing process.
+
+Before registration, Houbridge SHALL probe the supplied local port, confirm that the probed Houdini PID remains the same across validation, confirm that the requested port is present in that Houdini process's reported open ports, and capture the operating-system process incarnation used by normal Session validation. It SHALL then apply normal stale registry cleanup and allocate the smallest unused positive session number.
+
+Successful attachment SHALL return exactly:
+
+```json
+{
+  "session": 2,
+  "port": 49153,
+  "pid": 18744
+}
+```
+
+If the same Houdini process is already registered through the same port, attachment SHALL be idempotent and return that existing session without creating another record. If the same live Houdini process is already registered through a different port, attachment SHALL fail rather than create a second Session record for one process.
+
+The attached session SHALL become `primary` only when stale cleanup leaves no live registered sessions. If at least one live registered session remains, the existing primary selection, including `null`, SHALL be preserved.
+
+#### Scenario: Attach a manually opened existing Houdini
+- **WHEN** the user runs `openport -a -q` in an existing Houdini and invokes `houbridge session attach` with the printed port
+- **THEN** Houbridge validates the port, PID, and process incarnation
+- **AND** registers the existing Houdini without launching another process
+
+#### Scenario: Attach the same target twice
+- **WHEN** the same Houdini PID and port are already registered
+- **THEN** `session attach` returns the existing session number
+- **AND** no duplicate Session record is created
+
+#### Scenario: Existing process is already registered through another port
+- **WHEN** the probed Houdini process is already represented by a live Session record using another port
+- **THEN** attachment fails through the common BridgeError envelope
+- **AND** the existing Session record is not replaced or duplicated
+
+#### Scenario: Attach while another live session remains and no primary is selected
+- **WHEN** stale cleanup leaves another live registered session but `primary` is `null`
+- **THEN** the attached session is registered
+- **AND** `primary` remains `null`
 
 ### Requirement: Expose session promote
 

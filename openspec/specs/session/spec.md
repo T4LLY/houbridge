@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define discovery, inspection, registration, primary selection, and local launch of Houdini sessions without binding Houbridge to a Houdini license edition. Command JSON schemas are specified separately.
+Define inspection, registration, attachment, primary selection, and local launch of Houdini sessions without binding Houbridge to a Houdini license edition. Command JSON schemas are specified separately.
 
 ## Requirements
 
@@ -96,9 +96,31 @@ After stale cleanup, the newly launched process SHALL receive the smallest unuse
 - **WHEN** stale cleanup removes every previously registered session before `session new` allocates a number
 - **THEN** the newly created session becomes `primary`
 
+### Requirement: Attach an existing process through a manually opened local port
+
+`session attach PORT` SHALL register an already-running local Houdini process without launching or installing anything into Houdini. The target process SHALL already expose an openport; the documented manual workflow SHALL be to execute `openport -a -q` in the target Houdini Textport and pass the printed port to Houbridge. Houbridge SHALL NOT attempt to discover arbitrary unopened Houdini processes or bootstrap an openport into them.
+
+Attachment SHALL use the normal Houdini Session probe and SHALL validate the target across repeated probing and operating-system process-incarnation reads before registry mutation. The requested port SHALL be reported by that same Houdini process. Stale registry cleanup and session-number allocation SHALL follow the same rules as `session new`. If cleanup leaves zero live sessions, the attached process SHALL become primary; if live sessions remain, attachment SHALL preserve the current primary value.
+
+A single live Houdini process SHALL have at most one Session record. Reattaching the same registered PID and port SHALL be idempotent. Attempting to attach another openport belonging to a Houdini process that is already registered SHALL fail without modifying that record.
+
+#### Scenario: Existing Houdini is prepared manually
+- **WHEN** a user opens a port with `openport -a -q` in an already-running Houdini
+- **AND** invokes `session attach` with that port
+- **THEN** Houbridge registers that process without starting a second Houdini
+
+#### Scenario: Port identity changes while attaching
+- **WHEN** the probed PID, reported openport, or process incarnation changes during validation
+- **THEN** attachment fails before the Session registry is mutated
+
+#### Scenario: Another live session already exists without a primary
+- **WHEN** attachment begins with at least one live registered session and `primary` is `null`
+- **THEN** the new Session record is added
+- **AND** `primary` remains `null`
+
 ### Requirement: Let Houdini choose the openport
 
-Houbridge SHALL NOT expose a user-configurable bridge port and SHALL NOT search the host for a free bridge port. During `session new` bootstrap, Houdini SHALL execute `openport -a` and choose an available local port. Houbridge SHALL obtain that selected port together with the launched process PID and persist both in the Session registry.
+Houbridge SHALL NOT expose a persistent user-configurable bridge port and SHALL NOT search the host for a free bridge port. During `session new` bootstrap, Houdini SHALL execute `openport -a` and choose an available local port. `session attach` MAY accept an already-open runtime port as its required positional target, but Houbridge SHALL NOT choose that port or open it in the existing process. Houbridge SHALL persist the validated port together with the Houdini process PID in the Session registry.
 
 The automatically selected port is runtime connection state only. Normal Houdini-facing commands SHALL resolve it from the selected session record rather than from configuration or a `--port` option.
 
@@ -133,7 +155,7 @@ A selected registry entry SHALL be validated before dispatch by confirming the r
 
 ### Requirement: Promote a live session explicitly
 
-Session promotion SHALL be the only public operation that changes an existing registry's primary selection after initial registry creation. `session promote N` SHALL validate that session `N` is registered and live before setting `primary` to `N`.
+Once at least one live Session record already exists, Session promotion SHALL be the only public operation that replaces or creates the primary selection. Automatic primary assignment is limited to `session new` or `session attach` when stale cleanup leaves zero live Session records. `session promote N` SHALL validate that session `N` is registered and live before setting `primary` to `N`.
 
 #### Scenario: Replace the primary selection
 - **WHEN** a live session `3` is promoted while session `1` is primary

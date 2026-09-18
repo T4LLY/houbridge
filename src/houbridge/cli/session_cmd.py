@@ -12,6 +12,7 @@ from houbridge.houdini.transport import HoudiniTransport
 from houbridge.history.retirement import HistoryRetirementService
 from houbridge.paths import GlobalDataPaths
 from houbridge.process_coordination import ProcessIdentity
+from houbridge.session.attach import SessionAttachService
 from houbridge.session.info import SessionInfoService
 from houbridge.session.launcher import HoudiniSessionLauncher
 from houbridge.session.new import SessionNewService
@@ -99,6 +100,34 @@ def new_command(
         headless=headless,
         hcommand=hcommand,
     )
+    emit_result(payload)
+
+
+@session_app.command(
+    "attach",
+    help="Register an existing Houdini session that already has an openport.",
+)
+def attach_command(
+    port: int = typer.Argument(
+        ...,
+        metavar="PORT",
+        min=1,
+        max=65535,
+        help="Port printed by `openport -a -q` in the target Houdini Textport.",
+    ),
+) -> None:
+    settings = load_config()
+    paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
+    registry = SessionRegistry(
+        paths.sessions_registry,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+    )
+    probe = SessionProbe(lambda: HoudiniTransport.from_config(settings.houdini))
+    payload = SessionAttachService(
+        registry,
+        probe,
+        on_stale=_history_retirement_callback(paths),
+    ).attach(port)
     emit_result(payload)
 
 
