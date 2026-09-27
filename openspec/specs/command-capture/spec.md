@@ -2,9 +2,34 @@
 
 ## Purpose
 
-Define the public syntax, options, validation rules, preset format, image bounds, and JSON response contracts for viewport/window capture, OCR, and turntable video capture.
+Define the public syntax, options, validation rules, preset format, image bounds, and JSON response contracts for shared Scene Viewer pane discovery, viewport/window capture, OCR, and turntable video capture.
 
 ## Requirements
+
+### Requirement: Expose shared Scene Viewer pane discovery
+
+The syntax SHALL be:
+
+```text
+houbridge capture panes [--session INTEGER]
+```
+
+`--session INTEGER` SHALL be a positive registered session number and SHALL use the primary session when omitted.
+
+The command SHALL return one `panes` array using the same Scene Viewer catalog service and public schema as `houbridge capture viewport --info`. Each pane SHALL contain exactly `name`, `current_node`, and `viewports`; each viewport SHALL contain exactly `name`, `type`, `width`, and `height`. `current_node` SHALL be a node path string or `null`. Pane ordering SHALL have no selection or priority semantics.
+
+#### Scenario: Request capture pane discovery
+- **WHEN** `houbridge capture panes` is invoked
+- **THEN** output contains one entry per visible Scene Viewer pane tab
+- **AND** the result schema is identical to viewport `--info`
+
+#### Scenario: Request pane discovery from a selected session
+- **WHEN** `houbridge capture panes --session 3` is invoked
+- **THEN** discovery targets registered session `3`
+
+#### Scenario: No Scene Viewer is available
+- **WHEN** no visible Scene Viewer pane is available
+- **THEN** the command fails with the same structured missing-viewer failure as viewport `--info`
 
 ### Requirement: Expose viewport capture and viewport info through one command
 
@@ -18,7 +43,7 @@ Supported options SHALL be:
 
 | Option | Constraint / meaning |
 | --- | --- |
-| `--info` | Return visible Scene Viewer pane and viewport metadata instead of capturing. |
+| `--info` | Return the same shared Scene Viewer pane catalog as `houbridge capture panes` instead of capturing. |
 | `--top` | Capture top view. |
 | `--bottom` | Capture bottom view. |
 | `--front` | Capture front view. |
@@ -40,9 +65,10 @@ When `--pane` is omitted, capture SHALL proceed automatically only when exactly 
 
 Every explicit direction and every effective preset `view` SHALL change the temporary capture viewport to that view and frame all currently displayed geometry/objects before capture. Capture with neither an explicit direction nor a preset `view` SHALL preserve the source viewport composition.
 
-#### Scenario: Request viewport info
+#### Scenario: Request viewport info through the compatibility entry point
 - **WHEN** `--info` is used alone
-- **THEN** output contains a `panes` array with one entry per visible Scene Viewer pane tab
+- **THEN** output is identical in schema and discovery semantics to `houbridge capture panes`
+- **AND** output contains a `panes` array with one entry per visible Scene Viewer pane tab
 - **AND** each pane contains exactly `name`, `current_node`, and `viewports`
 - **AND** `current_node` is a node path string or `null`
 - **AND** `viewports` contains every viewport currently visible in that Scene Viewer

@@ -2,21 +2,28 @@
 
 ## Purpose
 
-Define viewport inspection, viewport/window screenshots, OCR, and turntable video capture while preserving the user's Houdini viewer state and keeping temporary image/video output bounded. Command JSON schemas are specified separately.
+Define shared Scene Viewer pane discovery, viewport/window screenshots, OCR, and turntable video capture while preserving the user's Houdini viewer state and keeping temporary image/video output bounded. Command JSON schemas are specified separately.
 
 ## Requirements
 
-### Requirement: Report visible Scene Viewer panes and their viewports
+### Requirement: Report visible Scene Viewer panes and their viewports through one shared discovery path
 
 Capture SHALL inspect every visible Scene Viewer pane tab returned by Houdini, including visible Scene Viewers in floating windows. Each pane SHALL expose its pane-tab name, current node path when available, and every viewport currently visible in that Scene Viewer. Pane ordering SHALL follow Houdini's enumeration and SHALL NOT carry public ordering semantics. Capture SHALL report only stable public data and SHALL NOT expose Houdini objects or implementation-only state.
 
 `current_node` SHALL be the current node path when it can be obtained and SHALL be `null` when no current node is available or the current node cannot be read safely. Each viewport SHALL contain its public name/type and pixel dimensions. Viewport selection/current-state flags SHALL NOT be part of this catalog.
 
+The capture-level pane discovery command and viewport `--info` compatibility entry point SHALL use the same discovery service and SHALL return the same public catalog schema.
+
 #### Scenario: Several Scene Viewers are visible
-- **WHEN** viewport inspection runs while multiple Scene Viewer pane tabs are visible
+- **WHEN** pane discovery runs while multiple Scene Viewer pane tabs are visible
 - **THEN** every visible Scene Viewer is reported as a separate pane entry
 - **AND** each pane contains every viewport currently visible in that Scene Viewer
 - **AND** pane ordering does not imply selection priority
+
+#### Scenario: Viewport info uses the shared catalog
+- **WHEN** viewport `--info` is requested
+- **THEN** it returns the same pane catalog schema as capture-level pane discovery
+- **AND** it uses the same underlying discovery service
 
 #### Scenario: A Scene Viewer has no readable current node
 - **WHEN** the Scene Viewer has no current node or its current node cannot be read safely
@@ -24,13 +31,13 @@ Capture SHALL inspect every visible Scene Viewer pane tab returned by Houdini, i
 
 #### Scenario: No Scene Viewer is available
 - **WHEN** no usable Scene Viewer exists
-- **THEN** viewport inspection reports a structured missing-viewer failure
+- **THEN** pane discovery reports a structured missing-viewer failure
 
 ### Requirement: Capture the active viewport
 
 Capture SHALL be able to write a PNG representing a Scene Viewer viewport. When exactly one visible Scene Viewer exists and no pane is specified, Capture SHALL use it automatically. When more than one visible Scene Viewer exists, Capture SHALL require an explicit pane-tab name and SHALL NOT select one by enumeration order. An explicit pane name SHALL match exactly one visible Scene Viewer pane tab.
 
-Missing and ambiguous pane selection failures SHALL include the same Scene Viewer catalog shape used by viewport inspection under structured error `context.panes`, so callers can retry without issuing a separate inspection request.
+Missing and ambiguous pane selection failures SHALL include the same Scene Viewer catalog shape used by shared pane discovery under structured error `context.panes`, so callers can retry without issuing a separate discovery request.
 
 #### Scenario: Capture a viewport frame
 - **WHEN** a normal viewport capture is requested and exactly one visible Scene Viewer exists
@@ -40,7 +47,7 @@ Missing and ambiguous pane selection failures SHALL include the same Scene Viewe
 #### Scenario: Several Scene Viewers are available without a pane selector
 - **WHEN** viewport capture is requested without a pane name and more than one visible Scene Viewer exists
 - **THEN** Capture fails with `scene_viewer_ambiguous`
-- **AND** `context.panes` contains the same pane catalog fields as viewport inspection
+- **AND** `context.panes` contains the same pane catalog fields as shared pane discovery
 - **AND** Capture does not choose a Scene Viewer by enumeration order
 
 #### Scenario: Explicit pane does not exist

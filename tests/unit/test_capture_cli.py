@@ -105,6 +105,7 @@ def _install(monkeypatch):
 def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     root = runner.invoke(app, ["--help"])
     capture = runner.invoke(app, ["capture", "--help"])
+    panes = runner.invoke(app, ["capture", "panes", "--help"])
     viewport = runner.invoke(app, ["capture", "viewport", "--help"])
     window = runner.invoke(app, ["capture", "window", "--help"])
     turntable = runner.invoke(app, ["capture", "turntable", "--help"])
@@ -112,16 +113,19 @@ def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     assert (
         root.exit_code
         == capture.exit_code
+        == panes.exit_code
         == viewport.exit_code
         == window.exit_code
         == turntable.exit_code
         == 0
     )
     assert "capture" in root.stdout
+    assert "panes" in capture.stdout
     assert "viewport" in capture.stdout
     assert "window" in capture.stdout
     assert "ocr" in capture.stdout
     assert "turntable" in capture.stdout
+    assert "--session" in panes.stdout
     for option in (
         "--info", "--top", "--bottom", "--front", "--back", "--left", "--right",
         "--persp", "--uv", "--scale", "--preset", "--pane", "--session",
@@ -136,6 +140,19 @@ def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     for output in (viewport.stdout, window.stdout, turntable.stdout):
         for forbidden in ("--root", "--port", "--hcommand"):
             assert forbidden not in output
+
+
+def test_capture_panes_uses_selected_session_and_viewport_info_shape(monkeypatch) -> None:
+    resolver, _service, _turntable = _install(monkeypatch)
+
+    result = runner.invoke(app, ["capture", "panes", "--session", "4"])
+
+    assert result.exit_code == 0
+    assert result.stdout == (
+        '{"panes":[{"name":"panetab1","current_node":"/obj/geo1/OUT",'
+        '"viewports":[{"name":"persp1","type":"persp","width":10,"height":10}]}]}\n'
+    )
+    assert resolver.calls == [4]
 
 
 def test_viewport_info_uses_selected_session_and_exact_public_shape(monkeypatch) -> None:

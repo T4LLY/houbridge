@@ -68,6 +68,32 @@ def _turntable_service(
     )
 
 
+def _scene_viewer_catalog(
+    settings: HoubridgeConfig,
+    session: int | None,
+) -> dict[str, object]:
+    resolver, transport = _resolver_and_transport(settings)
+    resolved = resolver.resolve(session)
+    return ViewportInfoService(transport).info(resolved)
+
+
+@capture_app.command("panes", help="List Scene Viewer panes available to Capture.")
+def panes_command(
+    session: int | None = typer.Option(
+        None,
+        "--session",
+        min=1,
+        help="Target this registered session instead of the primary session.",
+    ),
+) -> None:
+    try:
+        settings = load_config()
+        payload = _scene_viewer_catalog(settings, session)
+        emit_result(payload, policy=OutputPolicy.from_config(settings))
+    except BridgeError as exc:
+        terminate_with_bridge_error(exc)
+
+
 @capture_app.command("viewport", help="Capture a Houdini viewport image.")
 def viewport_command(
     info: bool = typer.Option(
@@ -132,11 +158,11 @@ def viewport_command(
         )
     try:
         settings = load_config()
-        resolver, transport = _resolver_and_transport(settings)
-        resolved = resolver.resolve(session)
         if info:
-            payload = ViewportInfoService(transport).info(resolved)
+            payload = _scene_viewer_catalog(settings, session)
         else:
+            resolver, transport = _resolver_and_transport(settings)
+            resolved = resolver.resolve(session)
             payload = _screenshot_service(settings, transport).capture_viewport(
                 resolved,
                 views=selected,
