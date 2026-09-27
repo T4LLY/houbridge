@@ -29,11 +29,16 @@ Supported options SHALL be:
 | `--uv` | Capture UV view. |
 | `--scale FLOAT` | Must be greater than zero; default `1.0`; final dimensions are constrained by the shared screenshot maximums. |
 | `--preset PATH` | Existing readable screenshot-preset JSON file. |
+| `--pane TEXT` | Exact Scene Viewer pane-tab name to capture from. |
 | `--session INTEGER` | Positive registered session number; uses primary when omitted. |
 
-`--info` SHALL NOT be combined with capture directions, non-default `--scale`, or `--preset`.
+`--info` SHALL NOT be combined with capture directions, non-default `--scale`, `--preset`, or `--pane`.
 
 When no individual view is supplied, a preset view SHALL be used when defined; otherwise the active viewport SHALL be captured. Explicit direction flags take precedence over a preset `view`.
+
+When `--pane` is omitted, capture SHALL proceed automatically only when exactly one visible Scene Viewer pane exists. If several are visible, capture SHALL fail with `scene_viewer_ambiguous`. When `--pane` is supplied, its value SHALL match exactly one visible Scene Viewer pane-tab name. No match SHALL fail with `scene_viewer_not_found`; multiple exact matches SHALL fail with `scene_viewer_ambiguous`. These selection failures SHALL include the available Scene Viewer catalog under `context.panes`, using the same pane entry schema as `--info`.
+
+Every explicit direction and every effective preset `view` SHALL change the temporary capture viewport to that view and frame all currently displayed geometry/objects before capture. Capture with neither an explicit direction nor a preset `view` SHALL preserve the source viewport composition.
 
 #### Scenario: Request viewport info
 - **WHEN** `--info` is used alone
@@ -88,6 +93,20 @@ When no individual view is supplied, a preset view SHALL be used when defined; o
 #### Scenario: Info conflicts with capture options
 - **WHEN** `--info` is combined with a capture option
 - **THEN** the command fails with `capture_info_conflict`
+
+#### Scenario: Multiple panes require an explicit selector
+- **WHEN** capture is requested without `--pane` and multiple visible Scene Viewer panes exist
+- **THEN** the command fails with `scene_viewer_ambiguous`
+- **AND** `context.panes` contains the available Scene Viewer catalog
+
+#### Scenario: Explicit pane is missing
+- **WHEN** `--pane` does not match any visible Scene Viewer pane-tab name
+- **THEN** the command fails with `scene_viewer_not_found`
+- **AND** `context.panes` contains the available Scene Viewer catalog
+
+#### Scenario: Directed view is reframed
+- **WHEN** a direction flag or preset `view` selects a directed capture
+- **THEN** the temporary viewport frames all currently displayed geometry/objects after changing view type and before capture
 
 ### Requirement: Define the screenshot preset JSON contract
 

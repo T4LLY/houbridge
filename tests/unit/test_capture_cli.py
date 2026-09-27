@@ -124,7 +124,7 @@ def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     assert "turntable" in capture.stdout
     for option in (
         "--info", "--top", "--bottom", "--front", "--back", "--left", "--right",
-        "--persp", "--uv", "--scale", "--preset", "--session",
+        "--persp", "--uv", "--scale", "--preset", "--pane", "--session",
     ):
         assert option in viewport.stdout
     assert "--quad" not in viewport.stdout
@@ -156,7 +156,10 @@ def test_viewport_capture_passes_multiple_directions_and_scale(monkeypatch) -> N
 
     result = runner.invoke(
         app,
-        ["capture", "viewport", "--front", "--right", "--scale", "2.5", "--session", "2"],
+        [
+            "capture", "viewport", "--front", "--right", "--scale", "2.5",
+            "--pane", "panetab4", "--session", "2",
+        ],
     )
 
     assert result.exit_code == 0
@@ -165,14 +168,18 @@ def test_viewport_capture_passes_multiple_directions_and_scale(monkeypatch) -> N
         "views": ("front", "right"),
         "scale": 2.5,
         "preset_path": None,
+        "pane": "panetab4",
     }
 
 
 def test_viewport_info_conflict_uses_spec_code() -> None:
     info = runner.invoke(app, ["capture", "viewport", "--info", "--scale", "2"])
+    pane = runner.invoke(app, ["capture", "viewport", "--info", "--pane", "panetab1"])
 
     assert info.exit_code == 1
     assert '"code":"capture_info_conflict"' in info.stdout
+    assert pane.exit_code == 1
+    assert '"code":"capture_info_conflict"' in pane.stdout
 
 
 def test_window_command_passes_explicit_crop_and_returns_inline_bounds(monkeypatch) -> None:

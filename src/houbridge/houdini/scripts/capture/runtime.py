@@ -38,6 +38,13 @@ ATTR_CLASSES = {
 }
 
 
+class CaptureRequestError(RuntimeError):
+    def __init__(self, code, message, *, context=None):
+        super().__init__(message)
+        self.code = code
+        self.context = dict(context) if context else None
+
+
 def list_scene_viewers(hou):
     return tuple(
         pane_tab
@@ -96,6 +103,40 @@ def describe_scene_viewers(scenes, hou):
     return {
         "panes": [describe_scene_viewer(scene, hou) for scene in scenes],
     }
+
+
+def resolve_scene_viewer(hou, pane_name=None):
+    scenes = list_scene_viewers(hou)
+    if not scenes:
+        raise CaptureRequestError(
+            "viewport_unavailable",
+            "No Scene Viewer pane is available.",
+        )
+
+    if pane_name is None:
+        if len(scenes) == 1:
+            return scenes[0]
+        raise CaptureRequestError(
+            "scene_viewer_ambiguous",
+            "Multiple Scene Viewer panes are available; specify --pane.",
+            context=describe_scene_viewers(scenes, hou),
+        )
+
+    matches = tuple(scene for scene in scenes if scene.name() == pane_name)
+    if len(matches) == 1:
+        return matches[0]
+    context = describe_scene_viewers(scenes, hou)
+    if not matches:
+        raise CaptureRequestError(
+            "scene_viewer_not_found",
+            f"Scene Viewer pane {pane_name!r} was not found.",
+            context=context,
+        )
+    raise CaptureRequestError(
+        "scene_viewer_ambiguous",
+        f"Multiple Scene Viewer panes named {pane_name!r} are available.",
+        context=context,
+    )
 
 
 def constrained_size(width, height, scale, max_width, max_height):

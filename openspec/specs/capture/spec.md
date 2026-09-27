@@ -28,20 +28,41 @@ Capture SHALL inspect every visible Scene Viewer pane tab returned by Houdini, i
 
 ### Requirement: Capture the active viewport
 
-Capture SHALL be able to write a PNG representing the active Scene Viewer viewport.
+Capture SHALL be able to write a PNG representing a Scene Viewer viewport. When exactly one visible Scene Viewer exists and no pane is specified, Capture SHALL use it automatically. When more than one visible Scene Viewer exists, Capture SHALL require an explicit pane-tab name and SHALL NOT select one by enumeration order. An explicit pane name SHALL match exactly one visible Scene Viewer pane tab.
+
+Missing and ambiguous pane selection failures SHALL include the same Scene Viewer catalog shape used by viewport inspection under structured error `context.panes`, so callers can retry without issuing a separate inspection request.
 
 #### Scenario: Capture a viewport frame
-- **WHEN** a normal viewport capture is requested
+- **WHEN** a normal viewport capture is requested and exactly one visible Scene Viewer exists
 - **THEN** a completed PNG is published in the operating-system temporary capture area
 - **AND** the user's active viewer remains usable after capture
+
+#### Scenario: Several Scene Viewers are available without a pane selector
+- **WHEN** viewport capture is requested without a pane name and more than one visible Scene Viewer exists
+- **THEN** Capture fails with `scene_viewer_ambiguous`
+- **AND** `context.panes` contains the same pane catalog fields as viewport inspection
+- **AND** Capture does not choose a Scene Viewer by enumeration order
+
+#### Scenario: Explicit pane does not exist
+- **WHEN** viewport capture names a Scene Viewer pane tab that is not visible
+- **THEN** Capture fails with `scene_viewer_not_found`
+- **AND** `context.panes` contains the available Scene Viewer catalog
+
+#### Scenario: Explicit pane name is duplicated
+- **WHEN** more than one visible Scene Viewer has the explicitly requested pane-tab name
+- **THEN** Capture fails with `scene_viewer_ambiguous`
+- **AND** does not choose either matching pane
 
 ### Requirement: Capture directed views without modifying the user's viewer
 
 Directed captures SHALL use a temporary/cloned Scene Viewer state rather than permanently changing the user's current viewer. Supported directed views SHALL be `top`, `bottom`, `front`, `back`, `left`, `right`, `persp`, and `uv`.
 
+After changing the temporary viewport to each requested directed view, Capture SHALL frame all currently displayed geometry/objects with Houdini's viewport framing operation before capturing. No additional public padding control SHALL be applied. A capture without an explicit or preset view SHALL preserve the source viewport composition and SHALL NOT perform this directed-view reframing step.
+
 #### Scenario: Capture a front view
 - **WHEN** a front-directed capture is requested
 - **THEN** the temporary capture viewer is aligned to the requested direction
+- **AND** all currently displayed geometry/objects are framed in that direction before capture
 - **AND** the user's original viewer orientation is not changed
 
 #### Scenario: Capture several explicit views

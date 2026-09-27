@@ -97,6 +97,11 @@ def viewport_command(
         readable=True,
         help="Apply settings from a screenshot preset JSON file.",
     ),
+    pane: str | None = typer.Option(
+        None,
+        "--pane",
+        help="Capture from this Scene Viewer pane-tab name.",
+    ),
     session: int | None = typer.Option(
         None,
         "--session",
@@ -118,7 +123,7 @@ def viewport_command(
         )
         if enabled
     )
-    if info and (selected or scale != 1.0 or preset is not None):
+    if info and (selected or scale != 1.0 or preset is not None or pane is not None):
         terminate_with_bridge_error(
             BridgeError(
                 "capture_info_conflict",
@@ -137,6 +142,7 @@ def viewport_command(
                 views=selected,
                 scale=scale,
                 preset_path=preset,
+                pane=pane,
             )
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:

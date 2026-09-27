@@ -12,7 +12,7 @@ import pytest
 
 from houbridge.capture.artifacts import CaptureArtifactPublisher
 from houbridge.capture.png import png_size
-from houbridge.capture.screenshot import ScreenshotService
+from houbridge.capture.screenshot import ScreenshotService, _require_capture_success
 from houbridge.config import ScreenshotConfig
 from houbridge.errors import BridgeError
 from houbridge.houdini.transport import HoudiniTarget
@@ -127,7 +127,11 @@ def test_directed_viewport_capture_uses_readable_sequential_names(tmp_path: Path
     transport = _CaptureTransport()
     service = _service(tmp_path, transport)
 
-    result = service.capture_viewport(_Session(), views=("front", "right"))
+    result = service.capture_viewport(
+        _Session(),
+        views=("front", "right"),
+        pane="panetab4",
+    )
 
     assert [item["view"] for item in result["captures"]] == ["front", "right"]
     paths = [Path(item["path"]) for item in result["captures"]]
@@ -137,6 +141,7 @@ def test_directed_viewport_capture_uses_readable_sequential_names(tmp_path: Path
     ]
     assert all(path.parent == tmp_path / "os-temp" / "houbridge" / "artifacts" / "capture" for path in paths)
     assert transport.requests[0]["requested_views"] == ["front", "right"]
+    assert transport.requests[0]["pane"] == "panetab4"
 
 
 def test_capture_sequence_is_not_reused_after_published_output_is_removed(tmp_path: Path) -> None:
@@ -203,9 +208,34 @@ def test_active_view_without_preset_does_not_clone_or_change_live_view(tmp_path:
 
     source = Path(viewport.__file__).read_text(encoding="utf-8")
     assert "source_scene.curViewport()" in source
-    assert "viewport.changeType(view_types[view_name])" in source
     assert ".homeAll(" not in source
-    assert ".frameAll(" not in source
+    change = source.index("viewport.changeType(view_types[view_name])")
+    frame = source.index("viewport.frameAll()")
+    capture = source.index("capture_single_view(scene, viewport, png_paths[index])")
+    assert change < frame < capture
+
+
+def test_capture_status_preserves_structured_houdini_error(tmp_path: Path) -> None:
+    status = tmp_path / "result.json"
+    status.write_text(
+        json.dumps(
+            {
+                "ok": False,
+                "code": "scene_viewer_ambiguous",
+                "message": "Multiple Scene Viewer panes are available; specify --pane.",
+                "context": {"panes": [{"name": "panetab1"}, {"name": "panetab4"}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BridgeError) as caught:
+        _require_capture_success(status)
+
+    assert caught.value.code == "scene_viewer_ambiguous"
+    assert caught.value.context == {
+        "panes": [{"name": "panetab1"}, {"name": "panetab4"}]
+    }
 
 
 def test_window_capture_returns_inline_final_image_bounds_and_no_sidecar_artifact(tmp_path: Path) -> None:

@@ -260,3 +260,76 @@ def test_viewport_info_injected_source_reuses_capture_runtime_catalog() -> None:
     source = Path(viewport_info.__file__).read_text(encoding="utf-8")
     assert 'runtime["list_scene_viewers"](hou)' in source
     assert 'runtime["describe_scene_viewers"](scenes, hou)' in source
+
+
+def test_scene_viewer_resolution_requires_unambiguous_visible_pane() -> None:
+    viewport_types = SimpleNamespace(
+        Top=object(),
+        Bottom=object(),
+        Front=object(),
+        Back=object(),
+        Left=object(),
+        Right=object(),
+        Perspective=object(),
+        UV=object(),
+    )
+
+    class _SceneViewer:
+        def __init__(self, name: str, node_path: str | None) -> None:
+            self._name = name
+            self._node_path = node_path
+
+        def name(self) -> str:
+            return self._name
+
+        def type(self):
+            return "scene_viewer"
+
+        def currentNode(self):
+            if self._node_path is None:
+                return None
+            return SimpleNamespace(path=lambda: self._node_path)
+
+        def viewports(self):
+            return ()
+
+    scene_a = _SceneViewer("panetab1", "/obj/a/OUT")
+    scene_b = _SceneViewer("panetab4", "/obj/b/OUT")
+    scenes = [scene_a, scene_b]
+    hou = SimpleNamespace(
+        ui=SimpleNamespace(paneTabs=lambda: tuple(scenes)),
+        paneTabType=SimpleNamespace(SceneViewer="scene_viewer"),
+        geometryViewportType=viewport_types,
+    )
+
+    with pytest.raises(capture_runtime.CaptureRequestError) as ambiguous:
+        capture_runtime.resolve_scene_viewer(hou)
+    assert ambiguous.value.code == "scene_viewer_ambiguous"
+    assert [pane["name"] for pane in ambiguous.value.context["panes"]] == [
+        "panetab1",
+        "panetab4",
+    ]
+
+    assert capture_runtime.resolve_scene_viewer(hou, "panetab4") is scene_b
+
+    scenes[:] = [scene_a]
+    assert capture_runtime.resolve_scene_viewer(hou) is scene_a
+    scenes[:] = [scene_a, scene_b]
+
+    with pytest.raises(capture_runtime.CaptureRequestError) as missing:
+        capture_runtime.resolve_scene_viewer(hou, "missing")
+    assert missing.value.code == "scene_viewer_not_found"
+    assert [pane["name"] for pane in missing.value.context["panes"]] == [
+        "panetab1",
+        "panetab4",
+    ]
+
+    scenes[:] = [scene_a, _SceneViewer("panetab1", "/obj/c/OUT")]
+    with pytest.raises(capture_runtime.CaptureRequestError) as duplicate:
+        capture_runtime.resolve_scene_viewer(hou, "panetab1")
+    assert duplicate.value.code == "scene_viewer_ambiguous"
+
+    scenes.clear()
+    with pytest.raises(capture_runtime.CaptureRequestError) as unavailable:
+        capture_runtime.resolve_scene_viewer(hou)
+    assert unavailable.value.code == "viewport_unavailable"

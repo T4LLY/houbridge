@@ -29,6 +29,12 @@ def run(request_path: str) -> None:
             "message": str(exc) or type(exc).__name__,
             "detail": traceback.format_exc(),
         }
+        code = getattr(exc, "code", None)
+        context = getattr(exc, "context", None)
+        if isinstance(code, str) and code:
+            payload["code"] = code
+        if isinstance(context, dict) and context:
+            payload["context"] = context
     result_path.write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",

@@ -30,6 +30,7 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
     apply_preset = runtime["apply_preset"]
     create_attribute_visualizers = runtime["create_attribute_visualizers"]
     destroy_visualizers = runtime["destroy_visualizers"]
+    resolve_scene_viewer = runtime["resolve_scene_viewer"]
 
     png_paths = [Path(value) for value in request["png_paths"]]
     requested_views = list(request["requested_views"])
@@ -37,12 +38,10 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
     max_width = int(request["max_width"])
     max_height = int(request["max_height"])
     preset = request["preset"]
+    pane_name = request.get("pane")
     view_types = _view_types(hou)
 
-    desktop = hou.ui.curDesktop()
-    source_scene = desktop.paneTabOfType(hou.paneTabType.SceneViewer)
-    if source_scene is None:
-        raise RuntimeError("No Scene Viewer pane is available.")
+    source_scene = resolve_scene_viewer(hou, pane_name)
 
     def capture_single_view(scene, viewport, output_path):
         apply_preset(viewport, preset, hou)
@@ -95,6 +94,8 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
         viewport = scene.curViewport()
         for index, view_name in enumerate(requested_views):
             viewport.changeType(view_types[view_name])
+            process_events(hou, QtWidgets)
+            viewport.frameAll()
             process_events(hou, QtWidgets)
             capture_single_view(scene, viewport, png_paths[index])
     finally:

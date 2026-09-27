@@ -46,6 +46,7 @@ class ScreenshotService:
         views: tuple[str, ...] = (),
         scale: float = 1.0,
         preset_path: Path | None = None,
+        pane: str | None = None,
     ) -> dict[str, object]:
         _validate_scale(scale)
         preset = (
@@ -66,6 +67,7 @@ class ScreenshotService:
             scale=scale,
             preset=preset,
             bounds=False,
+            pane=pane,
         )
         paths, _bounds = published
         if len(paths) == 1:
@@ -109,6 +111,7 @@ class ScreenshotService:
             scale=scale,
             preset=preset,
             bounds=True,
+            pane=None,
         )
         if bounds is None:
             raise BridgeError("screenshot_failed", "Window screenshot bounds are missing.")
@@ -124,6 +127,7 @@ class ScreenshotService:
         scale: float,
         preset: ScreenshotPreset,
         bounds: bool,
+        pane: str | None,
     ) -> tuple[tuple[Path, ...], dict[str, object] | None]:
         workspace = self._workspaces.allocate(prefix=f"capture-{kind}")
         published: list[Path] = []
@@ -147,6 +151,7 @@ class ScreenshotService:
                         "max_width": self._config.max_width,
                         "max_height": self._config.max_height,
                         "preset": preset.to_dict(),
+                        "pane": pane,
                     },
                     ensure_ascii=False,
                     separators=(",", ":"),
@@ -232,10 +237,23 @@ def _require_capture_success(path: Path) -> None:
     if payload.get("ok") is False:
         message = payload.get("message")
         detail = payload.get("detail")
+        code = payload.get("code")
+        context = payload.get("context")
+        if code is not None and (not isinstance(code, str) or not code):
+            raise BridgeError(
+                "screenshot_failed",
+                "Screenshot status contains an invalid error code.",
+            )
+        if context is not None and not isinstance(context, dict):
+            raise BridgeError(
+                "screenshot_failed",
+                "Screenshot status contains invalid error context.",
+            )
         raise BridgeError(
-            "screenshot_failed",
+            code or "screenshot_failed",
             str(message) if isinstance(message, str) and message else "Screenshot capture failed inside Houdini.",
             str(detail)[:4096] if isinstance(detail, str) and detail else None,
+            context=context,
         )
 
 
