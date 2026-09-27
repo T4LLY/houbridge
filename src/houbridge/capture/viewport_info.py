@@ -52,6 +52,91 @@ class ViewportInfoService:
             workspace.remove()
 
 
+def _normalize_scene_viewer_catalog(catalog: object) -> dict[str, object]:
+    if not isinstance(catalog, dict) or set(catalog) != {"panes"}:
+        raise BridgeError(
+            "viewport_info_invalid",
+            "Houdini Scene Viewer catalog is invalid.",
+        )
+    panes = catalog.get("panes")
+    if not isinstance(panes, list):
+        raise BridgeError(
+            "viewport_info_invalid",
+            "Houdini Scene Viewer catalog has no panes array.",
+        )
+
+    normalized_panes: list[dict[str, object]] = []
+    for pane in panes:
+        if not isinstance(pane, dict) or set(pane) != {
+            "name",
+            "current_node",
+            "viewports",
+        }:
+            raise BridgeError(
+                "viewport_info_invalid",
+                "Houdini Scene Viewer pane entry is invalid.",
+            )
+        name = pane.get("name")
+        current_node = pane.get("current_node")
+        viewports = pane.get("viewports")
+        if (
+            not isinstance(name, str)
+            or (current_node is not None and not isinstance(current_node, str))
+            or not isinstance(viewports, list)
+        ):
+            raise BridgeError(
+                "viewport_info_invalid",
+                "Houdini Scene Viewer pane entry has invalid fields.",
+            )
+
+        normalized_viewports: list[dict[str, object]] = []
+        for viewport in viewports:
+            if not isinstance(viewport, dict) or set(viewport) != {
+                "name",
+                "type",
+                "width",
+                "height",
+            }:
+                raise BridgeError(
+                    "viewport_info_invalid",
+                    "Houdini viewport entry is invalid.",
+                )
+            viewport_name = viewport.get("name")
+            viewport_type = viewport.get("type")
+            width = viewport.get("width")
+            height = viewport.get("height")
+            if (
+                not isinstance(viewport_name, str)
+                or not isinstance(viewport_type, str)
+                or isinstance(width, bool)
+                or not isinstance(width, int)
+                or isinstance(height, bool)
+                or not isinstance(height, int)
+                or width < 0
+                or height < 0
+            ):
+                raise BridgeError(
+                    "viewport_info_invalid",
+                    "Houdini viewport entry has invalid fields.",
+                )
+            normalized_viewports.append(
+                {
+                    "name": viewport_name,
+                    "type": viewport_type,
+                    "width": width,
+                    "height": height,
+                }
+            )
+        normalized_panes.append(
+            {
+                "name": name,
+                "current_node": current_node,
+                "viewports": normalized_viewports,
+            }
+        )
+    return {"panes": normalized_panes}
+
+
 def _read_viewport_info(path: Path) -> dict[str, object]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -76,43 +161,9 @@ def _read_viewport_info(path: Path) -> dict[str, object]:
             "viewport_unavailable",
             str(payload.get("message") or "No Scene Viewer pane is available."),
         )
-    if set(payload) != {"ok", "viewports"} or payload.get("ok") is not True:
+    if set(payload) != {"ok", "panes"} or payload.get("ok") is not True:
         raise BridgeError(
             "viewport_info_invalid",
             "Houdini viewport information has an invalid result envelope.",
         )
-    viewports = payload.get("viewports")
-    if not isinstance(viewports, list):
-        raise BridgeError(
-            "viewport_info_invalid",
-            "Houdini viewport information has no viewports array.",
-        )
-    normalized: list[dict[str, object]] = []
-    for item in viewports:
-        if not isinstance(item, dict) or set(item) != {"name", "type", "width", "height"}:
-            raise BridgeError(
-                "viewport_info_invalid",
-                "Houdini viewport entry is invalid.",
-            )
-        name = item.get("name")
-        viewport_type = item.get("type")
-        width = item.get("width")
-        height = item.get("height")
-        if (
-            not isinstance(name, str)
-            or not isinstance(viewport_type, str)
-            or isinstance(width, bool)
-            or not isinstance(width, int)
-            or isinstance(height, bool)
-            or not isinstance(height, int)
-            or width < 0
-            or height < 0
-        ):
-            raise BridgeError(
-                "viewport_info_invalid",
-                "Houdini viewport entry has invalid fields.",
-            )
-        normalized.append(
-            {"name": name, "type": viewport_type, "width": width, "height": height}
-        )
-    return {"viewports": normalized}
+    return _normalize_scene_viewer_catalog({"panes": payload.get("panes")})

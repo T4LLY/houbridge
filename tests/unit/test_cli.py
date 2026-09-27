@@ -58,6 +58,23 @@ def test_bridge_error_with_detail_adds_only_detail() -> None:
     }
 
 
+def test_bridge_error_with_context_adds_structured_recovery_data() -> None:
+    payload = bridge_error_payload(
+        BridgeError(
+            "scene_viewer_ambiguous",
+            "Multiple Scene Viewer panes are available; specify --pane.",
+            context={"panes": [{"name": "panetab1"}, {"name": "panetab4"}]},
+        )
+    )
+
+    assert payload == {
+        "error": True,
+        "code": "scene_viewer_ambiguous",
+        "message": "Multiple Scene Viewer panes are available; specify --pane.",
+        "context": {"panes": [{"name": "panetab1"}, {"name": "panetab4"}]},
+    }
+
+
 def test_compact_json_preserves_non_ascii_and_canonical_number_lexeme() -> None:
     serialized = serialize_result(
         {"name": "日本語", "score": CanonicalJsonNumber("301.278910")}

@@ -6,14 +6,21 @@ Define viewport inspection, viewport/window screenshots, OCR, and turntable vide
 
 ## Requirements
 
-### Requirement: Report visible Scene Viewer viewports
+### Requirement: Report visible Scene Viewer panes and their viewports
 
-Capture SHALL be able to inspect the currently visible Scene Viewer viewports and report only stable public viewport information needed by callers.
+Capture SHALL inspect every visible Scene Viewer pane tab returned by Houdini, including visible Scene Viewers in floating windows. Each pane SHALL expose its pane-tab name, current node path when available, and every viewport currently visible in that Scene Viewer. Pane ordering SHALL follow Houdini's enumeration and SHALL NOT carry public ordering semantics. Capture SHALL report only stable public data and SHALL NOT expose Houdini objects or implementation-only state.
 
-#### Scenario: A quad Scene Viewer is visible
-- **WHEN** viewport inspection runs against a quad layout
-- **THEN** each visible viewport is reported with its public name/type and pixel dimensions
-- **AND** internal Houdini objects or implementation-only state are not required by the caller
+`current_node` SHALL be the current node path when it can be obtained and SHALL be `null` when no current node is available or the current node cannot be read safely. Each viewport SHALL contain its public name/type and pixel dimensions. Viewport selection/current-state flags SHALL NOT be part of this catalog.
+
+#### Scenario: Several Scene Viewers are visible
+- **WHEN** viewport inspection runs while multiple Scene Viewer pane tabs are visible
+- **THEN** every visible Scene Viewer is reported as a separate pane entry
+- **AND** each pane contains every viewport currently visible in that Scene Viewer
+- **AND** pane ordering does not imply selection priority
+
+#### Scenario: A Scene Viewer has no readable current node
+- **WHEN** the Scene Viewer has no current node or its current node cannot be read safely
+- **THEN** its `current_node` is `null`
 
 #### Scenario: No Scene Viewer is available
 - **WHEN** no usable Scene Viewer exists

@@ -69,7 +69,22 @@ class _ViewportInfo:
         pass
 
     def info(self, _resolved):
-        return {"viewports": [{"name": "persp1", "type": "persp", "width": 10, "height": 10}]}
+        return {
+            "panes": [
+                {
+                    "name": "panetab1",
+                    "current_node": "/obj/geo1/OUT",
+                    "viewports": [
+                        {
+                            "name": "persp1",
+                            "type": "persp",
+                            "width": 10,
+                            "height": 10,
+                        }
+                    ],
+                }
+            ]
+        }
 
 
 def _install(monkeypatch):
@@ -129,7 +144,10 @@ def test_viewport_info_uses_selected_session_and_exact_public_shape(monkeypatch)
     result = runner.invoke(app, ["capture", "viewport", "--info", "--session", "3"])
 
     assert result.exit_code == 0
-    assert result.stdout == '{"viewports":[{"name":"persp1","type":"persp","width":10,"height":10}]}\n'
+    assert result.stdout == (
+        '{"panes":[{"name":"panetab1","current_node":"/obj/geo1/OUT",'
+        '"viewports":[{"name":"persp1","type":"persp","width":10,"height":10}]}]}\n'
+    )
     assert resolver.calls == [3]
 
 

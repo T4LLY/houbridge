@@ -18,7 +18,7 @@ Supported options SHALL be:
 
 | Option | Constraint / meaning |
 | --- | --- |
-| `--info` | Return visible viewport metadata instead of capturing. |
+| `--info` | Return visible Scene Viewer pane and viewport metadata instead of capturing. |
 | `--top` | Capture top view. |
 | `--bottom` | Capture bottom view. |
 | `--front` | Capture front view. |
@@ -37,12 +37,29 @@ When no individual view is supplied, a preset view SHALL be used when defined; o
 
 #### Scenario: Request viewport info
 - **WHEN** `--info` is used alone
-- **THEN** output is:
+- **THEN** output contains a `panes` array with one entry per visible Scene Viewer pane tab
+- **AND** each pane contains exactly `name`, `current_node`, and `viewports`
+- **AND** `current_node` is a node path string or `null`
+- **AND** `viewports` contains every viewport currently visible in that Scene Viewer
+- **AND** each viewport contains exactly `name`, `type`, `width`, and `height`
+- **AND** pane ordering has no selection or priority semantics
+- **AND** output is shaped like:
 
 ```json
 {
-  "viewports": [
-    {"name":"persp1","type":"persp","width":1280,"height":720}
+  "panes": [
+    {
+      "name":"panetab1",
+      "current_node":"/obj/robot/OUT",
+      "viewports":[
+        {"name":"persp1","type":"persp","width":1280,"height":720}
+      ]
+    },
+    {
+      "name":"panetab4",
+      "current_node":null,
+      "viewports":[]
+    }
   ]
 }
 ```

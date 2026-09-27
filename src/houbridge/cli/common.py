@@ -59,6 +59,8 @@ def bridge_error_payload(error: BridgeError) -> dict[str, object]:
     }
     if error.detail:
         payload["detail"] = error.detail
+    if error.context:
+        payload["context"] = error.context
     return payload
 
 

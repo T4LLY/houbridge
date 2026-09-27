@@ -55,16 +55,28 @@ When non-empty diagnostic detail exists, `detail` SHALL be added:
 {"error":true,"code":"ERROR_CODE","message":"message","detail":"diagnostic detail"}
 ```
 
-The failure envelope SHALL NOT add `ok`, a null `resource`, or other generic fields not defined above.
+When a command-specific contract defines structured recovery data, the handled `BridgeError` MAY additionally contain a non-empty JSON object named `context`. Recovery data SHALL remain structured inside `context` rather than adding command-specific top-level fields. Empty context SHALL be omitted.
 
-#### Scenario: BridgeError has no detail
-- **WHEN** a command raises a handled `BridgeError` without detail
+```json
+{"error":true,"code":"ERROR_CODE","message":"message","context":{"key":"value"}}
+```
+
+The failure envelope SHALL NOT add `ok`, a null `resource`, or top-level fields other than `error`, `code`, `message`, optional `detail`, and optional `context`.
+
+#### Scenario: BridgeError has no optional data
+- **WHEN** a command raises a handled `BridgeError` without detail or context
 - **THEN** the JSON object contains exactly `error`, `code`, and `message`
 - **AND** the process exits with status `1`
 
 #### Scenario: BridgeError has detail
 - **WHEN** a handled `BridgeError` contains non-empty detail
 - **THEN** `detail` is included
+- **AND** the process exits with status `1`
+
+#### Scenario: BridgeError has structured recovery context
+- **WHEN** a handled `BridgeError` contains non-empty command-specific recovery context
+- **THEN** that data is included under the top-level `context` object
+- **AND** no command-specific recovery field is added directly to the top-level error object
 - **AND** the process exits with status `1`
 
 ### Requirement: Wrap unexpected internal failures

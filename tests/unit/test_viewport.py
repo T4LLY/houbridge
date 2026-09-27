@@ -8,6 +8,7 @@ import pytest
 
 from houbridge.capture.viewport_info import ViewportInfoService
 from houbridge.errors import BridgeError
+from houbridge.houdini.scripts.capture import runtime as capture_runtime
 from houbridge.houdini.transport import HoudiniTarget
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
@@ -30,13 +31,34 @@ class _Transport:
         )
 
 
-def test_viewport_info_returns_only_stable_public_fields(tmp_path: Path) -> None:
+def test_viewport_info_returns_scene_viewer_catalog(tmp_path: Path) -> None:
     transport = _Transport(
         {
             "ok": True,
-            "viewports": [
-                {"name": "persp1", "type": "persp", "width": 960, "height": 540},
-                {"name": "top1", "type": "top", "width": 960, "height": 540},
+            "panes": [
+                {
+                    "name": "panetab1",
+                    "current_node": "/obj/robot/OUT",
+                    "viewports": [
+                        {
+                            "name": "persp1",
+                            "type": "persp",
+                            "width": 960,
+                            "height": 540,
+                        },
+                        {
+                            "name": "top1",
+                            "type": "top",
+                            "width": 960,
+                            "height": 540,
+                        },
+                    ],
+                },
+                {
+                    "name": "panetab4",
+                    "current_node": None,
+                    "viewports": [],
+                },
             ],
         }
     )
@@ -46,9 +68,30 @@ def test_viewport_info_returns_only_stable_public_fields(tmp_path: Path) -> None
     )
 
     assert service.info(_Session()) == {
-        "viewports": [
-            {"name": "persp1", "type": "persp", "width": 960, "height": 540},
-            {"name": "top1", "type": "top", "width": 960, "height": 540},
+        "panes": [
+            {
+                "name": "panetab1",
+                "current_node": "/obj/robot/OUT",
+                "viewports": [
+                    {
+                        "name": "persp1",
+                        "type": "persp",
+                        "width": 960,
+                        "height": 540,
+                    },
+                    {
+                        "name": "top1",
+                        "type": "top",
+                        "width": 960,
+                        "height": 540,
+                    },
+                ],
+            },
+            {
+                "name": "panetab4",
+                "current_node": None,
+                "viewports": [],
+            },
         ]
     }
     assert not transport.runners[0].parent.exists()
@@ -66,13 +109,17 @@ def test_viewport_info_reports_missing_scene_viewer(tmp_path: Path) -> None:
     assert caught.value.code == "viewport_unavailable"
 
 
-def test_viewport_info_rejects_invalid_entry_shape(tmp_path: Path) -> None:
+def test_viewport_info_rejects_invalid_pane_shape(tmp_path: Path) -> None:
     service = ViewportInfoService(
         _Transport(
             {
                 "ok": True,
-                "viewports": [
-                    {"name": "persp1", "type": "persp", "width": "960", "height": 540}
+                "panes": [
+                    {
+                        "name": "panetab1",
+                        "current_node": 42,
+                        "viewports": [],
+                    }
                 ],
             }
         ),
@@ -85,10 +132,131 @@ def test_viewport_info_rejects_invalid_entry_shape(tmp_path: Path) -> None:
     assert caught.value.code == "viewport_info_invalid"
 
 
-def test_viewport_info_injected_source_lives_under_capture_script_boundary() -> None:
+def test_scene_viewer_catalog_lists_all_visible_scene_viewer_tabs_and_viewports() -> None:
+    viewport_types = SimpleNamespace(
+        Top=object(),
+        Bottom=object(),
+        Front=object(),
+        Back=object(),
+        Left=object(),
+        Right=object(),
+        Perspective=object(),
+        UV=object(),
+    )
+
+    class _Node:
+        def __init__(self, path: str) -> None:
+            self._path = path
+
+        def path(self) -> str:
+            return self._path
+
+    class _Viewport:
+        def __init__(
+            self,
+            name: str,
+            kind,
+            geometry: tuple[int, int, int, int],
+            *,
+            visible: bool = True,
+        ) -> None:
+            self._name = name
+            self._kind = kind
+            self._geometry = geometry
+            self._visible = visible
+
+        def name(self) -> str:
+            return self._name
+
+        def type(self):
+            return self._kind
+
+        def isVisible(self) -> bool:
+            return self._visible
+
+        def geometry(self) -> tuple[int, int, int, int]:
+            return self._geometry
+
+    class _PaneTab:
+        def __init__(self, name: str, kind) -> None:
+            self._name = name
+            self._kind = kind
+
+        def name(self) -> str:
+            return self._name
+
+        def type(self):
+            return self._kind
+
+    class _SceneViewer(_PaneTab):
+        def __init__(self, name: str, node, viewports) -> None:
+            super().__init__(name, "scene_viewer")
+            self._node = node
+            self._viewports = tuple(viewports)
+
+        def currentNode(self):
+            return self._node
+
+        def viewports(self):
+            return self._viewports
+
+    scene_a = _SceneViewer(
+        "panetab1",
+        _Node("/obj/robot/OUT"),
+        [
+            _Viewport("persp1", viewport_types.Perspective, (0, 0, 1280, 720)),
+            _Viewport("top1", viewport_types.Top, (0, 0, 640, 360)),
+            _Viewport(
+                "right1",
+                viewport_types.Right,
+                (-1, -1, -1, -1),
+                visible=False,
+            ),
+        ],
+    )
+    scene_b = _SceneViewer("panetab4", None, [])
+    other = _PaneTab("panetab2", "network_editor")
+    hou = SimpleNamespace(
+        ui=SimpleNamespace(paneTabs=lambda: (scene_a, other, scene_b)),
+        paneTabType=SimpleNamespace(SceneViewer="scene_viewer"),
+        geometryViewportType=viewport_types,
+    )
+
+    scenes = capture_runtime.list_scene_viewers(hou)
+
+    assert scenes == (scene_a, scene_b)
+    assert capture_runtime.describe_scene_viewers(scenes, hou) == {
+        "panes": [
+            {
+                "name": "panetab1",
+                "current_node": "/obj/robot/OUT",
+                "viewports": [
+                    {
+                        "name": "persp1",
+                        "type": "persp",
+                        "width": 1280,
+                        "height": 720,
+                    },
+                    {
+                        "name": "top1",
+                        "type": "top",
+                        "width": 640,
+                        "height": 360,
+                    },
+                ],
+            },
+            {
+                "name": "panetab4",
+                "current_node": None,
+                "viewports": [],
+            },
+        ]
+    }
+
+
+def test_viewport_info_injected_source_reuses_capture_runtime_catalog() -> None:
     from houbridge.houdini.scripts.capture import viewport_info
 
     source = Path(viewport_info.__file__).read_text(encoding="utf-8")
-    assert "hou.ui.curDesktop().paneTabOfType(hou.paneTabType.SceneViewer)" in source
-    assert "viewport.isVisible()" in source
-    assert '"width": int(width)' in source
+    assert 'runtime["list_scene_viewers"](hou)' in source
+    assert 'runtime["describe_scene_viewers"](scenes, hou)' in source

@@ -73,7 +73,7 @@ def viewport_command(
     info: bool = typer.Option(
         False,
         "--info",
-        help="List available Scene Viewer viewports instead of capturing.",
+        help="List available Scene Viewer panes and viewports instead of capturing.",
     ),
     top: bool = typer.Option(False, "--top", help="Capture the top view."),
     bottom: bool = typer.Option(False, "--bottom", help="Capture the bottom view."),

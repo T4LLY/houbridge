@@ -38,6 +38,66 @@ ATTR_CLASSES = {
 }
 
 
+def list_scene_viewers(hou):
+    return tuple(
+        pane_tab
+        for pane_tab in hou.ui.paneTabs()
+        if pane_tab.type() == hou.paneTabType.SceneViewer
+    )
+
+
+def _viewport_type_name(viewport, hou):
+    names = {
+        hou.geometryViewportType.Top: "top",
+        hou.geometryViewportType.Bottom: "bottom",
+        hou.geometryViewportType.Front: "front",
+        hou.geometryViewportType.Back: "back",
+        hou.geometryViewportType.Left: "left",
+        hou.geometryViewportType.Right: "right",
+        hou.geometryViewportType.Perspective: "persp",
+        hou.geometryViewportType.UV: "uv",
+    }
+    return names.get(
+        viewport.type(),
+        str(viewport.type()).rsplit(".", 1)[-1].lower(),
+    )
+
+
+def _scene_current_node_path(scene):
+    try:
+        node = scene.currentNode()
+        return None if node is None else node.path()
+    except BaseException:
+        return None
+
+
+def describe_scene_viewer(scene, hou):
+    viewports = []
+    for viewport in scene.viewports():
+        if not viewport.isVisible():
+            continue
+        _x, _y, width, height = viewport.geometry()
+        viewports.append(
+            {
+                "name": viewport.name(),
+                "type": _viewport_type_name(viewport, hou),
+                "width": int(width),
+                "height": int(height),
+            }
+        )
+    return {
+        "name": scene.name(),
+        "current_node": _scene_current_node_path(scene),
+        "viewports": viewports,
+    }
+
+
+def describe_scene_viewers(scenes, hou):
+    return {
+        "panes": [describe_scene_viewer(scene, hou) for scene in scenes],
+    }
+
+
 def constrained_size(width, height, scale, max_width, max_height):
     scaled_width = max(1, int(round(width * scale)))
     scaled_height = max(1, int(round(height * scale)))
