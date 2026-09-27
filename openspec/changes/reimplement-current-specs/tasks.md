@@ -207,7 +207,6 @@
 - [x] 13.2 Inspect visible Scene Viewer viewports and expose only stable public viewport information.
 - [x] 13.3 Capture the active viewport to PNG.
 - [x] 13.4 Implement directed top/bottom/front/back/left/right/persp/uv captures using cloned/temporary viewer state without modifying the user's viewer.
-- [x] 13.5 Implement the fixed captioned four-view quad image.
 - [x] 13.6 Parse screenshot preset JSON strictly and reject unknown keys/invalid values.
 - [x] 13.7 Enforce viewport/window/turntable-specific preset capability restrictions.
 - [x] 13.8 Apply requested positive scale before aspect-preserving clamp to configured maximum dimensions.
@@ -222,7 +221,7 @@
 - [x] 13.17 Treat turntable PNG frames as private encoding intermediates and remove them after successful/failed finalization as specified.
 - [x] 13.18 Encode turntable output only as MP4 through external ffmpeg and do not expose an `--ffmpeg` public option.
 - [x] 13.19 Wire viewport/info, window, OCR, and turntable CLI contracts with their exact success JSON shapes.
-- [x] 13.20 Add Capture tests for view selection, cloned-view preservation, quad layout, preset validation, scale/clamp, window bounds/crop, temp publication/retention, OCR, turntable orbit/distance/ffmpeg/frame cleanup, and CLI output.
+- [x] 13.20 Add Capture tests for view selection, cloned-view preservation, preset validation, scale/clamp, window bounds/crop, temp publication/retention, OCR, turntable orbit/distance/ffmpeg/frame cleanup, and CLI output.
 
 ## 14. Session Action History
 

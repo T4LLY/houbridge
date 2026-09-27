@@ -44,7 +44,6 @@ class ScreenshotService:
         session: ResolvedSession,
         *,
         views: tuple[str, ...] = (),
-        quad: bool = False,
         scale: float = 1.0,
         preset_path: Path | None = None,
     ) -> dict[str, object]:
@@ -55,21 +54,15 @@ class ScreenshotService:
             else ScreenshotPreset()
         )
         normalized_views = tuple(validate_screenshot_view(view) for view in views)
-        if quad and normalized_views:
-            raise BridgeError(
-                "screenshot_view_conflict",
-                "Quad capture cannot be combined with individual viewport directions.",
-            )
         effective_views = normalized_views
-        if not quad and not effective_views and preset.view is not None:
+        if not effective_views and preset.view is not None:
             effective_views = (preset.view,)
-        capture_labels = ("quad",) if quad else (effective_views or ("active",))
+        capture_labels = effective_views or ("active",)
         published = self._capture(
             session,
             kind="viewport",
             labels=capture_labels,
             requested_views=effective_views,
-            quad=quad,
             scale=scale,
             preset=preset,
             bounds=False,
@@ -113,7 +106,6 @@ class ScreenshotService:
             kind="window",
             labels=("window",),
             requested_views=(),
-            quad=False,
             scale=scale,
             preset=preset,
             bounds=True,
@@ -129,7 +121,6 @@ class ScreenshotService:
         kind: ScreenshotKind,
         labels: tuple[str, ...],
         requested_views: tuple[str, ...],
-        quad: bool,
         scale: float,
         preset: ScreenshotPreset,
         bounds: bool,
@@ -152,7 +143,6 @@ class ScreenshotService:
                         "bounds_path": str(bounds_path) if bounds_path is not None else None,
                         "result_path": str(result_path),
                         "requested_views": list(requested_views),
-                        "quad": quad,
                         "scale": scale,
                         "max_width": self._config.max_width,
                         "max_height": self._config.max_height,

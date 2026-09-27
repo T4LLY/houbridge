@@ -27,14 +27,13 @@ Supported options SHALL be:
 | `--right` | Capture right view. |
 | `--persp` | Capture perspective view. |
 | `--uv` | Capture UV view. |
-| `--quad` | Capture quad-layout output. |
 | `--scale FLOAT` | Must be greater than zero; default `1.0`; final dimensions are constrained by the shared screenshot maximums. |
 | `--preset PATH` | Existing readable screenshot-preset JSON file. |
 | `--session INTEGER` | Positive registered session number; uses primary when omitted. |
 
-`--info` SHALL NOT be combined with capture directions, `--quad`, non-default `--scale`, or `--preset`. `--quad` SHALL NOT be combined with individual view flags.
+`--info` SHALL NOT be combined with capture directions, non-default `--scale`, or `--preset`.
 
-When no individual view and no `--quad` are supplied, a preset view SHALL be used when defined; otherwise the active viewport SHALL be captured. Explicit direction flags and `--quad` take precedence over a preset `view`.
+When no individual view is supplied, a preset view SHALL be used when defined; otherwise the active viewport SHALL be captured. Explicit direction flags take precedence over a preset `view`.
 
 #### Scenario: Request viewport info
 - **WHEN** `--info` is used alone
@@ -72,10 +71,6 @@ When no individual view and no `--quad` are supplied, a preset view SHALL be use
 #### Scenario: Info conflicts with capture options
 - **WHEN** `--info` is combined with a capture option
 - **THEN** the command fails with `capture_info_conflict`
-
-#### Scenario: Quad conflicts with a direction
-- **WHEN** `--quad` and an individual view flag are both supplied
-- **THEN** the command fails with `screenshot_view_conflict`
 
 ### Requirement: Define the screenshot preset JSON contract
 

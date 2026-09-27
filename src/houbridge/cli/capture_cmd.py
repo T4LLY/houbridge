@@ -83,11 +83,6 @@ def viewport_command(
     right: bool = typer.Option(False, "--right", help="Capture the right view."),
     persp: bool = typer.Option(False, "--persp", help="Capture the perspective view."),
     uv: bool = typer.Option(False, "--uv", help="Capture the UV view."),
-    quad: bool = typer.Option(
-        False,
-        "--quad",
-        help="Capture top, perspective, front, and right views as a quad.",
-    ),
     scale: float = typer.Option(
         1.0,
         "--scale",
@@ -123,21 +118,13 @@ def viewport_command(
         )
         if enabled
     )
-    if info and (selected or quad or scale != 1.0 or preset is not None):
+    if info and (selected or scale != 1.0 or preset is not None):
         terminate_with_bridge_error(
             BridgeError(
                 "capture_info_conflict",
                 "--info cannot be combined with viewport capture options.",
             )
         )
-    if quad and selected:
-        terminate_with_bridge_error(
-            BridgeError(
-                "screenshot_view_conflict",
-                "--quad cannot be combined with individual viewport directions.",
-            )
-        )
-
     try:
         settings = load_config()
         resolver, transport = _resolver_and_transport(settings)
@@ -148,7 +135,6 @@ def viewport_command(
             payload = _screenshot_service(settings, transport).capture_viewport(
                 resolved,
                 views=selected,
-                quad=quad,
                 scale=scale,
                 preset_path=preset,
             )

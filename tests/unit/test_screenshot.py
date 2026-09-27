@@ -191,23 +191,6 @@ def test_preset_view_is_used_but_explicit_direction_overrides_it(tmp_path: Path)
     assert transport.requests[1]["preset"]["shading"] == "smoothwire"
 
 
-def test_quad_is_one_capture_and_injected_code_uses_clone_fixed_views_and_captions(tmp_path: Path) -> None:
-    service = _service(tmp_path)
-    result = service.capture_viewport(_Session(), quad=True)
-
-    assert set(result) == {"path"}
-    from houbridge.houdini.scripts.capture import viewport
-
-    source = Path(viewport.__file__).read_text(encoding="utf-8")
-    assert "source_scene.clone" not in source
-    runtime_source = Path(viewport.__file__).with_name("runtime.py").read_text(encoding="utf-8")
-    assert "source_scene.clone()" in runtime_source
-    assert "hou.geometryViewportLayout.Quad" in source
-    for entry in ('("top", 0, 0)', '("persp", 1, 0)', '("front", 0, 1)', '("right", 1, 1)'):
-        assert entry in source
-    assert "_draw_caption(cell, label" in source
-
-
 def test_active_view_without_preset_does_not_clone_or_change_live_view(tmp_path: Path) -> None:
     transport = _CaptureTransport()
     service = _service(tmp_path, transport)
@@ -215,7 +198,7 @@ def test_active_view_without_preset_does_not_clone_or_change_live_view(tmp_path:
     service.capture_viewport(_Session())
 
     assert transport.requests[0]["requested_views"] == []
-    assert transport.requests[0]["quad"] is False
+    assert "quad" not in transport.requests[0]
     from houbridge.houdini.scripts.capture import viewport
 
     source = Path(viewport.__file__).read_text(encoding="utf-8")

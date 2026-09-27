@@ -109,9 +109,10 @@ def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     assert "turntable" in capture.stdout
     for option in (
         "--info", "--top", "--bottom", "--front", "--back", "--left", "--right",
-        "--persp", "--uv", "--quad", "--scale", "--preset", "--session",
+        "--persp", "--uv", "--scale", "--preset", "--session",
     ):
         assert option in viewport.stdout
+    assert "--quad" not in viewport.stdout
     for option in ("--scale", "--crop", "--preset", "--session"):
         assert option in window.stdout
     for option in ("--frames", "--fps", "--scale", "--pivot", "--distance", "--preset", "--session"):
@@ -144,20 +145,16 @@ def test_viewport_capture_passes_multiple_directions_and_scale(monkeypatch) -> N
     assert result.stdout == '{"path":"D:/Temp/viewport.png"}\n'
     assert service.viewport_calls[0][1] == {
         "views": ("front", "right"),
-        "quad": False,
         "scale": 2.5,
         "preset_path": None,
     }
 
 
-def test_viewport_info_conflict_and_quad_conflict_use_spec_codes() -> None:
+def test_viewport_info_conflict_uses_spec_code() -> None:
     info = runner.invoke(app, ["capture", "viewport", "--info", "--scale", "2"])
-    quad = runner.invoke(app, ["capture", "viewport", "--quad", "--front"])
 
     assert info.exit_code == 1
     assert '"code":"capture_info_conflict"' in info.stdout
-    assert quad.exit_code == 1
-    assert '"code":"screenshot_view_conflict"' in quad.stdout
 
 
 def test_window_command_passes_explicit_crop_and_returns_inline_bounds(monkeypatch) -> None:

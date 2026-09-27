@@ -42,15 +42,6 @@ Directed captures SHALL use a temporary/cloned Scene Viewer state rather than pe
 - **THEN** each requested view is captured independently
 - **AND** completion of one view does not mutate the user's live Scene Viewer state for the next
 
-### Requirement: Capture a fixed captioned quad image
-
-Capture SHALL support one four-view image arranged top/perspective/front/right in a fixed two-by-two layout with readable captions.
-
-#### Scenario: Capture quad reference views
-- **WHEN** quad capture is requested
-- **THEN** top, perspective, front, and right views are composed into one image
-- **AND** each quadrant is captioned with its view identity
-
 ### Requirement: Parse screenshot presets strictly
 
 Screenshot presets SHALL be JSON objects parsed through one Capture preset loader. The loader SHALL accept only the keys and values defined by the Capture command contract and SHALL reject unknown settings rather than ignoring them. View and shading values SHALL use their source-defined case-insensitive normalization; overlay keys and attribute classes SHALL remain restricted to their defined names.
