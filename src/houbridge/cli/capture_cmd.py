@@ -267,6 +267,11 @@ def turntable_command(
         readable=True,
         help="Apply shading, overlay, and attribute preset settings.",
     ),
+    pane: str | None = typer.Option(
+        None,
+        "--pane",
+        help="Capture from this Scene Viewer pane-tab name.",
+    ),
     session: int | None = typer.Option(
         None,
         "--session",
@@ -287,6 +292,7 @@ def turntable_command(
             pivot=parsed_pivot,
             distance=distance,
             preset_path=preset,
+            pane=pane,
         )
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:

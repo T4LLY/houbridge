@@ -51,6 +51,7 @@ class TurntableService:
         pivot: tuple[float, float, float] = _DEFAULT_PIVOT,
         distance: float | None = None,
         preset_path: Path | None = None,
+        pane: str | None = None,
     ) -> dict[str, str]:
         _validate_frames(frames)
         _validate_fps(fps)
@@ -81,6 +82,7 @@ class TurntableService:
                         "max_width": self._config.max_width,
                         "max_height": self._config.max_height,
                         "preset": preset.to_dict(),
+                        "pane": pane,
                     },
                     ensure_ascii=False,
                     separators=(",", ":"),
@@ -245,8 +247,21 @@ def _require_turntable_success(path: Path) -> None:
         return
     message = payload.get("message")
     detail = payload.get("detail")
+    code = payload.get("code")
+    context = payload.get("context")
+    if code is not None and (not isinstance(code, str) or not code):
+        raise BridgeError(
+            "turntable_failed",
+            "Turntable status contains an invalid error code.",
+        )
+    if context is not None and not isinstance(context, dict):
+        raise BridgeError(
+            "turntable_failed",
+            "Turntable status contains invalid error context.",
+        )
     raise BridgeError(
-        "turntable_failed",
+        code or "turntable_failed",
         message if isinstance(message, str) and message else "Turntable capture failed inside Houdini.",
         detail if isinstance(detail, str) and detail else None,
+        context=context,
     )

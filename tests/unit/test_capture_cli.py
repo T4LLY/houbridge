@@ -134,7 +134,10 @@ def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     assert "--quad" not in viewport.stdout
     for option in ("--scale", "--crop", "--preset", "--session"):
         assert option in window.stdout
-    for option in ("--frames", "--fps", "--scale", "--pivot", "--distance", "--preset", "--session"):
+    for option in (
+        "--frames", "--fps", "--scale", "--pivot", "--distance", "--preset",
+        "--pane", "--session",
+    ):
         assert option in turntable.stdout
     assert "--ffmpeg" not in turntable.stdout
     for output in (viewport.stdout, window.stdout, turntable.stdout):
@@ -272,6 +275,7 @@ def test_turntable_command_uses_defaults_explicit_options_session_and_common_out
             "--scale", "0.5",
             "--pivot", "1,2,3",
             "--distance", "5",
+            "--pane", "panetab4",
             "--session", "6",
         ],
     )
@@ -286,6 +290,7 @@ def test_turntable_command_uses_defaults_explicit_options_session_and_common_out
         "pivot": (1.0, 2.0, 3.0),
         "distance": 5.0,
         "preset_path": None,
+        "pane": "panetab4",
     }
 
 

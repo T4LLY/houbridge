@@ -322,7 +322,10 @@ Supported options SHALL be:
 | `--pivot TEXT` | comma-separated world-space `x,y,z`, default `0,0,0`. |
 | `--distance FLOAT` | optional finite camera distance from the pivot; when supplied it SHALL be greater than zero. |
 | `--preset PATH` | existing readable screenshot-preset JSON file; turntable-compatible keys only. |
+| `--pane TEXT` | Exact Scene Viewer pane-tab name to use as the turntable source. |
 | `--session INTEGER` | Positive registered session number; uses primary when omitted. |
+
+Turntable capture SHALL select its source Scene Viewer with the same exact-name semantics as viewport `--pane`. If `--pane` is omitted, capture SHALL proceed automatically only when exactly one visible Scene Viewer exists. Multiple visible Scene Viewers SHALL fail with `scene_viewer_ambiguous`; a missing explicit pane SHALL fail with `scene_viewer_not_found`; duplicate exact pane names SHALL fail with `scene_viewer_ambiguous`. These selection failures SHALL include the available Scene Viewer catalog under `context.panes`.
 
 Turntable capture SHALL always encode the generated frames with `ffmpeg`. PNG frames are transient encoding intermediates only. After successful encoding, only the MP4 video SHALL be published; frame directories/patterns SHALL NOT be retained or exposed as supported output artifacts.
 
@@ -343,6 +346,15 @@ A successful turntable capture SHALL emit exactly:
 - **WHEN** `--distance 5.0` is supplied and the source camera has a valid direction from the pivot
 - **THEN** every turntable camera position SHALL remain exactly `5.0` world units from the pivot
 - **AND** the starting orbit direction SHALL match the source camera direction from the pivot
+
+#### Scenario: Turntable pane is selected explicitly
+- **WHEN** `--pane panetab4` matches exactly one visible Scene Viewer pane tab
+- **THEN** that Scene Viewer is used as the turntable source
+
+#### Scenario: Turntable pane selection is ambiguous
+- **WHEN** multiple visible Scene Viewers exist and `--pane` is omitted
+- **THEN** the command fails with `scene_viewer_ambiguous`
+- **AND** `context.panes` contains the available Scene Viewer catalog
 
 #### Scenario: Turntable distance is invalid
 - **WHEN** `--distance` is zero, negative, or non-finite

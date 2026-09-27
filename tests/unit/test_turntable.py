@@ -107,6 +107,7 @@ def test_turntable_defaults_capture_160_frames_and_publish_mp4_only(tmp_path: Pa
     assert transport.requests[0]["frames"] == 160
     assert transport.requests[0]["pivot"] == [0.0, 0.0, 0.0]
     assert transport.requests[0]["distance"] is None
+    assert transport.requests[0]["pane"] is None
     capture_dir = artifacts.root / "capture"
     assert [item.name for item in capture_dir.iterdir()] == [path.name]
     assert not any(item.suffix == ".png" for item in capture_dir.iterdir())
@@ -127,11 +128,13 @@ def test_explicit_distance_and_pivot_are_forwarded_without_changing_direction_co
         frames=2,
         pivot=(1.0, -2.0, 3.5),
         distance=5.0,
+        pane="panetab4",
     )
 
     request = transport.requests[0]
     assert request["pivot"] == [1.0, -2.0, 3.5]
     assert request["distance"] == 5.0
+    assert request["pane"] == "panetab4"
 
 
 def test_turntable_rejects_invalid_pivot_distance_and_turntable_incompatible_preset_before_transport(
@@ -218,6 +221,45 @@ def test_capture_or_encoding_failure_never_publishes_frames_or_video(tmp_path: P
     assert not capture_dir.exists() or list(capture_dir.iterdir()) == []
 
 
+def test_turntable_preserves_structured_scene_viewer_selection_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    class _PaneErrorTransport(_TurntableTransport):
+        def execute_script(self, _target, runner: Path):
+            workspace = runner.parent
+            request = json.loads((workspace / "request.json").read_text(encoding="utf-8"))
+            self.requests.append(request)
+            Path(request["result_path"]).write_text(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "code": "scene_viewer_ambiguous",
+                        "message": "Multiple Scene Viewer panes are available; specify --pane.",
+                        "context": {
+                            "panes": [{"name": "panetab1", "current_node": None, "viewports": []}]
+                        },
+                    },
+                    separators=(",", ":"),
+                ),
+                encoding="utf-8",
+            )
+
+    transport = _PaneErrorTransport()
+    service, _artifacts = _service(tmp_path, transport)
+    monkeypatch.setattr(
+        "houbridge.capture.turntable.encode_turntable_ffmpeg",
+        lambda *_args, **_kwargs: pytest.fail("ffmpeg must not run after pane selection failure"),
+    )
+
+    with pytest.raises(BridgeError) as caught:
+        service.capture(_Session(), frames=2)
+
+    assert caught.value.code == "scene_viewer_ambiguous"
+    assert caught.value.context == {
+        "panes": [{"name": "panetab1", "current_node": None, "viewports": []}]
+    }
+
+
 def test_turntable_injected_code_uses_shared_runtime_clockwise_orbit_and_distance_rule() -> None:
     from houbridge.houdini.scripts.capture import turntable
 
@@ -226,6 +268,9 @@ def test_turntable_injected_code_uses_shared_runtime_clockwise_orbit_and_distanc
     assert 'runtime["close_scene_viewer"]' in source
     assert 'runtime["flipbook_png"]' in source
     assert 'runtime["apply_preset"]' in source
+    assert 'runtime["resolve_scene_viewer"]' in source
+    assert 'pane_name = request.get("pane")' in source
+    assert "source_scene = resolve_scene_viewer(hou, pane_name)" in source
     assert "angle = -360.0 * float(index) / float(frames)" in source
     assert "offset = hou.Vector3(source_world_position) - pivot" in source
     assert "if distance_value is not None:" in source
@@ -233,4 +278,5 @@ def test_turntable_injected_code_uses_shared_runtime_clockwise_orbit_and_distanc
     assert "if offset.length() <= 1e-9:" in source
     assert "frame_camera.setPivot(tuple(pivot))" in source
     assert "source_scene.set" not in source
+    assert "paneTabOfType(hou.paneTabType.SceneViewer)" not in source
     assert "def _close_scene(" not in source

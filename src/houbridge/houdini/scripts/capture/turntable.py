@@ -26,6 +26,7 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
     create_attribute_visualizers = runtime["create_attribute_visualizers"]
     destroy_visualizers = runtime["destroy_visualizers"]
     flipbook_png = runtime["flipbook_png"]
+    resolve_scene_viewer = runtime["resolve_scene_viewer"]
 
     frames = int(request["frames"])
     frames_dir = Path(request["frames_dir"])
@@ -35,10 +36,9 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
     max_width = int(request["max_width"])
     max_height = int(request["max_height"])
     preset = request["preset"]
+    pane_name = request.get("pane")
 
-    source_scene = hou.ui.curDesktop().paneTabOfType(hou.paneTabType.SceneViewer)
-    if source_scene is None:
-        raise RuntimeError("No Scene Viewer pane is available.")
+    source_scene = resolve_scene_viewer(hou, pane_name)
     source_viewport = source_scene.curViewport()
     if source_viewport.type() != hou.geometryViewportType.Perspective:
         source_viewport = next(
@@ -134,6 +134,12 @@ def run(request_path: str) -> None:
             "message": str(exc) or type(exc).__name__,
             "detail": traceback.format_exc(),
         }
+        code = getattr(exc, "code", None)
+        context = getattr(exc, "context", None)
+        if isinstance(code, str) and code:
+            payload["code"] = code
+        if isinstance(context, dict) and context:
+            payload["context"] = context
     result_path.write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",

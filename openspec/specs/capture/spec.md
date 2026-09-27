@@ -274,7 +274,9 @@ OCR SHALL return its complete logical recognition result to the common Output su
 
 ### Requirement: Capture a clockwise turntable and encode video
 
-Turntable capture SHALL clone the current Scene Viewer, choose an available Perspective viewport, preserve its current camera position as the starting position, and orbit that camera clockwise through 360 degrees around the explicit world-space pivot on world Y. The pivot SHALL default to `(0,0,0)`. Every frame SHALL remain aimed at that pivot. The user's Scene Viewer SHALL not be modified.
+Turntable capture SHALL resolve its source Scene Viewer through the same shared pane-selection path as viewport capture. When exactly one visible Scene Viewer exists and no pane is specified, Capture SHALL use it automatically. When several are visible, Capture SHALL require an explicit pane-tab name. An explicit pane name SHALL match exactly one visible Scene Viewer. Missing and ambiguous pane selection failures SHALL preserve the shared `scene_viewer_not_found` / `scene_viewer_ambiguous` codes and SHALL include the available Scene Viewer catalog under `context.panes`.
+
+After selecting the source Scene Viewer, turntable capture SHALL clone it, choose an available Perspective viewport, preserve its current camera position as the starting position, and orbit that camera clockwise through 360 degrees around the explicit world-space pivot on world Y. The pivot SHALL default to `(0,0,0)`. Every frame SHALL remain aimed at that pivot. The user's Scene Viewer SHALL not be modified.
 
 The default frame count SHALL be `160`; the default FPS SHALL be `30`.
 
@@ -288,6 +290,17 @@ The default frame count SHALL be `160`; the default FPS SHALL be `30`.
 - **WHEN** the caller supplies three finite world-space coordinates
 - **THEN** those coordinates are used as the turntable pivot
 - **AND** every frame remains aimed at that pivot
+
+#### Scenario: Several Scene Viewers require an explicit turntable pane
+- **WHEN** turntable capture is requested without a pane name and more than one visible Scene Viewer exists
+- **THEN** Capture fails with `scene_viewer_ambiguous`
+- **AND** `context.panes` contains the available Scene Viewer catalog
+- **AND** Capture does not choose a Scene Viewer by enumeration order
+
+#### Scenario: Turntable uses an explicit Scene Viewer pane
+- **WHEN** `--pane` names exactly one visible Scene Viewer pane tab
+- **THEN** that Scene Viewer supplies the Perspective viewport used for the turntable source camera
+- **AND** the user's source Scene Viewer remains unmodified
 
 #### Scenario: Reject an invalid pivot
 - **WHEN** the pivot does not contain exactly three finite numbers
