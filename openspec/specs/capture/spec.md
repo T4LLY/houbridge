@@ -70,6 +70,19 @@ After changing the temporary viewport to each requested directed view, Capture S
 - **THEN** each requested view is captured independently
 - **AND** completion of one view does not mutate the user's live Scene Viewer state for the next
 
+### Requirement: Composite flipbook captures over the Scene Viewer background
+
+Viewport PNGs and turntable source frames produced through the Scene Viewer flipbook path SHALL composite the captured RGBA image over the current viewport color scheme before scaling and saving. The background SHALL use a vertical gradient from Houdini's `BackgroundColor` at the top to `BackgroundBottomColor` at the bottom. The resulting PNG SHALL be fully opaque so alpha-bearing viewport elements such as the grid retain their intended appearance against the Scene Viewer background. Window capture SHALL NOT use this flipbook background-compositing path.
+
+#### Scenario: Viewport flipbook contains transparent background pixels
+- **WHEN** Houdini produces a viewport flipbook PNG with transparent or partially transparent pixels
+- **THEN** Capture composites those pixels over the viewport's current top-to-bottom background gradient
+- **AND** saves an opaque viewport PNG
+
+#### Scenario: Turntable frame contains transparent background pixels
+- **WHEN** Houdini produces a turntable source frame through the shared flipbook path
+- **THEN** the same viewport background compositing is applied before the frame is scaled and encoded
+
 ### Requirement: Parse screenshot presets strictly
 
 Screenshot presets SHALL be JSON objects parsed through one Capture preset loader. The loader SHALL accept only the keys and values defined by the Capture command contract and SHALL reject unknown settings rather than ignoring them. View and shading values SHALL use their source-defined case-insensitive normalization; overlay keys and attribute classes SHALL remain restricted to their defined names.

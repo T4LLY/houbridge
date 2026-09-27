@@ -254,6 +254,144 @@ def test_scene_viewer_catalog_lists_all_visible_scene_viewer_tabs_and_viewports(
     }
 
 
+def test_composite_viewport_background_uses_viewport_gradient() -> None:
+    class _Color:
+        def __init__(self, rgb) -> None:
+            self._rgb = rgb
+
+        def rgb(self):
+            return self._rgb
+
+    class _Settings:
+        def __init__(self) -> None:
+            self.requested = []
+
+        def colorFromName(self, name: str):
+            self.requested.append(name)
+            return _Color(
+                {
+                    "BackgroundColor": (0.3, 0.3, 0.3),
+                    "BackgroundBottomColor": (0.25, 0.25, 0.25),
+                }[name]
+            )
+
+    class _Viewport:
+        def __init__(self) -> None:
+            self._settings = _Settings()
+
+        def settings(self):
+            return self._settings
+
+    class _Pixmap:
+        def __init__(self, width: int, height: int) -> None:
+            self._width = width
+            self._height = height
+
+        def width(self) -> int:
+            return self._width
+
+        def height(self) -> int:
+            return self._height
+
+        def rect(self):
+            return (0, 0, self._width, self._height)
+
+    class _Gradient:
+        def __init__(self, *coords) -> None:
+            self.coords = coords
+            self.stops = []
+
+        def setColorAt(self, position: float, color) -> None:
+            self.stops.append((position, color))
+
+    painters = []
+
+    class _Painter:
+        def __init__(self, target) -> None:
+            self.target = target
+            self.fills = []
+            self.draws = []
+            self.ended = False
+            painters.append(self)
+
+        def fillRect(self, rect, gradient) -> None:
+            self.fills.append((rect, gradient))
+
+        def drawPixmap(self, x: int, y: int, pixmap) -> None:
+            self.draws.append((x, y, pixmap))
+
+        def end(self) -> None:
+            self.ended = True
+
+    QtGui = SimpleNamespace(
+        QPixmap=_Pixmap,
+        QLinearGradient=_Gradient,
+        QColor=SimpleNamespace(fromRgbF=lambda *rgb: rgb),
+        QPainter=_Painter,
+    )
+    source = _Pixmap(1280, 720)
+    viewport = _Viewport()
+
+    result = capture_runtime.composite_viewport_background(source, viewport, QtGui)
+
+    assert (result.width(), result.height()) == (1280, 720)
+    assert viewport.settings().requested == [
+        "BackgroundColor",
+        "BackgroundBottomColor",
+    ]
+    painter = painters[0]
+    gradient = painter.fills[0][1]
+    assert gradient.coords == (0.0, 0.0, 0.0, 719.0)
+    assert gradient.stops == [
+        (0.0, (0.3, 0.3, 0.3)),
+        (1.0, (0.25, 0.25, 0.25)),
+    ]
+    assert painter.draws == [(0, 0, source)]
+    assert painter.ended is True
+
+
+def test_flipbook_png_composites_background_before_saving(monkeypatch, tmp_path: Path) -> None:
+    events = []
+    raw = object()
+    composited = object()
+    viewport = object()
+
+    monkeypatch.setattr(
+        capture_runtime,
+        "flipbook_pixmap",
+        lambda *args, **kwargs: events.append("flipbook") or raw,
+    )
+    monkeypatch.setattr(
+        capture_runtime,
+        "composite_viewport_background",
+        lambda pixmap, actual_viewport, QtGui: (
+            events.append("composite") or composited
+        )
+        if pixmap is raw and actual_viewport is viewport
+        else None,
+    )
+
+    def _save(pixmap, path, **kwargs) -> None:
+        assert pixmap is composited
+        events.append("save")
+
+    monkeypatch.setattr(capture_runtime, "save_pixmap", _save)
+
+    capture_runtime.flipbook_png(
+        object(),
+        viewport,
+        tmp_path / "capture.png",
+        scale=1.0,
+        max_width=2048,
+        max_height=2048,
+        hou=object(),
+        QtCore=object(),
+        QtGui=object(),
+    )
+
+    assert events == ["flipbook", "composite", "save"]
+
+
 def test_viewport_info_injected_source_reuses_capture_runtime_catalog() -> None:
     from houbridge.houdini.scripts.capture import viewport_info
 

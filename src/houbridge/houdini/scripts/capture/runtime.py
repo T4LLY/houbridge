@@ -197,6 +197,30 @@ def flipbook_pixmap(scene, viewport, path, *, hou, QtGui):
     return pixmap
 
 
+def composite_viewport_background(pixmap, viewport, QtGui):
+    settings = viewport.settings()
+    top_rgb = settings.colorFromName("BackgroundColor").rgb()
+    bottom_rgb = settings.colorFromName("BackgroundBottomColor").rgb()
+
+    background = QtGui.QPixmap(pixmap.width(), pixmap.height())
+    gradient = QtGui.QLinearGradient(
+        0.0,
+        0.0,
+        0.0,
+        float(max(1, pixmap.height() - 1)),
+    )
+    gradient.setColorAt(0.0, QtGui.QColor.fromRgbF(*top_rgb))
+    gradient.setColorAt(1.0, QtGui.QColor.fromRgbF(*bottom_rgb))
+
+    painter = QtGui.QPainter(background)
+    try:
+        painter.fillRect(background.rect(), gradient)
+        painter.drawPixmap(0, 0, pixmap)
+    finally:
+        painter.end()
+    return background
+
+
 def flipbook_png(
     scene,
     viewport,
@@ -210,6 +234,7 @@ def flipbook_png(
     QtGui,
 ):
     pixmap = flipbook_pixmap(scene, viewport, path, hou=hou, QtGui=QtGui)
+    pixmap = composite_viewport_background(pixmap, viewport, QtGui)
     save_pixmap(
         pixmap,
         path,
