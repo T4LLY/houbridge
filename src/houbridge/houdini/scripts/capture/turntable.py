@@ -17,19 +17,11 @@ def _orbit_rotation(angle_degrees, hou):
     ).extractRotationMatrix3()
 
 
-def _close_scene(scene):
-    try:
-        scene.close()
-    except BaseException:
-        panel = scene.floatingPanel()
-        if panel is not None:
-            panel.close()
-
-
 def capture(request, hou, QtCore, QtGui, QtWidgets):
     runtime = _runtime()
     process_events = runtime["process_events"]
     clone_scene_viewer = runtime["clone_scene_viewer"]
+    close_scene_viewer = runtime["close_scene_viewer"]
     apply_preset = runtime["apply_preset"]
     create_attribute_visualizers = runtime["create_attribute_visualizers"]
     destroy_visualizers = runtime["destroy_visualizers"]
@@ -124,7 +116,7 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
             )
     finally:
         destroy_visualizers(visualizers)
-        _close_scene(scene)
+        close_scene_viewer(scene)
 
 
 def run(request_path: str) -> None:

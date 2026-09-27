@@ -223,6 +223,7 @@ def test_turntable_injected_code_uses_shared_runtime_clockwise_orbit_and_distanc
 
     source = Path(turntable.__file__).read_text(encoding="utf-8")
     assert 'runtime["clone_scene_viewer"]' in source
+    assert 'runtime["close_scene_viewer"]' in source
     assert 'runtime["flipbook_png"]' in source
     assert 'runtime["apply_preset"]' in source
     assert "angle = -360.0 * float(index) / float(frames)" in source
@@ -232,3 +233,4 @@ def test_turntable_injected_code_uses_shared_runtime_clockwise_orbit_and_distanc
     assert "if offset.length() <= 1e-9:" in source
     assert "frame_camera.setPivot(tuple(pivot))" in source
     assert "source_scene.set" not in source
+    assert "def _close_scene(" not in source

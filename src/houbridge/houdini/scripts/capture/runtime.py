@@ -263,6 +263,15 @@ def clone_scene_viewer(source_scene, hou, QtWidgets):
     return cloned
 
 
+def close_scene_viewer(scene):
+    try:
+        scene.close()
+    except BaseException:
+        panel = scene.floatingPanel()
+        if panel is not None:
+            panel.close()
+
+
 def apply_preset(viewport, preset, hou):
     settings = viewport.settings()
     shading = preset.get("shading")

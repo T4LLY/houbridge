@@ -392,6 +392,27 @@ def test_flipbook_png_composites_background_before_saving(monkeypatch, tmp_path:
     assert events == ["flipbook", "composite", "save"]
 
 
+def test_close_scene_viewer_uses_panel_fallback_when_direct_close_fails() -> None:
+    events = []
+
+    class _Panel:
+        def close(self) -> None:
+            events.append("panel.close")
+
+    class _Scene:
+        def close(self) -> None:
+            events.append("scene.close")
+            raise RuntimeError("direct close failed")
+
+        def floatingPanel(self):
+            events.append("scene.floatingPanel")
+            return _Panel()
+
+    capture_runtime.close_scene_viewer(_Scene())
+
+    assert events == ["scene.close", "scene.floatingPanel", "panel.close"]
+
+
 def test_viewport_info_injected_source_reuses_capture_runtime_catalog() -> None:
     from houbridge.houdini.scripts.capture import viewport_info
 

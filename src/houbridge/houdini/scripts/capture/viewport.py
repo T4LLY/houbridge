@@ -25,6 +25,7 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
     runtime = _runtime()
     process_events = runtime["process_events"]
     clone_scene_viewer = runtime["clone_scene_viewer"]
+    close_scene_viewer = runtime["close_scene_viewer"]
     flipbook_png = runtime["flipbook_png"]
     constrained_size = runtime["constrained_size"]
     apply_preset = runtime["apply_preset"]
@@ -99,9 +100,4 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
             process_events(hou, QtWidgets)
             capture_single_view(scene, viewport, png_paths[index])
     finally:
-        try:
-            scene.close()
-        except BaseException:
-            panel = scene.floatingPanel()
-            if panel is not None:
-                panel.close()
+        close_scene_viewer(scene)
