@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the public syntax, options, validation rules, preset format, image bounds, and JSON response contracts for shared Scene Viewer pane discovery, viewport/window capture, OCR, and turntable video capture.
+Define the public syntax, options, validation rules, preset format, image bounds, and JSON response contracts for shared Scene Viewer pane discovery, viewport/window/camera capture, OCR, and turntable video capture.
 
 ## Requirements
 
@@ -134,6 +134,87 @@ Every explicit direction and every effective preset `view` SHALL change the temp
 - **WHEN** a direction flag or preset `view` selects a directed capture
 - **THEN** the temporary viewport frames all currently displayed geometry/objects after changing view type and before capture
 
+### Requirement: Expose camera discovery, detail, and capture through one command
+
+The syntax SHALL be:
+
+```text
+houbridge capture camera [CAMERA_PATH] [OPTIONS]
+```
+
+Supported options SHALL be:
+
+| Option | Constraint / meaning |
+| --- | --- |
+| `--list` | List initially supported cameras without capturing; CAMERA_PATH SHALL be omitted. |
+| `--detail` | Return bounded detail for CAMERA_PATH without capturing. |
+| `--scale FLOAT` | Camera capture only; greater than zero, default `1.0`; camera resolution is scaled before shared screenshot maximums are enforced. |
+| `--pane TEXT` | Camera capture only; exact Scene Viewer pane-tab name to use as the display/capture source. |
+| `--session INTEGER` | Positive registered session number; uses primary when omitted. |
+
+`CAMERA_PATH` SHALL be required unless `--list` is supplied. `--list` SHALL NOT be combined with CAMERA_PATH, `--detail`, non-default `--scale`, or `--pane`; those combinations SHALL fail with `capture_camera_list_conflict`. `--detail` SHALL require CAMERA_PATH and SHALL NOT be combined with non-default `--scale` or `--pane`; those combinations SHALL fail with `capture_camera_detail_conflict`. A missing CAMERA_PATH outside list mode SHALL fail with `camera_path_required` through the normal handled-error output path.
+
+Initial discovery SHALL include only standard OBJ Camera instances and standard Camera SOP instances that currently produce camera primitives on their first output. It SHALL emit exactly `path`, `type`, and `resolution` for each camera, with `type` exactly `obj` or `sop`, sorted by `path`. SOP list paths SHALL include a primitive-number selector so each emitted path can be passed directly to camera capture. COP, LOP/USD, and APEX cameras are planned future camera types and SHALL be excluded until their capture support is implemented.
+
+A successful list SHALL have the shape:
+
+```json
+{
+  "cameras":[
+    {"path":"/obj/cam1","type":"obj","resolution":[1920,1080]},
+    {"path":"/obj/geo1/camera1:0","type":"sop","resolution":[1280,720]}
+  ]
+}
+```
+
+`--detail` SHALL inspect only the named camera and SHALL return exactly `path`, `type`, `resolution`, `projection`, `focal_length`, `aperture`, `pixel_aspect`, `near_clip`, `far_clip`, `focus_distance`, and `f_stop`. It SHALL NOT dump arbitrary camera metadata or renderer-specific parameters.
+
+A successful detail result SHALL have the shape:
+
+```json
+{
+  "path":"/obj/cam1",
+  "type":"obj",
+  "resolution":[1920,1080],
+  "projection":"perspective",
+  "focal_length":50.0,
+  "aperture":41.4214,
+  "pixel_aspect":1.0,
+  "near_clip":0.1,
+  "far_clip":1000.0,
+  "focus_distance":5.0,
+  "f_stop":5.6
+}
+```
+
+Camera capture SHALL use the same Scene Viewer pane-selection semantics and structured pane errors as viewport and turntable capture. It SHALL preserve camera framing, use the camera's own resolution as the source dimensions, apply `--scale` and the shared screenshot maximums, and emit exactly:
+
+```json
+{"path":"D:/Temp/.../camera20260928-1145-001.png"}
+```
+
+An explicit camera path SHALL be absolute. Initial explicit support SHALL accept standard OBJ Camera paths and standard Camera SOP first-output paths. A Camera SOP path MAY omit its selector only when exactly one camera primitive is present; otherwise it SHALL fail with `camera_ambiguous`. A missing camera or primitive SHALL fail with `camera_not_found`, a Camera SOP that produces no camera primitive or an OBJ Camera path with a primitive selector SHALL fail with `camera_invalid`, and node types outside the initial support set SHALL fail with `camera_unsupported`.
+
+#### Scenario: List cameras for path discovery
+- **WHEN** `houbridge capture camera --list` is invoked
+- **THEN** only lightweight supported camera entries are returned
+- **AND** no Scene Viewer pane is required
+
+#### Scenario: Inspect one camera in detail
+- **WHEN** `houbridge capture camera /obj/cam1 --detail` is invoked
+- **THEN** only that camera's bounded detail schema is returned
+- **AND** no image is captured
+
+#### Scenario: Capture one camera
+- **WHEN** `houbridge capture camera /obj/cam1 --scale 0.5` is invoked
+- **THEN** the source dimensions are the camera resolution
+- **AND** the published PNG uses the scaled/clamped dimensions
+- **AND** camera composition is not reframed
+
+#### Scenario: Camera path is omitted outside list mode
+- **WHEN** `houbridge capture camera` or `houbridge capture camera --detail` is invoked without CAMERA_PATH
+- **THEN** the command fails with `camera_path_required`
+
 ### Requirement: Define the screenshot preset JSON contract
 
 `--preset PATH` SHALL load one JSON object. The only permitted top-level keys SHALL be `view`, `shading`, `overlays`, `attributes`, and `crop`. An invalid preset root, unknown top-level key, invalid shading/overlay/attribute/crop value, or malformed preset structure SHALL fail with `invalid_screenshot_preset`. An invalid `view` value SHALL fail with `invalid_screenshot_view`, matching the shared view validator.
@@ -197,7 +278,7 @@ Example window preset:
 
 ### Requirement: Apply scale before shared screenshot maximum dimensions
 
-For viewport, window, and turntable frame generation, `--scale` SHALL be applied before enforcing the effective `[screenshot].max_width` and `[screenshot].max_height`. Generated defaults SHALL be `2048` and `2048`.
+For viewport, window, camera, and turntable frame generation, `--scale` SHALL be applied before enforcing the effective `[screenshot].max_width` and `[screenshot].max_height`. Generated defaults SHALL be `2048` and `2048`.
 
 For a source image of `width` by `height`, the sizing rule SHALL be equivalent to:
 

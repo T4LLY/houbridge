@@ -15,7 +15,7 @@ ScreenshotView = Literal[
     "uv",
 ]
 ScreenshotMode = Literal["viewport", "window", "turntable"]
-ScreenshotKind = Literal["viewport", "window"]
+ScreenshotKind = Literal["viewport", "window", "camera"]
 
 
 @dataclass(frozen=True, slots=True)

@@ -181,12 +181,27 @@ def save_pixmap(pixmap, path, *, scale, max_width, max_height, QtCore):
         raise RuntimeError("Qt failed to save capture PNG.")
 
 
-def flipbook_pixmap(scene, viewport, path, *, hou, QtGui):
+def flipbook_pixmap(
+    scene,
+    viewport,
+    path,
+    *,
+    flipbook_resolution=None,
+    crop_camera=False,
+    hou,
+    QtGui,
+):
     settings = scene.flipbookSettings().stash()
     frame = hou.frame()
     settings.frameRange((frame, frame))
     settings.outputToMPlay(False)
     settings.output(str(path))
+    if flipbook_resolution is not None:
+        settings.useResolution(True)
+        settings.resolution(tuple(int(value) for value in flipbook_resolution))
+        settings.outputZoom(100)
+    if crop_camera:
+        settings.cropOutMaskOverlay(True)
     scene.flipbook(viewport, settings)
     if not path.is_file():
         raise RuntimeError("Viewport flipbook did not produce a PNG.")
@@ -229,11 +244,21 @@ def flipbook_png(
     scale,
     max_width,
     max_height,
+    flipbook_resolution=None,
+    crop_camera=False,
     hou,
     QtCore,
     QtGui,
 ):
-    pixmap = flipbook_pixmap(scene, viewport, path, hou=hou, QtGui=QtGui)
+    pixmap = flipbook_pixmap(
+        scene,
+        viewport,
+        path,
+        flipbook_resolution=flipbook_resolution,
+        crop_camera=crop_camera,
+        hou=hou,
+        QtGui=QtGui,
+    )
     pixmap = composite_viewport_background(pixmap, viewport, QtGui)
     save_pixmap(
         pixmap,

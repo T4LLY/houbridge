@@ -5,6 +5,7 @@ from pathlib import Path
 import typer
 
 from houbridge.capture import (
+    CameraService,
     CaptureArtifactPublisher,
     ScreenshotOCRService,
     ScreenshotService,
@@ -62,6 +63,21 @@ def _turntable_service(
         settings.screenshot.retention_hours,
     )
     return TurntableService(
+        transport,
+        settings.screenshot,
+        publisher,
+    )
+
+
+def _camera_service(
+    settings: HoubridgeConfig,
+    transport: HoudiniTransport,
+) -> CameraService:
+    publisher = CaptureArtifactPublisher(
+        TemporaryArtifactService(),
+        settings.screenshot.retention_hours,
+    )
+    return CameraService(
         transport,
         settings.screenshot,
         publisher,
@@ -168,6 +184,83 @@ def viewport_command(
                 views=selected,
                 scale=scale,
                 preset_path=preset,
+                pane=pane,
+            )
+        emit_result(payload, policy=OutputPolicy.from_config(settings))
+    except BridgeError as exc:
+        terminate_with_bridge_error(exc)
+
+
+@capture_app.command("camera", help="Capture through an OBJ or SOP camera, or inspect cameras.")
+def camera_command(
+    camera_path: str | None = typer.Argument(
+        None,
+        metavar="CAMERA_PATH",
+        help="Absolute OBJ or SOP camera path.",
+    ),
+    list_cameras: bool = typer.Option(
+        False,
+        "--list",
+        help="List supported OBJ and Camera SOP cameras without capturing.",
+    ),
+    detail: bool = typer.Option(
+        False,
+        "--detail",
+        help="Show bounded details for CAMERA_PATH without capturing.",
+    ),
+    scale: float = typer.Option(
+        1.0,
+        "--scale",
+        help="Scale the camera resolution by this factor.",
+    ),
+    pane: str | None = typer.Option(
+        None,
+        "--pane",
+        help="Capture from this Scene Viewer pane-tab name.",
+    ),
+    session: int | None = typer.Option(
+        None,
+        "--session",
+        min=1,
+        help="Target this registered session instead of the primary session.",
+    ),
+) -> None:
+    if list_cameras and (camera_path is not None or detail or scale != 1.0 or pane is not None):
+        terminate_with_bridge_error(
+            BridgeError(
+                "capture_camera_list_conflict",
+                "--list cannot be combined with CAMERA_PATH, --detail, --scale, or --pane.",
+            )
+        )
+    if detail and (scale != 1.0 or pane is not None):
+        terminate_with_bridge_error(
+            BridgeError(
+                "capture_camera_detail_conflict",
+                "--detail cannot be combined with --scale or --pane.",
+            )
+        )
+    if not list_cameras and camera_path is None:
+        terminate_with_bridge_error(
+            BridgeError(
+                "camera_path_required",
+                "CAMERA_PATH is required unless --list is used.",
+            )
+        )
+
+    try:
+        settings = load_config()
+        resolver, transport = _resolver_and_transport(settings)
+        resolved = resolver.resolve(session)
+        service = _camera_service(settings, transport)
+        if list_cameras:
+            payload = service.list(resolved)
+        elif detail:
+            payload = service.detail(resolved, camera_path)
+        else:
+            payload = service.capture(
+                resolved,
+                camera_path,
+                scale=scale,
                 pane=pane,
             )
         emit_result(payload, policy=OutputPolicy.from_config(settings))

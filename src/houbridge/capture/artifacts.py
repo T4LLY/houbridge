@@ -47,7 +47,7 @@ class CaptureArtifactPublisher:
         kind: ScreenshotKind,
         captured_at: datetime | None = None,
     ) -> Path:
-        if kind not in {"viewport", "window"}:
+        if kind not in {"viewport", "window", "camera"}:
             raise ValueError(f"Unsupported screenshot kind: {kind}")
         at = captured_at or self.now_datetime()
         key = f"{kind}{at:%Y%m%d-%H%M}"

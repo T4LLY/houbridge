@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define shared Scene Viewer pane discovery, viewport/window screenshots, OCR, and turntable video capture while preserving the user's Houdini viewer state and keeping temporary image/video output bounded. Command JSON schemas are specified separately.
+Define shared Scene Viewer pane discovery, viewport/window/camera screenshots, OCR, and turntable video capture while preserving the user's Houdini viewer state and keeping temporary image/video output bounded. Command JSON schemas are specified separately.
 
 ## Requirements
 
@@ -77,14 +77,56 @@ After changing the temporary viewport to each requested directed view, Capture S
 - **THEN** each requested view is captured independently
 - **AND** completion of one view does not mutate the user's live Scene Viewer state for the next
 
+### Requirement: Discover and capture supported Houdini cameras
+
+Capture SHALL support standard OBJ Camera nodes and Camera SOP camera primitives as its initial camera types. Camera discovery SHALL be lightweight and SHALL list only those currently supported types: standard OBJ Camera instances and camera primitives produced by standard Camera SOP instances. Discovery SHALL return stable camera paths that can be passed back to camera capture, the public camera type (`obj` or `sop`), and camera resolution. Discovery ordering SHALL be deterministic by camera path.
+
+An explicit OBJ Camera path SHALL identify a standard Camera object. An explicit SOP Camera path SHALL identify a camera primitive from the SOP's first output, either as the sole camera primitive at the node path or with a `:<camera-name-or-primitive-number>` selector. When a first-output SOP path contains several camera primitives and no selector is supplied, Capture SHALL fail with `camera_ambiguous` rather than choosing one. Explicit SOP paths SHALL identify standard Camera SOP instances; arbitrary SOP nodes that happen to contain camera primitives are outside the initial support set.
+
+COP, LOP/USD, and APEX camera capture SHALL be reserved for later implementation and SHALL NOT appear in the initial camera discovery result. Initial camera capture SHALL likewise not claim support for non-first SOP output camera-path forms.
+
+Camera capture SHALL select its source Scene Viewer through the shared pane resolver, clone that viewer, switch the clone to a single viewport, and make the clone look through the requested camera. It SHALL preserve the camera's framing and SHALL NOT run viewport `frameAll()` or otherwise reframe the camera. The user's original Scene Viewer SHALL remain unmodified.
+
+Camera capture source dimensions SHALL come from the camera's own resolution, not the Scene Viewer window dimensions. The requested positive scale and shared screenshot maximum dimensions SHALL then be applied through the common scale-and-clamp rule.
+
+#### Scenario: Discover initial supported cameras
+- **WHEN** camera discovery is requested
+- **THEN** standard OBJ Camera instances and Camera SOP camera primitives are returned with path, type, and resolution
+- **AND** COP, LOP/USD, and APEX cameras are not returned
+- **AND** arbitrary SOP nodes that happen to contain camera primitives are outside the initial support set
+
+#### Scenario: Capture an OBJ Camera
+- **WHEN** an OBJ Camera path is captured
+- **THEN** a cloned Scene Viewer looks through that camera
+- **AND** the camera's composition is preserved without framing the displayed scene
+
+#### Scenario: Capture a SOP Camera primitive
+- **WHEN** a supported first-output SOP camera primitive path is captured
+- **THEN** the cloned viewport looks through that camera primitive
+- **AND** the output dimensions are derived from that camera primitive's resolution
+
+#### Scenario: SOP camera selection is ambiguous
+- **WHEN** a SOP path without a selector produces more than one camera primitive
+- **THEN** Capture fails with `camera_ambiguous`
+- **AND** `context.cameras` provides lightweight paths for the matching camera primitives
+
+#### Scenario: Several Scene Viewers require a pane for camera capture
+- **WHEN** camera capture is requested without `--pane` and several visible Scene Viewers exist
+- **THEN** Capture fails with `scene_viewer_ambiguous`
+- **AND** `context.panes` contains the shared Scene Viewer catalog
+
 ### Requirement: Composite flipbook captures over the Scene Viewer background
 
-Viewport PNGs and turntable source frames produced through the Scene Viewer flipbook path SHALL composite the captured RGBA image over the current viewport color scheme before scaling and saving. The background SHALL use a vertical gradient from Houdini's `BackgroundColor` at the top to `BackgroundBottomColor` at the bottom. The resulting PNG SHALL be fully opaque so alpha-bearing viewport elements such as the grid retain their intended appearance against the Scene Viewer background. Window capture SHALL NOT use this flipbook background-compositing path.
+Viewport PNGs, camera PNGs, and turntable source frames produced through the Scene Viewer flipbook path SHALL composite the captured RGBA image over the current viewport color scheme before scaling and saving. The background SHALL use a vertical gradient from Houdini's `BackgroundColor` at the top to `BackgroundBottomColor` at the bottom. The resulting PNG SHALL be fully opaque so alpha-bearing viewport elements such as the grid retain their intended appearance against the Scene Viewer background. Window capture SHALL NOT use this flipbook background-compositing path.
 
 #### Scenario: Viewport flipbook contains transparent background pixels
 - **WHEN** Houdini produces a viewport flipbook PNG with transparent or partially transparent pixels
 - **THEN** Capture composites those pixels over the viewport's current top-to-bottom background gradient
 - **AND** saves an opaque viewport PNG
+
+#### Scenario: Camera flipbook contains transparent background pixels
+- **WHEN** Houdini produces a camera capture through the shared flipbook path
+- **THEN** the same viewport background compositing is applied before the camera PNG is scaled and saved
 
 #### Scenario: Turntable frame contains transparent background pixels
 - **WHEN** Houdini produces a turntable source frame through the shared flipbook path
@@ -123,7 +165,7 @@ Viewport capture SHALL allow preset `view`, `shading`, `overlays`, and `attribut
 
 ### Requirement: Scale before enforcing maximum dimensions
 
-Viewport images, window images, and turntable source frames SHALL use one shared scale-and-clamp calculation. The requested positive scale SHALL be applied first, then the result SHALL be downscaled if necessary to fit both effective `[screenshot].max_width` and `[screenshot].max_height` while preserving aspect ratio.
+Viewport images, window images, camera images, and turntable source frames SHALL use one shared scale-and-clamp calculation. The requested positive scale SHALL be applied first, then the result SHALL be downscaled if necessary to fit both effective `[screenshot].max_width` and `[screenshot].max_height` while preserving aspect ratio.
 
 Generated defaults SHALL be `max_width = 2048` and `max_height = 2048`.
 
@@ -331,9 +373,9 @@ Turntable capture SHALL invoke `ffmpeg` after source-frame capture. The encode p
 
 ### Requirement: Keep injected Capture code under the Capture script boundary
 
-Houdini-side viewport/window/turntable implementation SHALL be grouped below `houbridge/houdini/scripts/capture/`, with common display/view/sizing/preset helpers factored there rather than duplicated as large host-side source strings.
+Houdini-side viewport/window/camera/turntable implementation SHALL be grouped below `houbridge/houdini/scripts/capture/`, with common display/view/sizing/preset helpers factored there rather than duplicated as large host-side source strings.
 
-#### Scenario: Screenshot and turntable share viewer helpers
-- **WHEN** both features need cloning, sizing, presets, or display logic
+#### Scenario: Capture modes share viewer helpers
+- **WHEN** viewport, camera, or turntable capture needs cloning, sizing, or display logic
 - **THEN** shared injected helpers live in focused Capture script modules
 - **AND** host-side Capture services remain orchestration-focused

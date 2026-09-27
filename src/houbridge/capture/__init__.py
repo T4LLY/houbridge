@@ -1,6 +1,7 @@
 """Viewport and window Capture feature."""
 
 from .artifacts import CaptureArtifactPublisher
+from .camera import CameraService
 from .models import AttributeVisualizerPreset, ScreenshotPreset
 from .ocr import ScreenshotOCRService
 from .preset import load_screenshot_preset, validate_screenshot_view
@@ -11,6 +12,7 @@ from .viewport_info import ViewportInfoService
 __all__ = [
     "AttributeVisualizerPreset",
     "CaptureArtifactPublisher",
+    "CameraService",
     "ScreenshotPreset",
     "ScreenshotOCRService",
     "ScreenshotService",

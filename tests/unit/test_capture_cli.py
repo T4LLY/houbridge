@@ -38,6 +38,35 @@ class _TurntableService:
         return {"path": "D:/Temp/turntable.mp4"}
 
 
+class _CameraService:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def list(self, resolved):
+        self.calls.append(("list", resolved, {}))
+        return {"cameras": [{"path": "/obj/cam1", "type": "obj", "resolution": [1920, 1080]}]}
+
+    def detail(self, resolved, camera_path):
+        self.calls.append(("detail", resolved, {"camera_path": camera_path}))
+        return {
+            "path": camera_path,
+            "type": "obj",
+            "resolution": [1920, 1080],
+            "projection": "perspective",
+            "focal_length": 50.0,
+            "aperture": 41.4214,
+            "pixel_aspect": 1.0,
+            "near_clip": 0.1,
+            "far_clip": 1000.0,
+            "focus_distance": 5.0,
+            "f_stop": 5.6,
+        }
+
+    def capture(self, resolved, camera_path, **kwargs):
+        self.calls.append(("capture", resolved, {"camera_path": camera_path, **kwargs}))
+        return {"path": "D:/Temp/camera.png"}
+
+
 class _ScreenshotService:
     def __init__(self) -> None:
         self.viewport_calls = []
@@ -93,10 +122,12 @@ def _install(monkeypatch):
     transport = object()
     service = _ScreenshotService()
     turntable = _TurntableService()
+    camera = _CameraService()
     monkeypatch.setattr(capture_cmd, "load_config", lambda: settings)
     monkeypatch.setattr(capture_cmd, "_resolver_and_transport", lambda _settings: (resolver, transport))
     monkeypatch.setattr(capture_cmd, "_screenshot_service", lambda _settings, _transport: service)
     monkeypatch.setattr(capture_cmd, "_turntable_service", lambda _settings, _transport: turntable)
+    monkeypatch.setattr(capture_cmd, "_camera_service", lambda _settings, _transport: camera)
     monkeypatch.setattr(capture_cmd, "ViewportInfoService", _ViewportInfo)
     monkeypatch.setattr(capture_cmd.OutputPolicy, "from_config", lambda _settings: _Policy())
     return resolver, service, turntable
@@ -109,6 +140,7 @@ def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     viewport = runner.invoke(app, ["capture", "viewport", "--help"])
     window = runner.invoke(app, ["capture", "window", "--help"])
     turntable = runner.invoke(app, ["capture", "turntable", "--help"])
+    camera = runner.invoke(app, ["capture", "camera", "--help"])
 
     assert (
         root.exit_code
@@ -117,6 +149,7 @@ def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
         == viewport.exit_code
         == window.exit_code
         == turntable.exit_code
+        == camera.exit_code
         == 0
     )
     assert "capture" in root.stdout
@@ -125,6 +158,7 @@ def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     assert "window" in capture.stdout
     assert "ocr" in capture.stdout
     assert "turntable" in capture.stdout
+    assert "camera" in capture.stdout
     assert "--session" in panes.stdout
     for option in (
         "--info", "--top", "--bottom", "--front", "--back", "--left", "--right",
@@ -140,7 +174,10 @@ def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     ):
         assert option in turntable.stdout
     assert "--ffmpeg" not in turntable.stdout
-    for output in (viewport.stdout, window.stdout, turntable.stdout):
+    assert "CAMERA_PATH" in camera.stdout
+    for option in ("--list", "--detail", "--scale", "--pane", "--session"):
+        assert option in camera.stdout
+    for output in (viewport.stdout, window.stdout, turntable.stdout, camera.stdout):
         for forbidden in ("--root", "--port", "--hcommand"):
             assert forbidden not in output
 
@@ -301,4 +338,48 @@ def test_turntable_invalid_pivot_fails_before_session_resolution(monkeypatch) ->
 
     assert result.exit_code == 1
     assert '"code":"invalid_turntable_pivot"' in result.stdout
+    assert resolver.calls == []
+
+
+def test_camera_command_list_detail_and_capture_modes(monkeypatch) -> None:
+    resolver, _screenshot, _turntable = _install(monkeypatch)
+    camera = _CameraService()
+    monkeypatch.setattr(capture_cmd, "_camera_service", lambda _settings, _transport: camera)
+
+    listed = runner.invoke(app, ["capture", "camera", "--list", "--session", "2"])
+    detailed = runner.invoke(app, ["capture", "camera", "/obj/cam1", "--detail"])
+    captured = runner.invoke(
+        app,
+        ["capture", "camera", "/obj/cam1", "--scale", "0.5", "--pane", "panetab4"],
+    )
+
+    assert listed.exit_code == detailed.exit_code == captured.exit_code == 0
+    assert listed.stdout == '{"cameras":[{"path":"/obj/cam1","type":"obj","resolution":[1920,1080]}]}\n'
+    assert '"projection":"perspective"' in detailed.stdout
+    assert captured.stdout == '{"path":"D:/Temp/camera.png"}\n'
+    assert resolver.calls == [2, None, None]
+    assert camera.calls[0][0] == "list"
+    assert camera.calls[1][0] == "detail"
+    assert camera.calls[1][2] == {"camera_path": "/obj/cam1"}
+    assert camera.calls[2][0] == "capture"
+    assert camera.calls[2][2] == {
+        "camera_path": "/obj/cam1",
+        "scale": 0.5,
+        "pane": "panetab4",
+    }
+
+
+def test_camera_command_requires_path_unless_list_and_rejects_mode_conflicts(monkeypatch) -> None:
+    resolver, _screenshot, _turntable = _install(monkeypatch)
+
+    missing = runner.invoke(app, ["capture", "camera"])
+    detail_missing = runner.invoke(app, ["capture", "camera", "--detail"])
+    list_path = runner.invoke(app, ["capture", "camera", "/obj/cam1", "--list"])
+    detail_scale = runner.invoke(app, ["capture", "camera", "/obj/cam1", "--detail", "--scale", "2"])
+
+    assert missing.exit_code == detail_missing.exit_code == list_path.exit_code == detail_scale.exit_code == 1
+    assert '"code":"camera_path_required"' in missing.stdout
+    assert '"code":"camera_path_required"' in detail_missing.stdout
+    assert '"code":"capture_camera_list_conflict"' in list_path.stdout
+    assert '"code":"capture_camera_detail_conflict"' in detail_scale.stdout
     assert resolver.calls == []
