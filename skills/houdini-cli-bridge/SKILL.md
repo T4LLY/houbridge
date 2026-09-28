@@ -27,9 +27,12 @@ houbridge is a CLI for inspecting and controlling a running Houdini instance.
 ## Output and Resources
 - When a large JSON result is returned as `{"resource": "<resource-id>"}`, use `houbridge resource` to retrieve only the parts you need.
 
+## Visual Inspection
+- Start with `houbridge capture --help`, then inspect the selected capture subcommand's `--help` instead of assuming current options.
+- Use `houbridge capture panes` to discover Scene Viewer pane names and pass the selected name with `--pane` to `viewport`, `camera`, or `turntable`.
+
 ## Other Commands
 - `houbridge search <subcommand>`: inspect the current Houdini state
-- `houbridge capture`: visual inspection
 - `houbridge exec --async`: asynchronous execution
 - `houbridge task <subcommand>`: inspect asynchronously executed Tasks
 

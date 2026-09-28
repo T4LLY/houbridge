@@ -113,10 +113,12 @@ def test_subcommand_help_has_concise_descriptions() -> None:
             "Search indexed workspace Python scripts.",
         ),
         "capture": (
-            "Capture a Houdini viewport image.",
+            "List Scene Viewer panes usable with --pane.",
+            "Capture a Scene Viewer viewport.",
+            "Capture through an OBJ or SOP camera, or inspect cameras.",
             "Capture a Houdini window image.",
             "Extract text from an image.",
-            "Capture a Houdini turntable animation.",
+            "Capture a Scene Viewer turntable animation.",
         ),
         "history": (
             "Search execution history.",

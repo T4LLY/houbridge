@@ -27,7 +27,7 @@ from houbridge.temporary_artifact import TemporaryArtifactService
 
 capture_app = create_cli_app(
     no_args_is_help=True,
-    help="Capture Houdini images and turntables, or OCR an image.",
+    help="Capture or inspect Houdini views and cameras, or OCR an image.",
 )
 
 
@@ -93,7 +93,7 @@ def _scene_viewer_catalog(
     return ViewportInfoService(transport).info(resolved)
 
 
-@capture_app.command("panes", help="List Scene Viewer panes available to Capture.")
+@capture_app.command("panes", help="List Scene Viewer panes usable with --pane.")
 def panes_command(
     session: int | None = typer.Option(
         None,
@@ -110,7 +110,7 @@ def panes_command(
         terminate_with_bridge_error(exc)
 
 
-@capture_app.command("viewport", help="Capture a Houdini viewport image.")
+@capture_app.command("viewport", help="Capture a Scene Viewer viewport.")
 def viewport_command(
     info: bool = typer.Option(
         False,
@@ -322,7 +322,7 @@ def ocr_command(
     except BridgeError as exc:
         terminate_with_bridge_error(exc)
 
-@capture_app.command("turntable", help="Capture a Houdini turntable animation.")
+@capture_app.command("turntable", help="Capture a Scene Viewer turntable animation.")
 def turntable_command(
     frames: int = typer.Option(
         160,
