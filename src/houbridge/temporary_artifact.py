@@ -74,7 +74,7 @@ class TemporaryArtifactService:
 
         removed = 0
         for path in directory.iterdir():
-            if not path.is_file() or path.name.startswith(".publish-"):
+            if not path.is_file():
                 continue
             try:
                 if path.stat().st_mtime <= cutoff_timestamp:

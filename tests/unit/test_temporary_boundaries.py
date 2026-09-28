@@ -163,6 +163,24 @@ def test_cleanup_uses_caller_cutoff_and_never_leaves_managed_namespace(
     assert outside.exists()
 
 
+def test_cleanup_removes_stale_publish_staging_and_preserves_recent_staging(
+    tmp_path: Path,
+) -> None:
+    service = TemporaryArtifactService(temp_root=tmp_path)
+    namespace = service.root / "capture"
+    namespace.mkdir(parents=True, exist_ok=True)
+    stale = namespace / ".publish-stale.tmp"
+    recent = namespace / ".publish-recent.tmp"
+    stale.write_bytes(b"stale")
+    recent.write_bytes(b"recent")
+    os.utime(stale, (100.0, 100.0))
+    os.utime(recent, (300.0, 300.0))
+
+    assert service.cleanup_before(namespace="capture", cutoff_timestamp=200.0) == 1
+    assert not stale.exists()
+    assert recent.exists()
+
+
 def test_temporary_artifact_does_not_classify_format(tmp_path: Path) -> None:
     service = TemporaryArtifactService(temp_root=tmp_path)
 
