@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from houbridge.errors import BridgeError
 from houbridge.process_coordination import ProcessIdentity
 from houbridge.semantic_id import SemanticBase
 from houbridge.task import (
@@ -386,6 +387,33 @@ def test_recovery_before_started_marker_does_not_replay_when_target_is_gone(tmp_
     assert failed.status == "failed"
     assert failed.runtime_failure_code == "task_target_changed"
     assert dispatcher.calls == 0
+
+def test_runtime_failure_survives_stream_drain_error(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    runner, invocations, workspaces = _runner(store, tmp_path, CompleteSuccess(store))
+    workspace = workspaces.allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    stdout = workspace.path_for("stdout.txt")
+    stdout.write_text("partial\n", encoding="utf-8")
+    workspace.path_for("stderr.txt").write_text("", encoding="utf-8")
+    TaskStreamCollector(invocations).drain(task_id, workspace)
+    stdout.unlink()
+
+    task = store.get(task_id)
+    assert task is not None
+    runner.runtime_failed(
+        task,
+        BridgeError("task_dispatch_timeout", "Task dispatch timed out."),
+    )
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_dispatch_timeout"
+    assert invocations.get(task_id) is None
+    assert not workspace.directory.exists()
+
 
 def test_stream_collector_keeps_incomplete_utf8_for_next_chunk(tmp_path: Path) -> None:
     store = _store(tmp_path)

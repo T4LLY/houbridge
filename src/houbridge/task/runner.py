@@ -155,7 +155,12 @@ class TaskInvocationRunner:
             except (FileNotFoundError, ValueError):
                 workspace = None
             if workspace is not None:
-                self._streams.drain(task.id, workspace, final=False)
+                try:
+                    self._streams.drain(task.id, workspace, final=False)
+                except BridgeError:
+                    # Runtime failure is already authoritative. Stream recovery is
+                    # best-effort here and must not prevent terminalization/cleanup.
+                    pass
         current = self._store.get(task.id)
         if current is not None and current.status not in ("completed", "failed"):
             self._store.mark_runtime_failed(
