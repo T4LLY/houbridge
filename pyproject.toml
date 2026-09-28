@@ -11,9 +11,7 @@ dependencies = [
   "filetype>=1.2,<2",
   "model2vec>=0.9,<1",
   "numpy>=1.26,<3",
-  "onnxruntime>=1.18,<2",
   "platformdirs>=4,<5",
-  "rapidocr>=3.9,<4",
   "sqlite-vec>=0.1.9,<0.2",
   "typer>=0.12,<1",
 ]

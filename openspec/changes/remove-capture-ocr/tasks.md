@@ -7,14 +7,14 @@
 
 ## 2. Remove embedded OCR ownership
 
-- [ ] 2.1 Remove the Capture OCR service and its public exports.
-- [ ] 2.2 Remove OCR-only result normalization, model/cache handling, runtime-noise suppression, and OCR-specific error paths.
-- [ ] 2.3 Remove OCR-only tests after preserving any generally useful non-OCR test coverage elsewhere.
+- [x] 2.1 Remove the Capture OCR service and its public exports.
+- [x] 2.2 Remove OCR-only result normalization, model/cache handling, runtime-noise suppression, and OCR-specific error paths.
+- [x] 2.3 Remove OCR-only tests after preserving any generally useful non-OCR test coverage elsewhere.
 
 ## 3. Remove OCR-only dependencies
 
-- [ ] 3.1 Trace RapidOCR and ONNX Runtime usage across the repository.
-- [ ] 3.2 Remove package dependencies that are no longer required by any Houbridge subsystem.
+- [x] 3.1 Trace RapidOCR and ONNX Runtime usage across the repository.
+- [x] 3.2 Remove package dependencies that are no longer required by any Houbridge subsystem.
 - [ ] 3.3 Refresh the dependency lockfile and verify a clean install/test run.
 
 ## 4. Preserve Capture behavior

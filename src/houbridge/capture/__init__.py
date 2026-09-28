@@ -3,7 +3,6 @@
 from .artifacts import CaptureArtifactPublisher
 from .camera import CameraService
 from .models import AttributeVisualizerPreset, ScreenshotPreset
-from .ocr import ScreenshotOCRService
 from .preset import load_screenshot_preset, validate_screenshot_view
 from .screenshot import ScreenshotService
 from .turntable import TurntableService, parse_turntable_pivot
@@ -14,7 +13,6 @@ __all__ = [
     "CaptureArtifactPublisher",
     "CameraService",
     "ScreenshotPreset",
-    "ScreenshotOCRService",
     "ScreenshotService",
     "TurntableService",
     "ViewportInfoService",
