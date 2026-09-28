@@ -36,12 +36,14 @@ class FakeEmbeddingProvider:
 
 class FakeDenseIndex:
     records = []
+    upsert_calls = []
 
     def __init__(self, _factory, *, schema) -> None:
         self.schema = schema
 
     def upsert(self, _profile: str, records) -> None:
         type(self).records = list(records)
+        type(self).upsert_calls.append([record.entry_id for record in records])
 
     def search(self, _profile: str, _query_vector, *, namespaces, top_k: int):
         assert namespaces == ["history-source"]
@@ -111,6 +113,40 @@ def test_history_search_fuses_source_semantics_and_lexical_action_context(
     assert provider.calls == [("profile-a", ("sizex",))]
     score = payload["hits"][0]["score"]
     assert getattr(score, "token") == "327.868852"
+
+
+def test_history_search_does_not_reindex_unchanged_entries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, source_hash = _store_with_two_entries(tmp_path)
+    FakeDenseIndex.records = []
+    FakeDenseIndex.upsert_calls = []
+    monkeypatch.setattr("houbridge.history.search.SQLiteVecIndex", FakeDenseIndex)
+
+    from houbridge.search.lexical import SQLiteFtsIndex
+
+    lexical_upserts: list[list[str]] = []
+    original_upsert = SQLiteFtsIndex.upsert
+
+    def tracking_upsert(self, documents) -> None:
+        batch = list(documents)
+        lexical_upserts.append([document.entry_id for document in batch])
+        original_upsert(self, batch)
+
+    monkeypatch.setattr(SQLiteFtsIndex, "upsert", tracking_upsert)
+    service = HistorySearchService(
+        store,
+        provider=FakeEmbeddingProvider(),
+        hybrid=SearchHybridConfig(rrf_k=60, candidate_multiplier=4, candidate_min=20),
+    )
+
+    first = service.search("sizex", top_k=10)
+    second = service.search("sizex", top_k=10)
+
+    assert first == second
+    assert FakeDenseIndex.upsert_calls == [[source_hash]]
+    assert lexical_upserts == [["1", "2"]]
 
 
 def test_history_get_and_list_use_public_shapes_and_newest_first(tmp_path: Path) -> None:

@@ -159,8 +159,15 @@ class HistorySearchService:
         dense = SQLiteVecIndex(factory, schema=DENSE_SCHEMA)
         lexical = SQLiteFtsIndex(factory, schema=LEXICAL_SCHEMA)
 
+        indexed_entry_ids = lexical.entry_ids(namespaces=[LEXICAL_NAMESPACE])
+        pending_entries = [
+            entry for entry in entries if str(entry.id) not in indexed_entry_ids
+        ]
+        if not pending_entries:
+            return dense, lexical
+
         vectors: list[DenseVectorRecord] = []
-        for source_hash in sorted({entry.source_hash for entry in entries}):
+        for source_hash in sorted({entry.source_hash for entry in pending_entries}):
             vector = cache.get(profile, source_hash)
             if vector is None:
                 raise BridgeError(
@@ -177,7 +184,7 @@ class HistorySearchService:
                     LEXICAL_NAMESPACE,
                     _lexical_projection(entry),
                 )
-                for entry in entries
+                for entry in pending_entries
             ]
         )
         return dense, lexical
