@@ -7,7 +7,6 @@ import typer
 from houbridge.capture import (
     CameraService,
     CaptureArtifactPublisher,
-    ScreenshotOCRService,
     ScreenshotService,
     TurntableService,
     ViewportInfoService,
@@ -27,7 +26,7 @@ from houbridge.temporary_artifact import TemporaryArtifactService
 
 capture_app = create_cli_app(
     no_args_is_help=True,
-    help="Capture or inspect Houdini views and cameras, or OCR an image.",
+    help="Capture or inspect Houdini views and cameras.",
 )
 
 
@@ -310,17 +309,6 @@ def window_command(
     except BridgeError as exc:
         terminate_with_bridge_error(exc)
 
-
-@capture_app.command("ocr", help="Extract text from an image.")
-def ocr_command(
-    image: Path = typer.Argument(..., help="Image file to recognize."),
-) -> None:
-    try:
-        settings = load_config()
-        payload = ScreenshotOCRService().recognize(image)
-        emit_result(payload, policy=OutputPolicy.from_config(settings))
-    except BridgeError as exc:
-        terminate_with_bridge_error(exc)
 
 @capture_app.command("turntable", help="Capture a Scene Viewer turntable animation.")
 def turntable_command(

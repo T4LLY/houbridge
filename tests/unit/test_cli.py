@@ -117,7 +117,6 @@ def test_subcommand_help_has_concise_descriptions() -> None:
             "Capture a Scene Viewer viewport.",
             "Capture through an OBJ or SOP camera, or inspect cameras.",
             "Capture a Houdini window image.",
-            "Extract text from an image.",
             "Capture a Scene Viewer turntable animation.",
         ),
         "history": (

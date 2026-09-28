@@ -25,7 +25,7 @@ app.add_typer(session_app, name="session", help="Create and inspect registered H
 app.add_typer(
     capture_app,
     name="capture",
-    help="Capture or inspect Houdini views and cameras, or OCR an image.",
+    help="Capture or inspect Houdini views and cameras.",
 )
 app.add_typer(resource_app, name="resource", help="Inspect and materialize stored Resources.")
 app.add_typer(search_app, name="search", help="Search local scripts and current Houdini state.")

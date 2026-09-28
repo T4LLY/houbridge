@@ -2,8 +2,8 @@
 
 ## 1. Remove the public OCR command
 
-- [ ] 1.1 Remove `houbridge capture ocr IMAGE` registration and OCR-specific CLI wiring.
-- [ ] 1.2 Remove CLI tests that assert the deleted OCR command and add coverage proving it is no longer exposed.
+- [x] 1.1 Remove `houbridge capture ocr IMAGE` registration and OCR-specific CLI wiring.
+- [x] 1.2 Remove CLI tests that assert the deleted OCR command and add coverage proving it is no longer exposed.
 
 ## 2. Remove embedded OCR ownership
 
