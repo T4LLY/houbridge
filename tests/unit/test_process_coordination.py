@@ -168,3 +168,43 @@ def test_lock_is_released_after_body_error(
 
     with lock.acquire(identity, timeout_seconds=0.05):
         pass
+
+def test_windows_process_identity_rejects_terminated_process_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import ctypes
+
+    class FakeWinFunction:
+        def __init__(self, result: int) -> None:
+            self.result = result
+            self.calls: list[tuple[object, ...]] = []
+
+        def __call__(self, *args: object) -> int:
+            self.calls.append(args)
+            return self.result
+
+    open_process = FakeWinFunction(123)
+    get_process_times = FakeWinFunction(1)
+    wait_for_single_object = FakeWinFunction(0x00000000)
+    close_handle = FakeWinFunction(1)
+
+    class FakeKernel32:
+        OpenProcess = open_process
+        GetProcessTimes = get_process_times
+        WaitForSingleObject = wait_for_single_object
+        CloseHandle = close_handle
+
+    monkeypatch.setattr(
+        ctypes,
+        "WinDLL",
+        lambda *_args, **_kwargs: FakeKernel32(),
+        raising=False,
+    )
+
+    with pytest.raises(ProcessLookupError):
+        coordination._windows_process_start_identity(4920)
+
+    assert open_process.calls == [(0x00101000, False, 4920)]
+    assert wait_for_single_object.calls == [(123, 0)]
+    assert close_handle.calls == [(123,)]
+
