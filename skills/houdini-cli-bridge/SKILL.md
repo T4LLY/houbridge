@@ -26,10 +26,12 @@ houbridge is a CLI for inspecting and controlling a running Houdini instance.
 
 ## Output and Resources
 - When a large JSON result is returned as `{"resource": "<resource-id>"}`, use `houbridge resource` to retrieve only the parts you need.
+- When `jq` is available and the needed fields are known, proactively filter Houbridge JSON to only the fields required for the current task. Do not aggressively filter unfamiliar output before understanding its structure.
 
 ## Visual Inspection
 - Start with `houbridge capture --help`, then inspect the selected capture subcommand's `--help` instead of assuming current options.
 - Use `houbridge capture panes` to discover Scene Viewer pane names and pass the selected name with `--pane` to `viewport`, `camera`, or `turntable`.
+- When `image-prep` is available, use it proactively to reduce unnecessary vision input from captures. Inspect `image-prep --help` for current capabilities, and prefer resizing, targeted crops, or changed-region extraction when the full image is unnecessary.
 
 ## Other Commands
 - `houbridge search <subcommand>`: inspect the current Houdini state

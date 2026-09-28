@@ -8,6 +8,11 @@ Houbridge is a CLI for controlling and inspecting local SideFX Houdini sessions.
 - A local SideFX Houdini installation
 - [uv](https://docs.astral.sh/uv/)
 
+### Optional tools
+
+- [`jq`](https://jqlang.org/) — recommended for filtering large Houbridge JSON responses before passing them to an AI agent.
+- [`image-prep`](https://github.com/T4LLY/image-prep) — recommended for reducing unnecessary vision input from captures through resizing, cropping, and changed-region extraction. Requires ImageMagick 7 with `magick` available on `PATH`.
+
 ### No Houdini-side installation
 
 Houbridge does not require a plug-in, package, or persistent service to be installed inside Houdini. It uses Houdini's built-in local `openport` and `hcommand` interface to send scripts at runtime.
