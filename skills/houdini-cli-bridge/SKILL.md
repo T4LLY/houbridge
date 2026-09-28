@@ -33,6 +33,11 @@ houbridge is a CLI for inspecting and controlling a running Houdini instance.
 - Use `houbridge capture panes` to discover Scene Viewer pane names and pass the selected name with `--pane` to `viewport`, `camera`, or `turntable`.
 - When `image-prep` is available, use it proactively to reduce unnecessary vision input from captures. Inspect `image-prep --help` for current capabilities, and prefer resizing, targeted crops, or changed-region extraction when the full image is unnecessary.
 
+## Optional Tools
+- For long-running Houbridge commands, use the harness's background task execution with completion steer/notification when available.
+- Run the normal synchronous Houbridge command in that background task, continue other work while it runs, and resume from the completion notification instead of polling.
+- Prefer this over `houbridge exec --async` when the harness can manage the background process and notify the agent on completion.
+
 ## Other Commands
 - `houbridge search <subcommand>`: inspect the current Houdini state
 - `houbridge exec --async`: asynchronous execution
