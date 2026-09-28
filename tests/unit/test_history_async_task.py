@@ -229,7 +229,63 @@ def test_async_history_finalization_preserves_frozen_metadata_and_is_idempotent(
     assert entry["purpose"] == "build preview geometry"
     assert entry["source_hash"] == hashlib.sha256(task.source.encode("utf-8")).hexdigest()  # type: ignore[union-attr]
     assert [(row["execution_key"], row["entry_id"]) for row in keys] == [
-        (f"task:{task.id}", entry["id"])
+        (f"task:{task.id}:{workspace.directory.resolve()}", entry["id"])
+    ]
+
+
+def test_task_reset_reused_id_records_distinct_history_entry(tmp_path: Path) -> None:
+    provider = FakeEmbeddingProvider()
+    history, storage = _history(tmp_path, provider)
+    store = _store(tmp_path)
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+
+    first = store.submit(_submission())
+    first_workspace = workspaces.allocate(prefix="task")
+    first_preparation = history.prepare(first, first_workspace)
+    assert first_preparation is not None
+    first_preparation.capture_path.write_text(
+        json.dumps(
+            {
+                "time": "2026-09-11T10:20:30+00:00",
+                "scene_replaced": False,
+                "changes": [],
+            },
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
+    history.finalize(first, first_workspace, python_ok=True)
+    store.mark_runtime_failed(first.id, code="test_terminal", message="terminal")
+    store.reset()
+
+    second = store.submit(_submission())
+    assert second.id == first.id
+    second_workspace = workspaces.allocate(prefix="task")
+    second_preparation = history.prepare(second, second_workspace)
+    assert second_preparation is not None
+    second_preparation.capture_path.write_text(
+        json.dumps(
+            {
+                "time": "2026-09-11T10:21:30+00:00",
+                "scene_replaced": False,
+                "changes": [],
+            },
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
+    history.finalize(second, second_workspace, python_ok=True)
+
+    database = storage.database_for(second.dispatch.process_identity)
+    with sqlite3.connect(database) as connection:
+        entries = connection.execute("SELECT id FROM history_entries ORDER BY id").fetchall()
+        keys = connection.execute(
+            "SELECT execution_key, entry_id FROM history_execution_keys ORDER BY entry_id"
+        ).fetchall()
+    assert entries == [(1,), (2,)]
+    assert keys == [
+        (f"task:{first.id}:{first_workspace.directory.resolve()}", 1),
+        (f"task:{second.id}:{second_workspace.directory.resolve()}", 2),
     ]
 
 

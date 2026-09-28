@@ -86,5 +86,7 @@ class AsyncTaskHistory:
             file=task.file_path,
             args=task.argv[1:],
             purpose=task.purpose,
-            execution_key=f"task:{task.id}",
+            # Task IDs are reusable after `task reset`; the invocation-local
+            # workspace stays stable across recovery but differs for new runs.
+            execution_key=f"task:{task.id}:{workspace.directory.resolve()}",
         )
