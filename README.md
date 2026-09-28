@@ -8,6 +8,10 @@ Houbridge is a CLI for controlling and inspecting local SideFX Houdini sessions.
 - A local SideFX Houdini installation
 - [uv](https://docs.astral.sh/uv/)
 
+### No Houdini-side installation
+
+Houbridge does not require a plug-in, package, or persistent service to be installed inside Houdini. It uses Houdini's built-in local `openport` and `hcommand` interface to send scripts at runtime.
+
 ### Optional tools
 
 - [`jq`](https://jqlang.org/) — recommended for filtering large Houbridge JSON responses before passing them to an AI agent.
@@ -15,10 +19,6 @@ Houbridge is a CLI for controlling and inspecting local SideFX Houdini sessions.
 - **OpenCode:** [`opencode-pty`](https://github.com/shekohex/opencode-pty) — recommended for running long synchronous Houbridge commands as background tasks with completion notification.
 
 If the agent does not reliably infer the appropriate background-task tool from the generic guidance, add the concrete tool name used by that harness to the Houbridge Skill, such as `pty_spawn` for `opencode-pty`.
-
-### No Houdini-side installation
-
-Houbridge does not require a plug-in, package, or persistent service to be installed inside Houdini. It uses Houdini's built-in local `openport` and `hcommand` interface to send scripts at runtime.
 
 ## Installation
 
