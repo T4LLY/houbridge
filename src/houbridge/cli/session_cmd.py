@@ -44,7 +44,10 @@ def info_command(
     resolver = SessionResolver(registry, probe)
     stale_cleanup = SessionStaleCleanupService(
         registry,
-        on_stale=_history_retirement_callback(paths),
+        on_stale=_history_retirement_callback(
+            paths,
+            lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+        ),
     )
     payload = SessionInfoService(
         registry,
@@ -89,7 +92,10 @@ def new_command(
         )
 
     launcher = HoudiniSessionLauncher(settings.houdini, probe_for_launch)
-    retire_stale_history = _history_retirement_callback(paths)
+    retire_stale_history = _history_retirement_callback(
+        paths,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+    )
 
     payload = SessionNewService(
         registry,
@@ -126,7 +132,10 @@ def attach_command(
     payload = SessionAttachService(
         registry,
         probe,
-        on_stale=_history_retirement_callback(paths),
+        on_stale=_history_retirement_callback(
+            paths,
+            lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+        ),
     ).attach(port)
     emit_result(payload)
 
@@ -149,7 +158,10 @@ def promote_command(
     resolver = SessionResolver(registry, probe)
     stale_cleanup = SessionStaleCleanupService(
         registry,
-        on_stale=_history_retirement_callback(paths),
+        on_stale=_history_retirement_callback(
+            paths,
+            lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+        ),
     )
     payload = SessionPromoteService(
         registry,
@@ -161,8 +173,13 @@ def promote_command(
 
 def _history_retirement_callback(
     paths: GlobalDataPaths,
+    *,
+    lock_timeout_seconds: float,
 ) -> Callable[[SessionRecord], None]:
-    retirement = HistoryRetirementService(paths)
+    retirement = HistoryRetirementService(
+        paths,
+        lock_timeout_seconds=lock_timeout_seconds,
+    )
 
     def retire(record: SessionRecord) -> None:
         if record.process_start_identity is None:

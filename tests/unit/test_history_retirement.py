@@ -4,7 +4,7 @@ from pathlib import Path
 
 from houbridge.history import HistoryRetirementService, history_session_key
 from houbridge.paths import GlobalDataPaths
-from houbridge.process_coordination import ProcessIdentity
+from houbridge.process_coordination import InterprocessFileLockTimeout, ProcessIdentity
 from houbridge.session.registry import SessionRecord, SessionRegistry, SessionRegistryState
 from houbridge.session.stale import SessionStaleCleanupService
 
@@ -99,4 +99,25 @@ def test_history_retirement_is_best_effort_when_directory_is_locked(
     monkeypatch.setattr("houbridge.history.retirement.shutil.rmtree", fail_remove)
 
     assert HistoryRetirementService(paths).retire(identity) is False
+    assert session_dir.exists()
+
+
+def test_history_retirement_lock_timeout_is_best_effort(tmp_path: Path) -> None:
+    paths = GlobalDataPaths.from_data_dir(tmp_path / "data")
+    identity = ProcessIdentity(1002, "old-start")
+    session_dir = paths.history_session(history_session_key(identity)).session_directory
+    session_dir.mkdir(parents=True)
+    (session_dir / "history.db").write_bytes(b"stale")
+    observed_timeouts: list[float | None] = []
+
+    class TimeoutLock:
+        def acquire(self, path: Path, *, timeout_seconds: float | None = None):
+            observed_timeouts.append(timeout_seconds)
+            raise InterprocessFileLockTimeout(path)
+
+    retirement = HistoryRetirementService(paths, lock_timeout_seconds=0.25)
+    retirement._file_lock = TimeoutLock()  # type: ignore[assignment]
+
+    assert retirement.retire(identity) is False
+    assert observed_timeouts == [0.25]
     assert session_dir.exists()
