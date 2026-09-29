@@ -283,6 +283,15 @@ def test_crop_selector_rejects_ambiguity_and_supports_zero_based_suffix() -> Non
     assert choose("network_editor:1", areas)["name"] == "pane2"
 
 
+def test_window_capture_uses_screen_pixels_instead_of_widget_grab() -> None:
+    from houbridge.houdini.scripts.capture import window
+
+    source = Path(window.__file__).read_text(encoding="utf-8")
+    assert "screen = window.screen()" in source
+    assert "screen.grabWindow(int(window.winId()))" in source
+    assert "window.grab()" not in source
+
+
 def test_crop_happens_before_scale_and_bounds_are_transformed_in_injected_code() -> None:
     from houbridge.houdini.scripts.capture import window
 

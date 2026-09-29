@@ -154,7 +154,10 @@ def capture(request, hou, QtCore, _QtGui, QtWidgets):
         raise RuntimeError("Houdini main window is unavailable.")
 
     process_events(hou, QtWidgets)
-    pixmap = window.grab()
+    screen = window.screen()
+    if screen is None:
+        raise RuntimeError("Qt screen for the Houdini main window is unavailable.")
+    pixmap = screen.grabWindow(int(window.winId()))
     if pixmap.isNull():
         raise RuntimeError("Qt failed to capture the main window.")
     full_source_width = pixmap.width()
