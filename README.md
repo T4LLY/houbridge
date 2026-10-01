@@ -86,6 +86,17 @@ Attaching the same registered port again is idempotent. If the same Houdini proc
 
 The attached process becomes primary only when no live registered sessions remain. Otherwise the existing primary selection is preserved; use `houbridge session promote <number>` when you want to change it.
 
+### Inspect and save the HIP file
+
+Inspect the active scene file or save it to its existing path:
+
+```bash
+houbridge hip info
+houbridge hip save
+```
+
+Both commands accept `--session`. `hip save` deliberately has no Save As path; a new unsaved scene is rejected rather than being written implicitly to Houdini's default path. Save results report `status: "saved"` when Houdini wrote the file or `status: "unchanged"` when the existing file had no unsaved changes and was left untouched.
+
 ### Run Houdini Python
 
 Create a Python file to execute:
@@ -121,6 +132,9 @@ Both commands use hybrid semantic and lexical ranking, so they can retrieve rela
 ### Common commands
 
 ```bash
+# Inspect the current HIP file.
+houbridge hip info
+
 # Capture a viewport image.
 houbridge capture viewport
 

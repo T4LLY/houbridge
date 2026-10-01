@@ -9,6 +9,7 @@ from houbridge.errors import BridgeError
 from houbridge.cli.capture_cmd import capture_app
 from houbridge.cli.exec_cmd import exec_command
 from houbridge.cli.history_cmd import history_app
+from houbridge.cli.hip_cmd import hip_app
 from houbridge.cli.resource_cmd import resource_app
 from houbridge.cli.search_cmd import search_app
 from houbridge.cli.session_cmd import session_app
@@ -22,6 +23,7 @@ app = create_cli_app(
 
 
 app.add_typer(session_app, name="session", help="Create and inspect registered Houdini sessions.")
+app.add_typer(hip_app, name="hip", help="Inspect and save the current HIP file.")
 app.add_typer(
     capture_app,
     name="capture",

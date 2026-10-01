@@ -84,11 +84,11 @@ def test_compact_json_preserves_non_ascii_and_canonical_number_lexeme() -> None:
     assert json.loads(serialized) == {"name": "日本語", "score": 301.27891}
 
 
-def test_root_help_exposes_all_seven_public_command_families() -> None:
+def test_root_help_exposes_all_eight_public_command_families() -> None:
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    for command in ("session", "capture", "resource", "search", "exec", "task", "history"):
+    for command in ("session", "hip", "capture", "resource", "search", "exec", "task", "history"):
         assert command in result.stdout
 
 
@@ -118,6 +118,10 @@ def test_subcommand_help_has_concise_descriptions() -> None:
             "Capture through an OBJ or SOP camera, or inspect cameras.",
             "Capture a Houdini window image.",
             "Capture a Scene Viewer turntable animation.",
+        ),
+        "hip": (
+            "Show the current HIP file state.",
+            "Save the current HIP file to its existing path.",
         ),
         "history": (
             "Search execution history.",

@@ -5,7 +5,7 @@ context: |
   Runtime: Python >=3.11 external CLI plus Houdini's bundled Python for injected scripts.
   Houbridge controls an already-running or locally launched Houdini GUI session through Houdini openport and SideFX hcommand.
   The Houdini-side operation language is raw hou Python. Reusable injected source lives under houbridge/houdini/scripts/ and is dispatched per invocation.
-  The top-level feature subsystems are Resource, Output, Session, Capture, Search, Execution, Task, and History. Shared infrastructure includes configuration, Houdini transport, target coordination, temporary-workspace management, temporary-artifact publication, and low-level search primitives.
+  The top-level feature subsystems are Resource, Output, Session, Hip, Capture, Search, Execution, Task, and History. Shared infrastructure includes configuration, Houdini transport, target coordination, temporary-workspace management, temporary-artifact publication, and low-level search primitives.
   Synchronous Execution is invocation-local. Async Task owns queued/running operational state. Session Action History stores only finalized AI action-recall entries for executions that actually start in Houdini.
   Houbridge persistence is external to the Houdini scene. Global operational state lives below the configured operational root; workspace script-search derived state remains in <cwd>/.houbridge/search.db.
   Resource payload storage is database-complete in <data-dir>/resources.db together with metadata, SHA-256 canonical identities, semantic aliases, and semantic tags. Task state is stored in <data-dir>/tasks.db. Session Action History is stored below <data-dir>/history/<session-key>/history.db.

@@ -13,6 +13,10 @@ houbridge is a CLI for inspecting and controlling a running Houdini instance.
 - `houbridge session info` shows session numbers. Commands such as `exec` can target a session with `--session <Number>`.
 - `houbridge session promote <Number>` sets the Primary session, allowing the `--session` parameter to be omitted.
 
+## HIP File
+- `houbridge hip info [--session <Number>]` reports the current HIP path and dirty/new state.
+- `houbridge hip save [--session <Number>]` saves only to the existing HIP path when there are unsaved changes. Its result reports `status: "saved"` when a native save ran or `status: "unchanged"` when the file was already clean. It does not perform Save As and rejects a new unsaved scene without an established target.
+
 ## Python
 - Execute Houdini Python with `houbridge exec --file <PATH>`. Prefer parameterized, reusable tools when practical.
 - Store reusable scripts in `.houbridge/python`.

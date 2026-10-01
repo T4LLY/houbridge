@@ -12,6 +12,7 @@ The Houbridge CLI SHALL expose the following command families in this specificat
 
 - `houbridge exec`
 - `houbridge session ...`
+- `houbridge hip ...`
 - `houbridge capture ...`
 - `houbridge search ...`
 - `houbridge resource ...`

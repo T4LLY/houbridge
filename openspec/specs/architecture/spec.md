@@ -35,7 +35,7 @@ Houbridge SHALL control Houdini through Houdini openport and SideFX `hcommand` o
 
 ### Requirement: Keep feature subsystems independently owned
 
-The top-level feature subsystems SHALL be `resource`, `output`, `session`, `capture`, `search`, `execution`, `task`, and `history`, plus shared configuration, Houdini transport, target coordination, temporary-workspace, temporary-artifact publication, canonical formatting, semantic-base generation, and low-level search primitives. Each feature subsystem SHALL expose a public service boundary and own its feature-specific implementation details.
+The top-level feature subsystems SHALL be `resource`, `output`, `session`, `hip`, `capture`, `search`, `execution`, `task`, and `history`, plus shared configuration, Houdini transport, target coordination, temporary-workspace, temporary-artifact publication, canonical formatting, semantic-base generation, and low-level search primitives. Each feature subsystem SHALL expose a public service boundary and own its feature-specific implementation details.
 
 #### Scenario: Search stores a Resource
 - **WHEN** Search needs to preserve a code body or oversized logical result
@@ -114,8 +114,13 @@ Houbridge SHALL read and modify the active Houdini scene through native Houdini 
 
 #### Scenario: Open an existing Hip file
 - **WHEN** Houbridge connects to a running scene
-- **THEN** Session, Capture, Search, and Execution operate on the current native Houdini state
+- **THEN** Session, Hip, Capture, Search, and Execution operate on the current native Houdini state
 - **AND** their operation does not depend on Houbridge persistence being present inside the scene
+
+#### Scenario: Inspect or save the current Hip file
+- **WHEN** the Hip subsystem reads or saves the active scene
+- **THEN** it uses native `hou.hipFile` APIs in the selected live Houdini process
+- **AND** it does not create Houbridge-owned scene persistence or a second scene-state store
 
 ### Requirement: Separate semantic base generation from feature ordinal allocation
 
