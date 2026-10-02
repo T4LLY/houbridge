@@ -33,7 +33,7 @@ def _store(tmp_path: Path) -> TaskStore:
     return TaskStore(tmp_path / "tasks.db", semantic_generator=FixedSemanticGenerator())
 
 
-def _submit(store: TaskStore, *, timeout: float = 5.0) -> str:
+def _submit(store: TaskStore, *, timeout: float = 5.0, history: bool = False) -> str:
     return store.submit(
         TaskSubmission(
             source="print('hello')\n",
@@ -51,7 +51,7 @@ def _submit(store: TaskStore, *, timeout: float = 5.0) -> str:
                 transport_environment={},
                 lock_timeout_seconds=5,
             ),
-            history_enabled=False,
+            history_enabled=history,
             history_code_profile="profile-a",
         )
     ).id
@@ -726,3 +726,204 @@ def test_dispatch_timeout_applies_only_before_started_marker(tmp_path: Path) -> 
     assert failed.status == "failed"
     assert failed.runtime_failure_code == "task_dispatch_timeout"
     assert handle.terminated is True
+
+
+def test_preflight_does_not_consume_dispatch_timeout_budget(tmp_path: Path) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    store = _store(tmp_path)
+    task_id = _submit(store, timeout=5.0, history=True)
+    base = datetime(2026, 9, 11, 8, 0, tzinfo=timezone.utc)
+    clock = [base]
+    invocations = TaskInvocationStore(store.database, now=lambda: clock[0])
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp-preflight")
+    sleep_durations: list[float] = []
+    dispatch_timestamps: list[str] = []
+
+    class SlowHistory:
+        def prepare(self, _task, _workspace):
+            clock[0] += timedelta(seconds=10)
+            return None
+
+    class Handle:
+        terminated = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+    handle = Handle()
+
+    class Dispatcher:
+        def start(self, _task, _script_path):
+            state = invocations.get(task_id)
+            assert state is not None
+            dispatch_timestamps.append(state.dispatch_started_at)
+            return handle
+
+    def sleep(seconds: float) -> None:
+        sleep_durations.append(seconds)
+        clock[0] += timedelta(seconds=seconds)
+
+    runner = TaskInvocationRunner(
+        store,
+        invocations,
+        workspaces,
+        CompleteSuccess(store),
+        history=SlowHistory(),
+        dispatcher=Dispatcher(),
+        identity_reader=lambda _pid: ProcessIdentity(4242, "process-4242"),
+        sleep=sleep,
+        now=lambda: clock[0],
+        poll_interval_seconds=1.0,
+    )
+    task = store.get(task_id)
+    assert task is not None
+
+    runner.run(task)
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_dispatch_timeout"
+    assert len(sleep_durations) == 5
+    assert dispatch_timestamps == [(base + timedelta(seconds=10)).isoformat()]
+    assert handle.terminated
+
+
+def test_recovery_keeps_creation_timestamp_before_dispatch_refresh(
+    tmp_path: Path,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    store = _store(tmp_path)
+    task_id = _submit(store, timeout=1.0)
+    base = datetime(2026, 9, 11, 8, 0, tzinfo=timezone.utc)
+    invocations = TaskInvocationStore(store.database, now=lambda: base)
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp-creation")
+    workspace = workspaces.allocate(prefix="task")
+    created = invocations.create(task_id, workspace.directory)
+    assert created.dispatch_started_at == base.isoformat()
+    dispatcher = NeverDispatch()
+    runner = TaskInvocationRunner(
+        store,
+        invocations,
+        workspaces,
+        CompleteSuccess(store),
+        dispatcher=dispatcher,
+        identity_reader=lambda _pid: ProcessIdentity(4242, "process-4242"),
+        now=lambda: base + timedelta(seconds=2),
+        sleep=lambda _seconds: None,
+        poll_interval_seconds=0.01,
+    )
+    task = store.get(task_id)
+    assert task is not None
+
+    runner.recover(task)
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_dispatch_timeout"
+    assert dispatcher.calls == 0
+
+
+def test_dispatch_timestamp_is_captured_after_database_begin_wait(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from contextlib import contextmanager
+    from datetime import datetime, timedelta, timezone
+
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    base = datetime(2026, 9, 11, 8, 0, tzinfo=timezone.utc)
+    clock = [base]
+    invocations = TaskInvocationStore(store.database, now=lambda: clock[0])
+    workspace = TemporaryWorkspaceService(
+        temp_root=tmp_path / "temp-begin-wait"
+    ).allocate(prefix="task")
+    invocations.create(task_id, workspace.directory)
+    original_connect = invocations._connect
+
+    class AdvancingConnection:
+        def __init__(self, connection) -> None:
+            self.connection = connection
+
+        def execute(self, sql, parameters=()):
+            if sql == "BEGIN IMMEDIATE":
+                clock[0] += timedelta(seconds=3)
+            return self.connection.execute(sql, parameters)
+
+    @contextmanager
+    def delayed_connect():
+        with original_connect() as connection:
+            yield AdvancingConnection(connection)
+
+    monkeypatch.setattr(invocations, "_connect", delayed_connect)
+
+    refreshed = invocations.mark_dispatch_started(task_id)
+
+    assert refreshed.dispatch_started_at == (base + timedelta(seconds=3)).isoformat()
+
+
+def test_dispatch_timestamp_storage_error_fails_closed_before_dispatch(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import sqlite3
+    from contextlib import contextmanager
+
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    invocations = TaskInvocationStore(store.database)
+
+    class CapturingWorkspaces(TemporaryWorkspaceService):
+        workspace: TemporaryWorkspace | None = None
+
+        def allocate(self, *, prefix: str = "invocation") -> TemporaryWorkspace:
+            self.workspace = super().allocate(prefix=prefix)
+            return self.workspace
+
+    workspaces = CapturingWorkspaces(temp_root=tmp_path / "temp-store-failure")
+    original_connect = invocations._connect
+    fail_update = [True]
+
+    class FailingConnection:
+        def __init__(self, connection) -> None:
+            self.connection = connection
+
+        def execute(self, sql, parameters=()):
+            if sql.startswith("UPDATE task_invocations") and fail_update[0]:
+                fail_update[0] = False
+                raise sqlite3.OperationalError("simulated timestamp write failure")
+            return self.connection.execute(sql, parameters)
+
+    @contextmanager
+    def fail_once_on_update():
+        with original_connect() as connection:
+            yield FailingConnection(connection)
+
+    monkeypatch.setattr(invocations, "_connect", fail_once_on_update)
+    dispatcher = NeverDispatch()
+    runner = TaskInvocationRunner(
+        store,
+        invocations,
+        workspaces,
+        CompleteSuccess(store),
+        dispatcher=dispatcher,
+        identity_reader=lambda _pid: ProcessIdentity(4242, "process-4242"),
+    )
+    task = store.get(task_id)
+    assert task is not None
+
+    runner.run(task)
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_store_failed"
+    assert dispatcher.calls == 0
+    assert workspaces.workspace is not None
+    assert not workspaces.workspace.directory.exists()
+    assert invocations.get(task_id) is None

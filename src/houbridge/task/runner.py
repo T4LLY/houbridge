@@ -106,6 +106,7 @@ class TaskInvocationRunner:
                 history=history_preparation,
             )
             staged = self._script_builder.stage(workspace, request_path)
+            state = self._invocations.mark_dispatch_started(task.id)
             dispatch = self._dispatcher.start(task, staged.script_path)
         except BridgeError as exc:
             self.runtime_failed(task, exc)

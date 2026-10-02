@@ -95,6 +95,34 @@ class TaskInvocationStore:
             ).fetchone()
         return _row_to_state(row) if row is not None else None
 
+    def mark_dispatch_started(self, task_id: str) -> TaskInvocationState:
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                dispatch_started_at = _as_utc(self._now()).isoformat()
+                cursor = connection.execute(
+                    "UPDATE task_invocations SET dispatch_started_at = ? WHERE task_id = ?",
+                    (dispatch_started_at, task_id),
+                )
+                if cursor.rowcount != 1:
+                    raise BridgeError(
+                        "task_invocation_missing",
+                        f"Task {task_id} has no recoverable invocation state.",
+                    )
+            state = self.get(task_id)
+        except sqlite3.Error as exc:
+            raise BridgeError(
+                "task_store_failed",
+                f"Task {task_id} dispatch timestamp could not be stored.",
+                f"{type(exc).__name__}: {exc}",
+            ) from exc
+        if state is None:  # pragma: no cover - guarded by update above.
+            raise BridgeError(
+                "task_store_failed",
+                "Task invocation state could not be read back.",
+            )
+        return state
+
     def terminal_states(self) -> tuple[TaskInvocationState, ...]:
         with self._connect() as connection:
             rows = connection.execute(
