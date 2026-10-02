@@ -133,6 +133,26 @@ def test_script_search_omits_description_for_existing_undescribed_script(tmp_pat
     assert "description" not in result["hits"][0]
 
 
+def test_script_search_excludes_top_level_underscore_entries_unless_all(tmp_path: Path) -> None:
+    python_root = tmp_path / ".houbridge" / "python"
+    local_root = python_root / "_project"
+    local_root.mkdir(parents=True)
+    (local_root / "probe.py").write_text(
+        '"""Inspect project-specific state."""\nLOCAL_ONLY_TOKEN = 1\n',
+        encoding="utf-8",
+    )
+    service, _provider, dense = _service(tmp_path)
+
+    default_result = service.search("LOCAL_ONLY_TOKEN", top_k=10)
+
+    assert default_result == {"hits": []}
+    assert len(dense.records) == 1
+
+    all_result = service.search("LOCAL_ONLY_TOKEN", top_k=10, include_all=True)
+
+    assert all_result["hits"][0]["path"] == ".houbridge/python/_project/probe.py"
+
+
 def test_script_search_invalid_python_remains_file_level_searchable_without_description(
     tmp_path: Path,
 ) -> None:

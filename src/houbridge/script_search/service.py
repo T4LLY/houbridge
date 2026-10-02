@@ -108,7 +108,13 @@ class ScriptSearchService:
             provider=(provider or Model2VecEmbeddingProvider()),
         )
 
-    def search(self, query: str, *, top_k: int = 10) -> dict[str, object]:
+    def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 10,
+        include_all: bool = False,
+    ) -> dict[str, object]:
         self._require_enabled()
         if not query.strip():
             raise BridgeError("invalid_script_query", "Script search query must not be empty.")
@@ -116,14 +122,23 @@ class ScriptSearchService:
             raise BridgeError("invalid_top_k", "Script search --top-k must be between 1 and 50.")
 
         current = self._reconcile()
-        if not current:
+        searchable = (
+            current
+            if include_all
+            else [
+                document
+                for document in current
+                if not document.relative_path.split("/", 1)[0].startswith("_")
+            ]
+        )
+        if not searchable:
             return {"hits": []}
 
         repository, dense, lexical = self._runtime()
         query_vector = self._encode_query(query)
-        current_ids = [document.entry_id for document in current]
+        current_ids = [document.entry_id for document in searchable]
         scores = hybrid_rank(
-            total_count=len(current),
+            total_count=len(searchable),
             top_k=top_k,
             candidate_min=self._hybrid.candidate_min,
             candidate_multiplier=self._hybrid.candidate_multiplier,

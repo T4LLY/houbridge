@@ -140,6 +140,19 @@ Workspace script search SHALL recursively index Python files below `<cwd>/.houbr
 - **WHEN** the current directory changes to another workspace
 - **THEN** script search uses that workspace's `.houbridge/python` tree and `.houbridge/search.db`
 
+### Requirement: Hide top-level underscore script entries from default search
+
+Workspace script indexing SHALL continue to reconcile every indexable Python file below `.houbridge/python`, including files whose first relative path component begins with `_`. Default script search SHALL rank only entries whose first relative path component does not begin with `_`. Script search with `--all` SHALL rank both default-visible and underscore-prefixed entries. The underscore directory name SHALL NOT otherwise be interpreted by Search.
+
+#### Scenario: Project-local script is indexed but hidden
+- **WHEN** `.houbridge/python/_project/probe.py` exists
+- **THEN** it is reconciled into the derived script index
+- **AND** a default script query does not rank it
+
+#### Scenario: Hidden entries are explicitly included
+- **WHEN** script search is invoked with `--all`
+- **THEN** indexed scripts below top-level underscore entries are eligible for ranking
+
 ### Requirement: Use the Python module docstring as the script description
 
 For valid Python source, workspace script search SHALL statically extract the module docstring without executing the file. A non-empty module docstring SHALL be treated as file-level `description` metadata and SHALL participate in semantic script ranking together with that file's source text. The original Python file SHALL remain authoritative for the description.

@@ -18,8 +18,8 @@ class _Service:
         self.result = result
         self.calls = []
 
-    def search(self, query: str, *, top_k: int = 10):
-        self.calls.append((query, top_k))
+    def search(self, query: str, *, top_k: int = 10, include_all: bool = False):
+        self.calls.append((query, top_k, include_all))
         if isinstance(self.result, Exception):
             raise self.result
         return self.result
@@ -72,7 +72,7 @@ def test_search_script_emits_exact_minimal_hit_shape(monkeypatch) -> None:
         '{"hits":[{"path":".houbridge/python/build.py",'
         '"score":301.278910,"description":"Builds geometry."}]}\n'
     )
-    assert service.calls == [("geometry", 7)]
+    assert service.calls == [("geometry", 7, False)]
 
 
 def test_search_script_omits_description_and_returns_only_hits(monkeypatch) -> None:
@@ -96,6 +96,16 @@ def test_search_script_omits_description_and_returns_only_hits(monkeypatch) -> N
     )
 
 
+def test_search_script_all_forwards_internal_visibility(monkeypatch) -> None:
+    service = _Service({"hits": []})
+    _install(monkeypatch, service)
+
+    result = runner.invoke(app, ["search", "script", "anything", "--all"])
+
+    assert result.exit_code == 0
+    assert service.calls == [("anything", 10, True)]
+
+
 def test_search_script_top_k_contract_is_framework_validated() -> None:
     help_result = runner.invoke(app, ["search", "script", "--help"])
     low = runner.invoke(app, ["search", "script", "query", "--top-k", "0"])
@@ -103,6 +113,7 @@ def test_search_script_top_k_contract_is_framework_validated() -> None:
 
     assert help_result.exit_code == 0
     assert "--top-k" in help_result.stdout
+    assert "--all" in help_result.stdout
     assert "--count" not in help_result.stdout
     assert low.exit_code == 2
     assert high.exit_code == 2

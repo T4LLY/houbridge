@@ -69,10 +69,10 @@ For normal lexical/hybrid search, `score` SHALL use the shared public RRF format
 The syntax SHALL be:
 
 ```text
-houbridge search script QUERY [--top-k INTEGER]
+houbridge search script QUERY [--top-k INTEGER] [--all]
 ```
 
-`QUERY` is required. `--top-k` SHALL be `1..50` and default to `10`.
+`QUERY` is required. `--top-k` SHALL be `1..50` and default to `10`. By default, scripts whose first path component below `.houbridge/python` begins with `_` SHALL be excluded from results. `--all` SHALL include those scripts.
 
 Success SHALL contain exactly one top-level field, `hits`. Each script hit SHALL contain `path` and `score`. When the indexed Python file has a non-empty module description, the hit SHALL also contain `description`:
 
@@ -99,6 +99,15 @@ Success SHALL contain exactly one top-level field, `hits`. Each script hit SHALL
 - **WHEN** a query produces a hybrid match from a Python file without a module description
 - **THEN** the hit contains exactly `path` and `score`
 - **AND** no `description` field is emitted
+
+#### Scenario: Underscore entry is hidden by default
+- **WHEN** a matching script is below `.houbridge/python/_project`
+- **AND** `--all` is omitted
+- **THEN** that script is excluded from `hits`
+
+#### Scenario: All script entries are requested
+- **WHEN** the same query is invoked with `--all`
+- **THEN** matching scripts below top-level underscore entries are eligible for `hits`
 
 #### Scenario: No script hit exists
 - **WHEN** the script query has no result

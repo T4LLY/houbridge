@@ -158,10 +158,11 @@ def search_node(
 def search_script(
     query: str = typer.Argument(..., help="Semantic query for indexed workspace Python scripts."),
     top_k: int = typer.Option(10, "--top-k", min=1, max=50, help="Return at most this many matches."),
+    include_all: bool = typer.Option(False, "--all", help="Include scripts under top-level underscore entries."),
 ) -> None:
     try:
         settings = load_config()
-        result = _script_service(settings).search(query, top_k=top_k)
+        result = _script_service(settings).search(query, top_k=top_k, include_all=include_all)
         emit_result(result, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:
         terminate_with_bridge_error(exc)
