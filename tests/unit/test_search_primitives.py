@@ -14,7 +14,7 @@ import pytest
 from houbridge.db.connection import connection_scope
 from houbridge.errors import BridgeError
 from houbridge.formatting import SearchScoreMetric, format_search_score
-from houbridge.search.dense import DenseIndexSchema, SQLiteVecIndex
+from houbridge.search.dense import DenseIndexSchema, DenseVectorRecord, SQLiteVecIndex
 from houbridge.search.embedding import (
     EmbeddingCoordinator,
     EmbeddingItem,
@@ -24,6 +24,7 @@ from houbridge.search.embedding import (
 from houbridge.search.hybrid import hybrid_rank
 from houbridge.search.lexical import LexicalDocument, LexicalIndexSchema, SQLiteFtsIndex
 from houbridge.search.rrf import reciprocal_rank_fusion
+from houbridge.search.sqlite_filter import append_membership_filter
 
 
 def _factory(path: Path):
@@ -315,3 +316,104 @@ def test_public_dense_and_rrf_scores_use_the_shared_phase1_formatter() -> None:
 
     assert dense.token == "301.278910"
     assert rrf.token == "317.540323"
+
+
+def test_dense_membership_filters_prefilter_singleton_and_preserve_controls(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "search.db"
+    index = SQLiteVecIndex(
+        _factory(database),
+        schema=DenseIndexSchema(
+            profile_table="script_vector_profiles",
+            vector_table_prefix="script_vec",
+        ),
+    )
+    index.upsert(
+        "profile-a",
+        [
+            DenseVectorRecord("hidden-near", "python", np.asarray([1.0, 0.0])),
+            DenseVectorRecord("eligible-near", "python", np.asarray([0.8, 0.6])),
+            DenseVectorRecord("eligible-far", "python", np.asarray([0.0, 1.0])),
+            DenseVectorRecord("other-namespace", "vex", np.asarray([1.0, 0.0])),
+        ],
+    )
+    query = np.asarray([1.0, 0.0], dtype=np.float32)
+
+    assert index.search(
+        "profile-a", query, namespaces=["python"], entry_ids=["eligible-far"], top_k=1
+    ) == ["eligible-far"]
+    assert index.search(
+        "profile-a", query, namespaces=["python"], entry_ids=["eligible-far"], top_k=3
+    ) == ["eligible-far"]
+    assert index.search(
+        "profile-a", query, namespaces=["python"], entry_ids=["eligible-near"], top_k=1
+    ) == ["eligible-near"]
+    assert index.search(
+        "profile-a",
+        query,
+        namespaces=["python"],
+        entry_ids=["eligible-far", "eligible-far"],
+        top_k=1,
+    ) == ["eligible-far"]
+    assert index.search(
+        "profile-a",
+        query,
+        namespaces=["python"],
+        entry_ids=["eligible-far", "eligible-near"],
+        top_k=1,
+    ) == ["eligible-near"]
+
+    inline_boundary = ["eligible-far", *(f"missing-{index}" for index in range(255))]
+    temp_boundary = ["eligible-far", *(f"missing-{index}" for index in range(256))]
+    with _factory(database)() as connection:
+        connection.execute("CREATE TABLE filter_probe(value TEXT PRIMARY KEY)")
+        connection.execute("INSERT INTO filter_probe VALUES (?)", ("eligible-far",))
+        for members in (inline_boundary, temp_boundary):
+            where: list[str] = []
+            params: list[object] = []
+            append_membership_filter(
+                connection,
+                where,
+                params,
+                column="value",
+                values=members,
+                temp_table="filter_probe_members",
+            )
+            rows = connection.execute(
+                f"SELECT value FROM filter_probe WHERE {where[0]}", tuple(params)
+            ).fetchall()
+            assert [row[0] for row in rows] == ["eligible-far"]
+
+    assert index.search(
+        "profile-a", query, namespaces=["python"], entry_ids=None, top_k=1
+    ) == ["hidden-near"]
+    assert index.search(
+        "profile-a", query, namespaces=["python"], entry_ids=[], top_k=1
+    ) == ["hidden-near"]
+    assert (
+        index.search(
+            "profile-a",
+            query,
+            namespaces=["python"],
+            entry_ids=["other-namespace"],
+            top_k=1,
+        )
+        == []
+    )
+    assert (
+        index.search(
+            "profile-a", query, namespaces=["python"], entry_ids=["missing"], top_k=1
+        )
+        == []
+    )
+    assert (
+        index.search(
+            "profile-a",
+            query,
+            namespaces=["python"],
+            entry_ids=["eligible-far"],
+            top_k=0,
+        )
+        == []
+    )

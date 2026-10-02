@@ -37,6 +37,12 @@ def append_membership_filter(
         return
 
     quoted_column = _quote_column_reference(column)
+    if len(members) == 1:
+        # Keep sqlite-vec's candidate filter; IN (?) can collapse to post-KNN equality.
+        where.append(f"{quoted_column} IN (SELECT ?)")
+        params.append(members[0])
+        return
+
     if len(members) <= _INLINE_MEMBERSHIP_LIMIT:
         placeholders = ",".join("?" for _ in members)
         where.append(f"{quoted_column} IN ({placeholders})")

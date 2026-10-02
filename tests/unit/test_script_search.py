@@ -395,3 +395,46 @@ def test_embedding_profile_change_replaces_derived_vector_namespace(tmp_path: Pa
     assert ("profile-a", (first_entry,)) in dense.removed
     assert ("profile-a", first_entry) not in dense.records
     assert ("profile-b", first_entry) in dense.records
+
+
+def test_script_search_dense_only_keeps_the_only_eligible_file_with_hidden_vectors(
+    tmp_path: Path,
+) -> None:
+    python_root = tmp_path / ".houbridge" / "python"
+    python_root.mkdir(parents=True)
+    hidden_files = []
+    for index in range(8):
+        path = python_root / f"_hidden_{index}.py"
+        path.write_text(f"HIDDEN_VALUE_{index} = {index}\n", encoding="utf-8")
+        hidden_files.append(path)
+    eligible = python_root / "visible.py"
+    eligible.write_text("ELIGIBLE_VALUE = 1\n", encoding="utf-8")
+
+    paths = WorkspaceSearchPaths.for_cwd(tmp_path)
+    service = ScriptSearchService(
+        paths=paths,
+        embedding_profile="code-profile",
+        enabled=True,
+        hybrid=SearchHybridConfig(rrf_k=60, candidate_multiplier=1, candidate_min=1),
+        provider=_Provider(),
+    )
+    query = "UNMATCHED_QUERY_TOKEN"
+
+    default_result = service.search(query, top_k=1)
+    assert [hit["path"] for hit in default_result["hits"]] == [
+        ".houbridge/python/visible.py"
+    ]
+
+    all_result = service.search(query, top_k=1, include_all=True)
+    assert all_result["hits"][0]["path"].startswith(".houbridge/python/_hidden_")
+
+    second_eligible = python_root / "visible_second.py"
+    second_eligible.write_text("SECOND_ELIGIBLE_VALUE = 2\n", encoding="utf-8")
+    assert service.search(query, top_k=1)["hits"][0]["path"].startswith(
+        ".houbridge/python/visible"
+    )
+
+    for path in hidden_files:
+        path.unlink()
+    no_hidden_result = service.search(query, top_k=1)
+    assert no_hidden_result["hits"][0]["path"].startswith(".houbridge/python/visible")
