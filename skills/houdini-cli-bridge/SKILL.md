@@ -19,9 +19,9 @@ houbridge is a CLI for inspecting and controlling a running Houdini instance.
 
 ## Python
 - Execute Houdini Python with `houbridge exec --file <PATH>`. Prefer parameterized, reusable tools when practical.
-- Store reusable scripts in `.houbridge/python`.
-- `houbridge search script <QUERY>` searches for reusable Python tools created in previous work.
-- Before implementing something new, consider whether an existing tool can be reused.
+- New reusable scripts start in `.houbridge/python/_candidate`; project-specific scripts default to `.houbridge/python/_project` or another user-selected top-level `_...` directory. Approved reusable tools live in non-underscore categories.
+- `houbridge search script <QUERY>` searches approved reusable Python tools. Add `--all` only when candidates or other top-level `_...` entries must also be inspected.
+- Before implementing something new, consider whether an existing approved tool can be reused.
 - Give reusable scripts a descriptive module docstring and a clear filename that indicate their purpose.
 
 ## History

@@ -22,14 +22,30 @@ Execution, Session selection, Task inspection, Resource retrieval, Capture, and 
 * Do not make failures look like successful results. Raise an exception when appropriate.
 * Avoid hard-coding values that callers are expected to change.
 * Use command-line arguments for configurable inputs.
-* Store reusable scripts in `.houbridge/python`.
+* Store workspace scripts below `.houbridge/python`.
+* Put newly authored cross-project reusable scripts in `.houbridge/python/_candidate/` until the user explicitly approves promotion.
+* Put project-specific scripts in `.houbridge/python/_project/` by default. A user may choose another top-level `_...` directory such as `_project_x` or `_proj_team`.
+* Do not create a new script directly in an approved non-underscore category unless the user explicitly approves that placement. Existing approved scripts may be edited in place when requested.
 * Keep search descriptions concise and put detailed usage information in `--help`.
+
+## Workspace Placement
+
+Use the top-level directory below `.houbridge/python` as the visibility boundary.
+
+* `_candidate/`: a new script intended to become reusable across projects, but not yet approved.
+* `_project/`: the default location for scripts that are specific to the current project, scene, or workflow.
+* Other top-level `_...` directories: user-defined local groupings. Do not infer extra semantics from their names.
+* Non-underscore directories: approved reusable tools.
+
+Do not use `_candidate/` as a dumping ground for project-specific code. If a script depends on the current project by design, keep it under `_project/` or another user-selected `_...` directory.
+
+Promotion is a separate review step. Do not move a script from `_candidate/` into an approved non-underscore category without explicit user approval.
 
 ## Search Summary
 
 Reusable scripts stored in `.houbridge/python` should define a concise module docstring.
 
-The module docstring is the script's search summary and is used by `houbridge search script`.
+The module docstring is the script's search summary. `houbridge search script` searches approved non-underscore entries by default; use `houbridge search script <QUERY> --all` when candidates or other top-level `_...` entries must also be inspected.
 
 Describe what the script does, not how it is implemented.
 
