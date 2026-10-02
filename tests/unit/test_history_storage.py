@@ -1,18 +1,27 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from houbridge.errors import BridgeError
 from houbridge.history import HistoryStorageService, HistoryStore, history_session_key
+from houbridge.history import materialize_action_changes
+from houbridge.history.invocation import _read_capture
 from houbridge.history.reader import HistoryReader
+from houbridge.history.reader import HistoryReadService
+from houbridge.history.search import _lexical_projection
+from houbridge.houdini.scripts.history.execution import HistoryCaptureContext, finalize
 from houbridge.paths import GlobalDataPaths
 from houbridge.process_coordination import ProcessIdentity
+from houbridge.resource.store import ResourceStore
+from houbridge.semantic_id import SemanticBase
 
 
 class FakeEmbeddingProvider:
@@ -22,6 +31,125 @@ class FakeEmbeddingProvider:
     def encode(self, texts, profile: str) -> np.ndarray:
         self.calls.append((profile, tuple(texts)))
         return np.asarray([[1.0, 2.0, 3.0] for _ in texts], dtype=np.float32)
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        pytest.param(None, "", id="add-empty"),
+        pytest.param("", None, id="remove-empty"),
+        pytest.param(None, "$HIP/raw.$F", id="add-expression"),
+        pytest.param("$HIP/raw.$F", None, id="remove-expression"),
+        pytest.param(None, "多" * 1400, id="add-oversized-text"),
+        pytest.param("多" * 1400, None, id="remove-oversized-text"),
+        pytest.param(
+            None, '{"expression":"' + "x" * 4100 + '"}', id="add-oversized-json"
+        ),
+        pytest.param(
+            '{"expression":"' + "x" * 4100 + '"}', None, id="remove-oversized-json"
+        ),
+        pytest.param("", "$HIP/raw.$F", id="legacy-strings"),
+        pytest.param("small", "多" * 1400, id="legacy-resource"),
+    ],
+)
+def test_parameter_changes_roundtrip_capture_storage_public_get_and_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    before: str | None,
+    after: str | None,
+) -> None:
+    import houbridge.resource.classifier as classifier
+
+    monkeypatch.setattr(classifier.filetype, "guess", lambda _payload: None)
+    raw = {
+        "type": "parm_changed",
+        "node": 11,
+        "path": "/obj/final",
+        "parm": "membership",
+        "before": before,
+        "after": after,
+    }
+    capture_path = tmp_path / "capture.json"
+    finalize(
+        HistoryCaptureContext(
+            recorder=SimpleNamespace(finalize=lambda: [raw]),
+            capture_path=capture_path,
+            started_at="2026-10-03T00:00:00+00:00",
+        )
+    )
+    capture = _read_capture(capture_path)
+    assert capture["scene_replaced"] is False
+    assert capture["changes"] == [raw]
+    resources = ResourceStore(
+        tmp_path / "resources.db",
+        semantic_generator=SimpleNamespace(  # type: ignore[arg-type]
+            generate=lambda _text, *, fallback_stem: SemanticBase(
+                prefix="history-value", tags=("history", "value")
+            )
+        ),
+    )
+    raw_changes = capture["changes"]
+    assert isinstance(raw_changes, list)
+    changes = materialize_action_changes(raw_changes, resources=resources)
+    store = HistoryStore(
+        tmp_path / "history.db", embedding_provider=FakeEmbeddingProvider()
+    )
+    embedded = store.embed_source(
+        "result = 'history'\n", requested_code_profile="profile-a"
+    )
+    entry_id = store.commit_entry(
+        expected_code_profile=embedded.profile,
+        time=str(capture["time"]),
+        cwd=str(tmp_path.resolve()),
+        status="completed",
+        file=str((tmp_path / "tool.py").resolve()),
+        args=(),
+        purpose=None,
+        source_hash=embedded.source_hash,
+        changes=changes,
+    )
+
+    reader = HistoryReader(store.database)
+    public = HistoryReadService(reader).get(entry_id)
+    expected = [change.to_payload() for change in changes]
+    with sqlite3.connect(store.database) as connection:
+        payloads = [
+            json.loads(row[0])
+            for row in connection.execute(
+                "SELECT payload_json FROM history_changes WHERE entry_id = ? ORDER BY ordinal",
+                (entry_id,),
+            )
+        ]
+    assert public["changes"] == payloads == expected
+    assert set(payloads[0]) == {"type", "node", "path", "parm", "before", "after"}
+    entry = reader.get(entry_id)
+    assert entry is not None
+    assert entry.changes == tuple(expected)
+    assert reader.all_for_search() == [entry]
+    projection = _lexical_projection(entry)
+    assert "membership" in projection
+    assert "/obj/final" in projection
+    assert "null" not in projection.splitlines()
+    assert "None" not in projection.splitlines()
+    for side, raw_value in (("before", before), ("after", after)):
+        value = payloads[0][side]
+        if raw_value is None or len(raw_value.encode("utf-8")) <= 4096:
+            assert value == raw_value
+            if raw_value:
+                assert raw_value in projection
+        else:
+            assert isinstance(value, dict)
+            assert set(value) == {"omitted", "resource", "tokens"}
+            assert value["omitted"] is True
+            resource = resources.get(value["resource"])
+            assert resource is not None
+            assert value["tokens"] == resource.token_count
+            assert resources.get_bytes(resource.semantic_alias) == raw_value.encode(
+                "utf-8"
+            )
+            assert raw_value not in projection
+            assert resource.semantic_alias in projection
+            assert str(resource.token_count) in projection
 
 
 def test_history_path_isolated_by_exact_process_incarnation(tmp_path: Path) -> None:

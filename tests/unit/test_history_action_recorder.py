@@ -8,6 +8,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from houbridge.history import materialize_action_changes
+from houbridge.history.invocation import _read_capture
+from houbridge.houdini.scripts.history.execution import HistoryCaptureContext, finalize
+
 
 SCRIPT = (
     Path(__file__).parents[2]
@@ -134,6 +138,16 @@ class FakeNode:
             parm_tuple=None if whole_node_event else object(),
         )
 
+    def add_parm(self, name: str, value: str) -> None:
+        self._parms[name] = FakeParm(name, value)
+        # Fake callback-delivery assumption for compactor tests; not native event verification.
+        self.emit(self.hou.nodeEventType.ParmTupleChanged, parm_tuple=None)
+
+    def remove_parm(self, name: str) -> None:
+        del self._parms[name]
+        # Fake callback-delivery assumption for compactor tests; not native event verification.
+        self.emit(self.hou.nodeEventType.ParmTupleChanged, parm_tuple=None)
+
     def set_input(self, index: int, source: "FakeNode | None", output: int = 0) -> None:
         if source is None:
             self._inputs.pop(index, None)
@@ -206,6 +220,194 @@ def _recorder_class():
 
 def _by_type(changes, change_type: str):
     return [change for change in changes if change["type"] == change_type]
+
+
+def _node_and_recorder(fake_hou, *, created: bool, parms: dict[str, str]):
+    hou, _root, obj = fake_hou
+    if created:
+        recorder = _recorder_class()()
+        node = obj.create_child(11, "witness", parms=parms)
+    else:
+        node = FakeNode(hou, 11, "/obj/witness", parent=obj, parms=parms)
+        recorder = _recorder_class()()
+    return node, recorder
+
+
+@pytest.mark.parametrize("created", [False, True], ids=["existing", "created"])
+@pytest.mark.parametrize("operation", ["add", "remove"])
+@pytest.mark.parametrize("raw_value", ["a", ""], ids=["nonempty", "empty"])
+def test_parameter_membership_survives_capture_and_materialization(
+    fake_hou, tmp_path: Path, created: bool, operation: str, raw_value: str
+) -> None:
+    parms = {"shared": "unchanged"}
+    if operation == "remove":
+        parms["text"] = raw_value
+    node, recorder = _node_and_recorder(fake_hou, created=created, parms=parms)
+
+    node.rename("/obj/final")
+    if operation == "add":
+        node.add_parm("text", raw_value)
+    else:
+        node.remove_parm("text")
+
+    capture_path = tmp_path / "history-capture.json"
+    finalize(HistoryCaptureContext(recorder, capture_path, "2026-10-03T00:00:00+00:00"))
+    capture = _read_capture(capture_path)
+    expected = [
+        {
+            "type": "node_created",
+            "node": 11,
+            "before": None,
+            "after": {"path": "/obj/final", "node_type": "null"},
+        }
+        if created
+        else {
+            "type": "node_renamed",
+            "node": 11,
+            "before": "/obj/witness",
+            "after": "/obj/final",
+        },
+        {
+            "type": "parm_changed",
+            "node": 11,
+            "path": "/obj/final",
+            "parm": "text",
+            "before": None if operation == "add" else raw_value,
+            "after": raw_value if operation == "add" else None,
+        },
+    ]
+    assert capture == {
+        "time": "2026-10-03T00:00:00+00:00",
+        "scene_replaced": False,
+        "changes": expected,
+    }
+    assert node.callbacks == []
+    resources = SimpleNamespace(
+        put_bytes=lambda _payload: pytest.fail(
+            "Inline changes must not create Resources"
+        )
+    )
+    raw_changes = capture["changes"]
+    assert isinstance(raw_changes, list)
+    changes = materialize_action_changes(raw_changes, resources=resources)  # type: ignore[arg-type]
+    assert [change.to_payload() for change in changes] == expected
+
+
+@pytest.mark.parametrize("created", [False, True], ids=["existing", "created"])
+@pytest.mark.parametrize(
+    "sequence", ["add-remove", "remove-readd", "remove-readd-changed"]
+)
+@pytest.mark.parametrize("raw_value", ["a", ""], ids=["nonempty", "empty"])
+def test_parameter_membership_compacts_against_the_applicable_baseline(
+    fake_hou, created: bool, sequence: str, raw_value: str
+) -> None:
+    parms = {"shared": "unchanged"}
+    if sequence != "add-remove":
+        parms["text"] = raw_value
+    node, recorder = _node_and_recorder(fake_hou, created=created, parms=parms)
+
+    if sequence == "add-remove":
+        node.add_parm("text", raw_value)
+        node.remove_parm("text")
+    else:
+        node.remove_parm("text")
+        node.add_parm(
+            "text", "$HIP/raw.$F" if sequence == "remove-readd-changed" else raw_value
+        )
+
+    expected = (
+        [
+            {
+                "type": "node_created",
+                "node": 11,
+                "before": None,
+                "after": {"path": "/obj/witness", "node_type": "null"},
+            }
+        ]
+        if created
+        else []
+    )
+    if sequence == "remove-readd-changed":
+        expected.append(
+            {
+                "type": "parm_changed",
+                "node": 11,
+                "path": "/obj/witness",
+                "parm": "text",
+                "before": raw_value,
+                "after": "$HIP/raw.$F",
+            }
+        )
+    assert recorder.finalize() == expected
+
+
+@pytest.mark.parametrize("created", [False, True], ids=["existing", "created"])
+@pytest.mark.parametrize("operation", ["add", "remove"])
+@pytest.mark.parametrize("raw_value", ["a", ""], ids=["nonempty", "empty"])
+def test_parameter_membership_changes_are_suppressed_when_node_is_deleted(
+    fake_hou, created: bool, operation: str, raw_value: str
+) -> None:
+    node, recorder = _node_and_recorder(
+        fake_hou,
+        created=created,
+        parms={"text": raw_value} if operation == "remove" else {},
+    )
+    node.rename("/obj/final")
+    if operation == "add":
+        node.add_parm("text", raw_value)
+    else:
+        node.remove_parm("text")
+    node.destroy()
+
+    assert recorder.finalize() == (
+        []
+        if created
+        else [
+            {
+                "type": "node_deleted",
+                "node": 11,
+                "before": {"path": "/obj/witness", "node_type": "null"},
+                "after": None,
+            }
+        ]
+    )
+
+
+def test_created_initial_parameters_do_not_become_initialization_diffs(
+    fake_hou,
+) -> None:
+    _node, recorder = _node_and_recorder(
+        fake_hou, created=True, parms={"text": "", "shared": "unchanged"}
+    )
+    assert recorder.finalize() == [
+        {
+            "type": "node_created",
+            "node": 11,
+            "before": None,
+            "after": {"path": "/obj/witness", "node_type": "null"},
+        }
+    ]
+
+
+@pytest.mark.parametrize("created", [False, True], ids=["existing", "created"])
+def test_present_empty_string_edit_remains_a_string_to_string_change(
+    fake_hou, created: bool
+) -> None:
+    node, recorder = _node_and_recorder(fake_hou, created=created, parms={"text": ""})
+    node.set_parm("text", "$HIP/raw.$F", whole_node_event=True)
+
+    changes = recorder.finalize()
+    assert changes is not None
+    assert _by_type(changes, "parm_changed") == [
+        {
+            "type": "parm_changed",
+            "node": 11,
+            "path": "/obj/witness",
+            "parm": "text",
+            "before": "",
+            "after": "$HIP/raw.$F",
+        }
+    ]
 
 
 def test_existing_node_compacts_rename_parm_rewire_and_flag_to_net_changes(fake_hou) -> None:

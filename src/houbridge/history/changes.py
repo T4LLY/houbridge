@@ -31,7 +31,7 @@ class OmittedRawValue:
         }
 
 
-HistoryRawValue: TypeAlias = str | OmittedRawValue
+HistoryRawValue: TypeAlias = str | None | OmittedRawValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,12 +213,20 @@ def _materialize_change(value: object, *, resources: ResourceStore) -> ActionCha
         )
     if change_type == "parm_changed":
         _exact_keys(data, {"type", "node", "path", "parm", "before", "after"})
+        before = data["before"]
+        after = data["after"]
+        if before is None and after is None:
+            raise _invalid()
+        if before is not None:
+            before = _string(before)
+        if after is not None:
+            after = _string(after)
         return ParmChangedChange(
             node=_node_id(data["node"]),
             path=_string(data["path"]),
             parm=_string(data["parm"]),
-            before=_bounded_raw_value(_string(data["before"]), resources=resources),
-            after=_bounded_raw_value(_string(data["after"]), resources=resources),
+            before=_bounded_raw_value(before, resources=resources),
+            after=_bounded_raw_value(after, resources=resources),
         )
     if change_type == "input_rewired":
         _exact_keys(data, {"type", "node", "path", "input", "before", "after"})
@@ -248,7 +256,9 @@ def _materialize_change(value: object, *, resources: ResourceStore) -> ActionCha
     raise _invalid()
 
 
-def _bounded_raw_value(value: str, *, resources: ResourceStore) -> HistoryRawValue:
+def _bounded_raw_value(value: str | None, *, resources: ResourceStore) -> HistoryRawValue:
+    if value is None:
+        return None
     payload = value.encode("utf-8")
     if len(payload) <= _INLINE_RAW_VALUE_BYTES:
         return value
@@ -265,7 +275,7 @@ def _bounded_raw_value(value: str, *, resources: ResourceStore) -> HistoryRawVal
 
 
 def _raw_value_payload(value: HistoryRawValue) -> object:
-    return value if isinstance(value, str) else value.to_payload()
+    return value if value is None or isinstance(value, str) else value.to_payload()
 
 
 def _node_state(value: object) -> NodeState:

@@ -241,9 +241,9 @@ def _parm_changes(
     new = after["parms"]
     assert isinstance(old, dict) and isinstance(new, dict)
     changes: list[dict[str, object]] = []
-    for name in sorted(old.keys() & new.keys()):
-        old_value = old[name]
-        new_value = new[name]
+    for name in sorted(old.keys() | new.keys()):
+        old_value = old.get(name)
+        new_value = new.get(name)
         if old_value == new_value:
             continue
         changes.append(
@@ -252,8 +252,8 @@ def _parm_changes(
                 "node": int(after["session_id"]),
                 "path": final_path,
                 "parm": str(name),
-                "before": str(old_value),
-                "after": str(new_value),
+                "before": old_value,
+                "after": new_value,
             }
         )
     return changes

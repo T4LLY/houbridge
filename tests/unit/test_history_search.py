@@ -13,6 +13,7 @@ from houbridge.cli.main import app
 from houbridge.config import SearchHybridConfig
 from houbridge.errors import BridgeError
 from houbridge.history.changes import ParmChangedChange
+from houbridge.history.changes import materialize_action_changes
 from houbridge.history.reader import HistoryEntryRecord, HistoryReadService, HistoryReader
 from houbridge.history.search import HistorySearchService
 from houbridge.history.store import HistoryStore
@@ -177,6 +178,61 @@ def test_history_get_and_list_use_public_shapes_and_newest_first(tmp_path: Path)
     }
     assert [entry["id"] for entry in listed["entries"]] == [2, 1]
     assert set(listed["entries"][0]) == {"id", "time", "status", "file", "purpose"}
+
+
+@pytest.mark.parametrize("present_side", ["before", "after"])
+@pytest.mark.parametrize("raw_value", ["", "presentvalue"], ids=["empty", "nonempty"])
+def test_history_lexical_search_recalls_membership_without_inventing_absence_terms(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, present_side: str, raw_value: str
+) -> None:
+    store, source_hash = _store_with_two_entries(tmp_path)
+    raw = {
+        "type": "parm_changed",
+        "node": 11,
+        "path": "/obj/finalmembership",
+        "parm": "membership",
+        "before": None,
+        "after": None,
+    }
+    raw[present_side] = raw_value
+    resources = SimpleNamespace(
+        put_bytes=lambda _payload: pytest.fail(
+            "Inline changes must not create Resources"
+        )
+    )
+    changes = materialize_action_changes([raw], resources=resources)  # type: ignore[arg-type]
+    entry_id = store.commit_entry(
+        expected_code_profile="profile-a",
+        time="2026-10-03T00:00:00",
+        cwd=str(tmp_path.resolve()),
+        status="completed",
+        file=str((tmp_path / "third.py").resolve()),
+        args=(),
+        purpose=None,
+        source_hash=source_hash,
+        changes=changes,
+    )
+    FakeDenseIndex.records = []
+    monkeypatch.setattr("houbridge.history.search.SQLiteVecIndex", FakeDenseIndex)
+    monkeypatch.setattr(FakeDenseIndex, "search", lambda _self, *_args, **_kwargs: [])
+    service = HistorySearchService(
+        store,
+        provider=FakeEmbeddingProvider(),
+        hybrid=SearchHybridConfig(rrf_k=60, candidate_multiplier=4, candidate_min=20),
+    )
+
+    queries = ["membership", "finalmembership"]
+    if raw_value:
+        queries.append(raw_value)
+    for query in queries:
+        hits = service.search(query)["hits"]
+        assert isinstance(hits, list)
+        assert [hit["id"] for hit in hits] == [entry_id]
+    assert service.search("null") == {"hits": []}
+    assert service.search("None") == {"hits": []}
+    assert HistoryReadService(HistoryReader(store.database)).get(entry_id)[
+        "changes"
+    ] == [raw]
 
 
 def test_missing_current_history_is_empty_for_search_and_list_and_get_is_not_found() -> None:
