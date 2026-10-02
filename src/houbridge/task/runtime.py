@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import os
 from collections import deque
+from contextlib import ExitStack
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from typing import Protocol
 
 from houbridge.errors import BridgeError
-from houbridge.process_coordination import ManagedExecutionLock, ProcessIdentity, process_identity_for_pid
+from houbridge.process_coordination import (
+    ManagedExecutionLock,
+    ManagedExecutionLockTimeout,
+    ProcessIdentity,
+    process_identity_for_pid,
+)
 
 from .models import TaskRecord
 from .runtime_store import TaskRuntimeStateStore
@@ -139,35 +145,66 @@ class TaskRuntime:
         return task
 
     def _run_claimed(self, task: TaskRecord, owner_token: str) -> None:
-        with self._execution_lock.acquire(
-            task.dispatch.process_identity,
-            timeout_seconds=task.dispatch.lock_timeout_seconds,
-        ):
+        with ExitStack() as stack:
+            try:
+                stack.enter_context(
+                    self._execution_lock.acquire(
+                        task.dispatch.process_identity,
+                        timeout_seconds=task.dispatch.lock_timeout_seconds,
+                    )
+                )
+            except ManagedExecutionLockTimeout as exc:
+                self._fail_claimed(task, owner_token, _lock_timeout_error(task, exc))
+                return
             if not self._validate_or_fail(task, owner_token):
                 return
             self._runner.run(task)
             self._finish_claimed_call(task.id, owner_token, expected_before="queued")
 
     def _recover_claimed(self, task: TaskRecord, owner_token: str) -> None:
-        with self._execution_lock.acquire(
-            task.dispatch.process_identity,
-            timeout_seconds=task.dispatch.lock_timeout_seconds,
-        ):
-            if not self._validate_or_fail(task, owner_token):
+        with ExitStack() as stack:
+            try:
+                stack.enter_context(
+                    self._execution_lock.acquire(
+                        task.dispatch.process_identity,
+                        timeout_seconds=task.dispatch.lock_timeout_seconds,
+                    )
+                )
+            except ManagedExecutionLockTimeout:
+                # Preserve the possibly-running claim and its global concurrency
+                # slot. The scheduler can still use any remaining capacity.
+                return
+            if not self._validate_or_fail(task, owner_token, recovering=True):
                 return
             self._runner.recover(task)
             self._finish_claimed_call(task.id, owner_token, expected_before="running")
 
-    def _validate_or_fail(self, task: TaskRecord, owner_token: str) -> bool:
+    def _validate_or_fail(
+        self,
+        task: TaskRecord,
+        owner_token: str,
+        *,
+        recovering: bool = False,
+    ) -> bool:
         try:
             self._target_validator.validate(task)
         except BridgeError as exc:
-            if exc.code != "task_target_changed":
-                raise
-            self._runner.runtime_failed(task, exc)
-            self._runtime_state.release_claim(task.id, owner_token)
+            if exc.code == "task_target_changed":
+                self._fail_claimed(task, owner_token, exc)
+                return False
+            if recovering:
+                # A transient probe failure cannot establish that an existing
+                # invocation is safe to fail or replay; recover its artifacts.
+                return True
+            self._fail_claimed(task, owner_token, exc)
             return False
         return True
+
+    def _fail_claimed(
+        self, task: TaskRecord, owner_token: str, error: BridgeError
+    ) -> None:
+        self._runner.runtime_failed(task, error)
+        self._runtime_state.release_claim(task.id, owner_token)
 
     def _finish_claimed_call(
         self,
@@ -202,3 +239,13 @@ def _take_unscheduled(
         if task_id not in active_ids:
             return task_id
     return None
+
+
+def _lock_timeout_error(
+    task: TaskRecord, error: ManagedExecutionLockTimeout
+) -> BridgeError:
+    return BridgeError(
+        "task_execution_lock_timeout",
+        f"Task {task.id} could not acquire the managed execution lock.",
+        str(error),
+    )

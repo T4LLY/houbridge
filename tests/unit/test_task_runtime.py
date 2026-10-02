@@ -5,7 +5,13 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from houbridge.process_coordination import ProcessIdentity
+import pytest
+
+from houbridge.errors import BridgeError
+from houbridge.process_coordination import (
+    ManagedExecutionLockTimeout,
+    ProcessIdentity,
+)
 from houbridge.semantic_id import SemanticBase
 from houbridge.session.probe import SessionProbeResult
 from houbridge.task import (
@@ -203,6 +209,252 @@ def test_runtime_rejects_restarted_bound_target_without_dispatch(tmp_path: Path)
     assert task.status == "failed"
     assert task.runtime_failure_code == "task_target_changed"
     assert runner.run_ids == []
+
+
+@pytest.mark.parametrize("max_concurrency", [1, 2])
+def test_probe_failure_fails_queued_task_and_scheduler_runs_healthy_task(
+    tmp_path: Path, max_concurrency: int
+) -> None:
+    store = _store(tmp_path)
+    failed_id = _submit(store, 0, pid=4200)
+    healthy_id = _submit(store, 1, pid=4201)
+    state = _runtime_state(store)
+    _reserve(state)
+    runner = CompletingRunner(store)
+
+    class ProbeValidator:
+        def validate(self, task) -> None:
+            if task.id == failed_id:
+                raise BridgeError(
+                    "session_probe_failed", "probe unavailable", "transient"
+                )
+
+    runtime = TaskRuntime(
+        store,
+        state,
+        runner,
+        max_concurrency=max_concurrency,
+        target_validator=ProbeValidator(),
+    )
+
+    runtime.run("runtime-token", runtime_identity=ProcessIdentity(9002, "runtime"))
+
+    failed = store.get(failed_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "session_probe_failed"
+    assert runner.run_ids == [healthy_id]
+    assert store.get(healthy_id).status == "completed"  # type: ignore[union-attr]
+    assert state.claim_count() == 0
+
+
+def test_managed_execution_lock_timeout_fails_task_and_scheduler_continues(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    failed_id = _submit(store, 0, pid=4300)
+    healthy_id = _submit(store, 1, pid=4301)
+    state = _runtime_state(store)
+    _reserve(state)
+    runner = CompletingRunner(store)
+
+    class TimeoutLock:
+        def acquire(self, identity, *, timeout_seconds=None):
+            from contextlib import contextmanager
+
+            @contextmanager
+            def _acquire():
+                if identity.pid == 4300:
+                    raise ManagedExecutionLockTimeout(identity)
+                yield
+
+            return _acquire()
+
+    runtime = TaskRuntime(
+        store,
+        state,
+        runner,
+        max_concurrency=1,
+        execution_lock=TimeoutLock(),  # type: ignore[arg-type]
+        target_validator=AcceptTarget(),
+    )
+
+    runtime.run("runtime-token", runtime_identity=ProcessIdentity(9002, "runtime"))
+
+    failed = store.get(failed_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_execution_lock_timeout"
+    assert runner.run_ids == [healthy_id]
+    assert store.get(healthy_id).status == "completed"  # type: ignore[union-attr]
+    assert state.claim_count() == 0
+
+
+def test_recovery_probe_failure_recovers_existing_invocation_without_replay(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    recovery_id = _submit(store, 0, pid=4400)
+    healthy_id = _submit(store, 1, pid=4401)
+    state = _runtime_state(store)
+    _reserve(state, "old-owner")
+    assert state.claim_runtime_owner("old-owner", ProcessIdentity(9001, "old-runtime"))
+    assert state.claim_next_queued("old-owner", max_concurrency=1) == recovery_id
+    store.mark_running(recovery_id)
+    assert state.clear_runtime_owner("old-owner")
+    assert state.reserve_runtime_start(
+        "runtime-token", ProcessIdentity(9002, "starter")
+    )
+
+    runner = CompletingRunner(store)
+
+    class ProbeValidator:
+        def validate(self, task) -> None:
+            if task.id == recovery_id:
+                raise BridgeError(
+                    "session_probe_failed", "probe unavailable", "transient"
+                )
+
+    runtime = TaskRuntime(
+        store,
+        state,
+        runner,
+        max_concurrency=1,
+        target_validator=ProbeValidator(),
+    )
+
+    runtime.run("runtime-token", runtime_identity=ProcessIdentity(9003, "runtime"))
+
+    assert runner.run_ids == [healthy_id]
+    assert runner.recover_ids == [recovery_id]
+    assert store.get(recovery_id).status == "completed"  # type: ignore[union-attr]
+    assert store.get(healthy_id).status == "completed"  # type: ignore[union-attr]
+    assert state.claim_count() == 0
+
+
+def test_recovery_lock_timeout_retries_claim_when_lock_becomes_available(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    recovery_id = _submit(store, 0, pid=4500)
+    healthy_id = _submit(store, 1, pid=4501)
+    state = _runtime_state(store)
+    _reserve(state, "old-owner")
+    assert state.claim_runtime_owner("old-owner", ProcessIdentity(9001, "old-runtime"))
+    assert state.claim_next_queued("old-owner", max_concurrency=1) == recovery_id
+    store.mark_running(recovery_id)
+    assert state.clear_runtime_owner("old-owner")
+    assert state.reserve_runtime_start(
+        "runtime-token", ProcessIdentity(9002, "starter")
+    )
+
+    runner = CompletingRunner(store)
+
+    class OneTimeoutLock:
+        def __init__(self) -> None:
+            self.recovery_attempts = 0
+
+        def acquire(self, identity, *, timeout_seconds=None):
+            from contextlib import contextmanager
+
+            @contextmanager
+            def _acquire():
+                if identity.pid == 4500 and self.recovery_attempts == 0:
+                    self.recovery_attempts += 1
+                    raise ManagedExecutionLockTimeout(identity)
+                yield
+
+            return _acquire()
+
+    lock = OneTimeoutLock()
+    runtime = TaskRuntime(
+        store,
+        state,
+        runner,
+        max_concurrency=1,
+        execution_lock=lock,  # type: ignore[arg-type]
+        target_validator=AcceptTarget(),
+    )
+
+    runtime.run("runtime-token", runtime_identity=ProcessIdentity(9003, "runtime"))
+
+    assert runner.run_ids == [healthy_id]
+    assert runner.recover_ids == [recovery_id]
+    assert store.get(recovery_id).status == "completed"  # type: ignore[union-attr]
+    assert store.get(healthy_id).status == "completed"  # type: ignore[union-attr]
+    assert state.claim_count() == 0
+
+
+def test_recovery_lock_timeouts_allow_healthy_task_progress_at_concurrency_two(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    recovery_id = _submit(store, 0, pid=4600)
+    healthy_id = _submit(store, 1, pid=4601)
+    state = _runtime_state(store)
+    _reserve(state, "old-owner")
+    assert state.claim_runtime_owner("old-owner", ProcessIdentity(9001, "old-runtime"))
+    assert state.claim_next_queued("old-owner", max_concurrency=2) == recovery_id
+    store.mark_running(recovery_id)
+    assert state.clear_runtime_owner("old-owner")
+    assert state.reserve_runtime_start(
+        "runtime-token", ProcessIdentity(9002, "starter")
+    )
+
+    healthy_finished = threading.Event()
+    release_recovery_lock = threading.Event()
+
+    class ObservingRunner(CompletingRunner):
+        def run(self, task) -> None:
+            super().run(task)
+            if task.id == healthy_id:
+                assert state.claim_count() == 2
+                healthy_finished.set()
+
+    class RepeatedTimeoutLock:
+        def acquire(self, identity, *, timeout_seconds=None):
+            from contextlib import contextmanager
+
+            @contextmanager
+            def _acquire():
+                if identity.pid == 4600 and not release_recovery_lock.wait(0.02):
+                    raise ManagedExecutionLockTimeout(identity)
+                yield
+
+            return _acquire()
+
+    runner = ObservingRunner(store)
+    runtime = TaskRuntime(
+        store,
+        state,
+        runner,
+        max_concurrency=2,
+        execution_lock=RepeatedTimeoutLock(),  # type: ignore[arg-type]
+        target_validator=AcceptTarget(),
+    )
+    runtime_error: list[BaseException] = []
+
+    def run_runtime() -> None:
+        try:
+            runtime.run(
+                "runtime-token", runtime_identity=ProcessIdentity(9003, "runtime")
+            )
+        except BaseException as exc:
+            runtime_error.append(exc)
+
+    runtime_thread = threading.Thread(target=run_runtime)
+    runtime_thread.start()
+    assert healthy_finished.wait(5)
+    release_recovery_lock.set()
+    runtime_thread.join(5)
+
+    assert not runtime_thread.is_alive()
+    assert runtime_error == []
+    assert runner.run_ids == [healthy_id]
+    assert runner.recover_ids == [recovery_id]
+    assert store.get(recovery_id).status == "completed"  # type: ignore[union-attr]
+    assert store.get(healthy_id).status == "completed"  # type: ignore[union-attr]
+    assert state.claim_count() == 0
 
 
 def test_replacement_runtime_recovers_running_claim_without_replaying_run(tmp_path: Path) -> None:
