@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import runpy
+import subprocess
 import sys
 from pathlib import Path
 
@@ -148,6 +150,40 @@ def test_physical_capture_supports_direct_child_glob_and_recursive_descendants(
         "/obj/geo1/box1",
         "/obj/geo1/attribwrangle1",
     ]
+
+
+def test_capture_script_cli_mode_returns_declared_result(monkeypatch) -> None:
+    root = _scene()
+    monkeypatch.setitem(sys.modules, "hou", _Hou(root))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [str(live_node_capture.__file__), "--path", "/obj/geo1", "--recursive"],
+    )
+
+    namespace = runpy.run_path(str(live_node_capture.__file__), run_name="__main__")
+
+    assert [item["path"] for item in namespace["result"]["nodes"]] == [
+        "/obj/geo1",
+        "/obj/geo1/box1",
+        "/obj/geo1/attribwrangle1",
+    ]
+
+
+def test_capture_script_help_does_not_require_houdini() -> None:
+    completed = subprocess.run(
+        [sys.executable, str(live_node_capture.__file__), "--help"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+    assert completed.returncode == 0
+    assert "Inspect current Houdini nodes" in completed.stdout
+    assert "--path" in completed.stdout
+    assert "--recursive" in completed.stdout
 
 
 class _Resolver:

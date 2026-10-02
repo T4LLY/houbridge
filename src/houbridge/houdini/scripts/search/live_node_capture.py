@@ -1,7 +1,11 @@
+"""Inspect current Houdini nodes by path scope without using a persistent index."""
+
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
+import sys
 
 
 def _unique_nodes(nodes):
@@ -51,14 +55,7 @@ def _scope_nodes(hou, path_filter, recursive):
     return _unique_nodes(expanded)
 
 
-def run(request_path: str) -> None:
-    import hou
-
-    request = json.loads(Path(request_path).read_text(encoding="utf-8"))
-    output_path = Path(request["output_path"])
-    path_filter = request.get("path")
-    recursive = bool(request.get("recursive", False))
-
+def capture_nodes(hou, *, path_filter=None, recursive=False):
     records = []
     for node in _scope_nodes(hou, path_filter, recursive):
         try:
@@ -73,8 +70,52 @@ def run(request_path: str) -> None:
             )
         except Exception:
             continue
+    return {"nodes": records}
 
+
+def run(request_path: str) -> None:
+    import hou
+
+    request = json.loads(Path(request_path).read_text(encoding="utf-8"))
+    output_path = Path(request["output_path"])
+    payload = capture_nodes(
+        hou,
+        path_filter=request.get("path"),
+        recursive=bool(request.get("recursive", False)),
+    )
     output_path.write_text(
-        json.dumps({"nodes": records}, ensure_ascii=False, separators=(",", ":")),
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
+
+
+def _parse_args(argv):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--path",
+        help="Inspect this exact Houdini node path or direct-child glob scope.",
+    )
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Include descendants of nodes selected by --path.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
+
+    # Keep Houdini-only imports after argument parsing so local --help works in
+    # the wrapper host Python without requiring hou or a live Houdini Session.
+    import hou
+
+    return capture_nodes(
+        hou,
+        path_filter=args.path,
+        recursive=args.recursive,
+    )
+
+
+if __name__ == "__main__":
+    result = main()
