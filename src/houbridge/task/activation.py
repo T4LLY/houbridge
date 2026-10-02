@@ -90,6 +90,8 @@ class TaskRuntimeProcessLauncher:
 
             returncode = process.poll()
             if returncode is not None:
+                if returncode == 0 and not self.runtime_state.recoverable_work_exists():
+                    return
                 raise BridgeError(
                     "task_runtime_handoff_failed",
                     "Task Runtime exited before ownership handoff completed.",

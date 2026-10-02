@@ -11,9 +11,12 @@ from typer.testing import CliRunner
 from houbridge.cli import task_cmd
 from houbridge.cli.main import app
 from houbridge.errors import BridgeError
+from houbridge.process_coordination import ProcessIdentity
 from houbridge.semantic_id import SemanticBase
 from houbridge.task.completion import TaskCompletionResourceFinalizer
 from houbridge.task.models import FrozenDispatchContext, TaskSubmission
+from houbridge.task.runtime import TaskRuntime
+from houbridge.task.runtime_store import TaskRuntimeStateStore
 from houbridge.task.service import TaskCommandService
 from houbridge.task.store import TaskStore
 
@@ -243,3 +246,197 @@ def test_async_handoff_failure_does_not_leave_queued_task(tmp_path: Path) -> Non
     assert len(tasks) == 1
     assert tasks[0].status == "failed"
     assert tasks[0].runtime_failure_code == "task_runtime_handoff_failed"
+
+
+@pytest.mark.parametrize("exit_code,has_queued_work", [(2, False), (0, True)])
+def test_runtime_launcher_rejects_exit_without_handoff(
+    tmp_path: Path, exit_code: int, has_queued_work: bool
+) -> None:
+    from houbridge.task.activation import TaskRuntimeProcessLauncher
+
+    store = _store(tmp_path)
+    if has_queued_work:
+        store.submit(_submission())
+    state = TaskRuntimeStateStore(store.database)
+
+    class ExitedProcess:
+        def poll(self) -> int:
+            return exit_code
+
+    launcher = TaskRuntimeProcessLauncher(
+        state,
+        store.database,
+        tmp_path / "resources.db",
+        72,
+        1,
+        1,
+        1,
+        popen=lambda *_args, **_kwargs: ExitedProcess(),  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(BridgeError) as caught:
+        launcher("owner")
+
+    assert caught.value.code == "task_runtime_handoff_failed"
+
+
+@pytest.mark.parametrize("terminal_status", ["completed", "failed"])
+def test_async_submission_succeeds_when_runtime_retires_before_competing_work(
+    tmp_path: Path, terminal_status: str
+) -> None:
+    from houbridge.execution.models import ExecutionInvocation
+    from houbridge.task.activation import TaskRuntimeProcessLauncher
+    from houbridge.task.async_submission import AsyncExecutionSubmitter
+    from houbridge.task.supervisor import TaskRuntimeSupervisor
+
+    store = _store(tmp_path)
+    state = TaskRuntimeStateStore(store.database)
+
+    class Resolver:
+        def resolve(self, _session):
+            return SimpleNamespace(
+                record=SimpleNamespace(session=1, port=1714),
+                identity=ProcessIdentity(4242, "start-4242"),
+            )
+
+    class Transport:
+        executable = "hcommand"
+        timeout_seconds = 5
+
+        def subprocess_environment(self):
+            return {}
+
+    class CompletingRunner:
+        def run(self, task) -> None:
+            store.mark_running(task.id)
+            if terminal_status == "completed":
+                store.mark_completed(task.id)
+            else:
+                store.mark_python_failed(task.id)
+
+        def recover(self, _task) -> None:
+            raise AssertionError("new queued Task must not be recovered")
+
+        def runtime_failed(self, task, error) -> None:
+            store.mark_runtime_failed(task.id, code=error.code, message=error.message)
+
+        def cleanup_terminal_workspaces(self) -> None:
+            return None
+
+    runtime = TaskRuntime(
+        store,
+        state,
+        CompletingRunner(),  # type: ignore[arg-type]
+        max_concurrency=1,
+        target_validator=SimpleNamespace(validate=lambda _task: None),  # type: ignore[arg-type]
+    )
+
+    class ExitedProcess:
+        def poll(self) -> int:
+            return 0
+
+    def popen(*_args, **_kwargs):
+        owner = state.runtime_owner()
+        assert owner is not None
+        runtime.run(owner.token, runtime_identity=ProcessIdentity(9002, "worker"))
+        assert state.runtime_owner() is None
+        store.submit(_submission("print('competing task')\n"))
+        return ExitedProcess()
+
+    launcher = TaskRuntimeProcessLauncher(
+        state,
+        store.database,
+        tmp_path / "resources.db",
+        72,
+        1,
+        1,
+        1,
+        popen=popen,
+    )
+    submitter = AsyncExecutionSubmitter(
+        Resolver(),  # type: ignore[arg-type]
+        Transport(),  # type: ignore[arg-type]
+        store,
+        TaskRuntimeSupervisor(
+            state,
+            current_identity_reader=lambda: ProcessIdentity(9001, "starter"),
+        ),
+        launcher,
+        lock_timeout_seconds=5,
+        history_enabled=False,
+        history_code_profile="profile-a",
+        ttl_hours=72,
+    )
+    invocation = ExecutionInvocation(
+        source="print('x')\n",
+        source_path="/workspace/build.py",
+        argv=("/workspace/build.py",),
+        purpose=None,
+        origin_cwd="/workspace",
+    )
+
+    task_id = submitter.submit(invocation, session=1)
+
+    completed = store.get(task_id)
+    assert completed is not None
+    assert completed.status == terminal_status
+    assert len(store.list_tasks()) == 2
+
+
+def test_async_submission_returns_accepted_running_task_after_handoff_error(
+    tmp_path: Path,
+) -> None:
+    from houbridge.execution.models import ExecutionInvocation
+    from houbridge.process_coordination import ProcessIdentity
+    from houbridge.task.async_submission import AsyncExecutionSubmitter
+
+    store = _store(tmp_path)
+
+    class Resolver:
+        def resolve(self, _session):
+            return SimpleNamespace(
+                record=SimpleNamespace(session=1, port=1714),
+                identity=ProcessIdentity(4242, "start-4242"),
+            )
+
+    class Transport:
+        executable = "hcommand"
+        timeout_seconds = 5
+
+        def subprocess_environment(self):
+            return {}
+
+    def accepted_then_fails(_token):
+        task = store.list_tasks()[0]
+        store.mark_running(task.id)
+        raise BridgeError("task_runtime_handoff_timeout", "late handoff timeout")
+
+    class Supervisor:
+        def ensure_active(self, launcher):
+            launcher("owner")
+
+    submitter = AsyncExecutionSubmitter(
+        Resolver(),  # type: ignore[arg-type]
+        Transport(),  # type: ignore[arg-type]
+        store,
+        Supervisor(),  # type: ignore[arg-type]
+        accepted_then_fails,
+        lock_timeout_seconds=5,
+        history_enabled=False,
+        history_code_profile="profile-a",
+        ttl_hours=72,
+    )
+    invocation = ExecutionInvocation(
+        source="print('x')\n",
+        source_path="/workspace/build.py",
+        argv=("/workspace/build.py",),
+        purpose=None,
+        origin_cwd="/workspace",
+    )
+
+    task_id = submitter.submit(invocation, session=1)
+
+    task = store.get(task_id)
+    assert task is not None
+    assert task.status == "running"
+    assert store.list_tasks()[0].status == "running"

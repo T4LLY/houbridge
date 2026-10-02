@@ -59,6 +59,15 @@ class AsyncExecutionSubmitter:
             self._supervisor.ensure_active(self._runtime_launcher)
         except BridgeError as exc:
             current = self._store.get(task.id)
+            if (
+                exc.code
+                in ("task_runtime_handoff_failed", "task_runtime_handoff_timeout")
+                and current is not None
+                and current.status in ("running", "completed", "failed")
+            ):
+                # Persisted Task state proves the runtime accepted this Task,
+                # even if it retired before the parent observed its handoff.
+                return task.id
             if current is not None and current.status in ("queued", "running"):
                 self._store.mark_runtime_failed(
                     task.id,
