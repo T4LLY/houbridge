@@ -65,6 +65,52 @@ def test_runtime_preserves_file_main_argv_and_purpose_is_not_injected(
     }
 
 
+def test_runtime_prepends_caller_file_directory_for_sibling_imports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_hou(monkeypatch)
+    script_dir = tmp_path / "bundle"
+    script_dir.mkdir()
+    helper_name = "_houbridge_phase4_sibling"
+    (script_dir / f"{helper_name}.py").write_text("VALUE = 42\n", encoding="utf-8")
+    request, workspace = _request_for(
+        tmp_path,
+        f"import {helper_name} as helper\nimport sys\nresult = {{'value': helper.VALUE, 'path0': sys.path[0]}}\n",
+        source_path="bundle/main.py",
+        argv=("bundle/main.py",),
+    )
+
+    run(str(request))
+    outcome = collect_outcome(workspace)  # type: ignore[arg-type]
+
+    assert outcome.python_ok is True
+    assert outcome.result is not None
+    assert outcome.result.inline_value() == {
+        "value": 42,
+        "path0": str(script_dir.resolve()),
+    }
+    sys.modules.pop(helper_name, None)
+
+
+def test_runtime_restores_houdini_sys_path_after_file_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_hou(monkeypatch)
+    request, _workspace = _request_for(
+        tmp_path,
+        "raise RuntimeError('boom')\n",
+        source_path="bundle/main.py",
+        argv=("bundle/main.py",),
+    )
+    previous = list(sys.path)
+
+    run(str(request))
+
+    assert sys.path == previous
+
+
 def test_runtime_direct_source_omits_file_provenance_and_preserves_script_argv(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

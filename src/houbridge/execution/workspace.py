@@ -28,9 +28,11 @@ def stage_invocation(
         stream.write(invocation.source)
 
     request_path = workspace.path_for("request.json")
+    source_import_root = _source_import_root(invocation)
     request = {
         "source_file": str(source_path),
         "source_path": invocation.source_path,
+        "source_import_root": source_import_root,
         "argv": list(invocation.argv),
         "purpose": invocation.purpose,
         "stdout_file": str(workspace.path_for("stdout.txt")),
@@ -96,3 +98,12 @@ def _read_optional_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return ""
+
+
+def _source_import_root(invocation: ExecutionInvocation) -> str | None:
+    if invocation.source_path is None:
+        return None
+    source_path = Path(invocation.source_path).expanduser()
+    if not source_path.is_absolute():
+        source_path = Path(invocation.origin_cwd) / source_path
+    return str(source_path.resolve().parent)

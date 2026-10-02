@@ -99,11 +99,13 @@ A synchronous execution that produces no public output MAY emit `{}`.
 
 ### Requirement: Return a complete synchronous Execution envelope with exec --full
 
-`exec --full` SHALL be an explicit machine-to-machine transport mode for synchronous Execution. It SHALL preserve the existing Execution result classification, JSON value types, stdout/stderr separation, field names, and field presence/omission rules while bypassing only size-control presentation behavior.
+`exec --full` SHALL be an explicit machine-to-machine transport mode for synchronous Execution. It SHALL preserve the existing Execution result classification and JSON value types, expose that classification as `result_kind` whenever a declared result is returned, preserve stdout/stderr separation and the remaining field presence/omission rules, and bypass only size-control presentation behavior.
 
 For `exec --full`:
 
 - a non-empty declared result SHALL be returned inline as `result` regardless of `[output].inline_max_tokens`,
+- whenever `result` is present, `result_kind` SHALL also be present with value `json` or `text` matching the existing declared-result classification,
+- when no declared result is present, `result_kind` SHALL be omitted,
 - non-empty stdout SHALL be returned inline as `stdout` regardless of `[output].inline_max_tokens`,
 - non-empty stderr SHALL be returned inline as `stderr` regardless of `[output].inline_max_tokens`,
 - the declared result SHALL NOT be replaced by the normal size-control `resource`/`mime`/`tokens` fields,
@@ -138,6 +140,7 @@ This full-output exception applies only to the synchronous Execution envelope. I
 #### Scenario: Full execution produces no public output
 - **WHEN** `exec --full` has no declared result and stdout/stderr are empty
 - **THEN** it preserves the existing omission rules and may emit `{}`
+- **AND** `result_kind` is absent
 
 #### Scenario: Python fails in full mode
 - **WHEN** caller Python fails during `exec --full` after producing stdout or stderr

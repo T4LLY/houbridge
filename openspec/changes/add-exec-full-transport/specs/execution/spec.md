@@ -16,7 +16,8 @@ The low-level execution boundary SHALL be able to capture stdout, stderr, a decl
 #### Scenario: Full output is selected
 - **WHEN** the owning command is synchronous `exec --full`
 - **THEN** the captured result/stdout/stderr values are unchanged from the values produced by the same Execution without `--full`
-- **AND** only their final size-control presentation differs
+- **AND** the full presentation may additionally expose the already-known declared-result classification as transport metadata
+- **AND** only size-control presentation and that classification metadata differ
 
 ### Requirement: Route synchronous execution output through Resource and Output boundaries
 

@@ -20,6 +20,7 @@ def run(request_path_value: str) -> None:
     with Path(request["source_file"]).open("r", encoding="utf-8", newline="") as source_file:
         source = source_file.read()
     source_path = request["source_path"]
+    source_import_root = request.get("source_import_root")
     source_argv = request["argv"]
 
     stdout_path = Path(request["stdout_file"])
@@ -60,8 +61,13 @@ def run(request_path_value: str) -> None:
         "w", encoding="utf-8", newline=""
     ) as stderr_file:
         previous_argv = sys.argv
+        previous_sys_path = list(sys.path)
         try:
             sys.argv = list(source_argv)
+            if source_import_root is not None:
+                if not isinstance(source_import_root, str) or not source_import_root:
+                    raise RuntimeError("Execution source import root is invalid.")
+                sys.path.insert(0, source_import_root)
             with contextlib.redirect_stdout(stdout_file), contextlib.redirect_stderr(stderr_file):
                 exec(compile(source, compile_filename, "exec"), namespace, namespace)
         except BaseException:
@@ -78,6 +84,7 @@ def run(request_path_value: str) -> None:
                 status["result_kind"] = result_kind
         finally:
             sys.argv = previous_argv
+            sys.path[:] = previous_sys_path
 
     # Publish the caller Python outcome before best-effort History finalization.
     # The host can then distinguish a terminal caller outcome from a transport

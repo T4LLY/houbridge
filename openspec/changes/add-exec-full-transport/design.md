@@ -28,6 +28,7 @@ Full synchronous Exec SHALL:
 
 - decode/classify the declared result exactly as normal synchronous Exec does,
 - include the declared result as `result` when non-empty,
+- include `result_kind` with value `json` or `text` whenever that declared `result` is present,
 - include non-empty stdout as `stdout`,
 - include non-empty stderr as `stderr`,
 - omit the normal size-control `resource`, `stdout_resource`, and `stderr_resource` substitutions for those bodies,
@@ -61,6 +62,6 @@ Tests SHALL prove both sides of the branch:
 
 - normal Exec still Resource-backs oversized per-artifact output and still obeys the common hard boundary,
 - full Exec returns complete >64 KiB result/stdout/stderr inline without Resource fallback or truncation,
-- full Exec preserves normal result types, output field presence/omission rules, stdout/stderr separation, and Python-failure semantics,
+- full Exec preserves normal result types, exposes their `result_kind`, preserves the remaining output field presence/omission rules, stdout/stderr separation, and Python-failure semantics,
 - full+async is rejected before Task submission,
 - existing non-full Exec tests continue to pass unchanged.

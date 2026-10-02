@@ -6,6 +6,7 @@
 - [x] 1.2 Record the existing target-selection contract and preserve `--session`; do not reintroduce removed public `--port` or `--hcommand` options.
 - [x] 1.3 Define `exec --full` as a synchronous-only transport exception in command-exec, Execution, Output Policy, and common command-contract deltas.
 - [x] 1.4 Preserve `resource get --full` and all Resource/Task behavior unchanged.
+- [x] 1.5 Define `result_kind` metadata for declared results returned by `exec --full`.
 
 ## 2. Implementation
 
@@ -14,7 +15,8 @@
 - [x] 2.3 In full presentation mode, keep non-empty declared result/stdout/stderr inline and preserve existing type and presence rules without size-control Resources.
 - [x] 2.4 Keep traceback Resource behavior and the existing synchronous Python-failure envelope unchanged.
 - [x] 2.5 Emit the full Execution envelope with the canonical JSON serializer while bypassing whole-result Resource fallback and the fixed final serialized JSON size guard only for `exec --full`.
-- [x] 2.6 Leave normal Exec, Resource, Task, Search, Capture, History, and common Output behavior unchanged.
+- [x] 2.6 Add `result_kind` only to full-mode envelopes that contain a declared result; leave normal Exec envelopes unchanged.
+- [x] 2.7 Leave Resource, Task, Search, Capture, History, and common Output behavior unchanged.
 
 ## 3. Tests
 
@@ -26,7 +28,8 @@
 - [x] 3.6 Use a fixture larger than 65536 serialized bytes and verify `exec --full` neither Resource-fallbacks nor raises `output_too_large`.
 - [x] 3.7 Verify `--full --async` exits as a CLI usage error and does not submit a Task.
 - [x] 3.8 Verify full mode preserves the existing stdout/stderr/result presence and omission rules, including a synchronous Python failure with captured streams.
-- [x] 3.9 Run the existing non-full Exec, Execution presentation, Output Policy, Resource, and Task regression tests and confirm their contracts remain unchanged.
+- [x] 3.9 Verify full mode reports `result_kind=json` and `result_kind=text` without inferring from the decoded result value.
+- [x] 3.10 Run the existing non-full Exec, Execution presentation, Output Policy, Resource, and Task regression tests and confirm their contracts remain unchanged.
 
 ## 4. Conformance
 

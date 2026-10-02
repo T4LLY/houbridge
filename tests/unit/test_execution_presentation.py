@@ -201,7 +201,33 @@ def test_full_mode_keeps_oversized_declared_result_inline_with_json_type() -> No
 
     result = presenter.present(outcome)
 
-    assert result.payload == {"result": declared}
+    assert result.payload == {"result": declared, "result_kind": "json"}
+    assert store.payloads == []
+
+
+def test_full_mode_exposes_result_kind_without_string_value_ambiguity() -> None:
+    presenter, store = _presenter(64, mode=ExecutionPresentationMode.FULL)
+    text_result = presenter.present(
+        ExecutionOutcome(
+            python_ok=True,
+            result=DeclaredResult("text", b"hello"),
+            stdout="",
+            stderr="",
+            traceback=None,
+        )
+    )
+    json_result = presenter.present(
+        ExecutionOutcome(
+            python_ok=True,
+            result=DeclaredResult("json", b'"hello"'),
+            stdout="",
+            stderr="",
+            traceback=None,
+        )
+    )
+
+    assert text_result.payload == {"result": "hello", "result_kind": "text"}
+    assert json_result.payload == {"result": "hello", "result_kind": "json"}
     assert store.payloads == []
 
 

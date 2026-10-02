@@ -246,14 +246,53 @@ def test_exec_hidden_code_requires_no_history() -> None:
     assert "--code requires --no-history" in result.stderr
 
 
-def test_exec_hidden_no_history_requires_code(tmp_path: Path) -> None:
+def test_exec_hidden_no_history_disables_history_for_file_execution(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "tool.py"
     source.write_text("result = 1\n", encoding="utf-8")
+    service, _store, presentation_modes = _install_fake_command_runtime(
+        monkeypatch,
+        SynchronousExecutionResult({"result": 1, "result_kind": "json"}, 0),
+    )
 
-    result = CliRunner().invoke(app, ["exec", "--file", str(source), "--no-history"])
+    result = CliRunner().invoke(
+        app,
+        ["exec", "--full", "--file", str(source), "--no-history"],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {"result": 1, "result_kind": "json"}
+    assert presentation_modes == [ExecutionPresentationMode.FULL]
+    assert service.history_enabled == [False]
+
+
+def test_exec_hidden_no_history_rejects_async_file_before_task_submission(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from houbridge.cli import exec_cmd
+
+    source = tmp_path / "tool.py"
+    source.write_text("result = 1\n", encoding="utf-8")
+    built = False
+
+    def should_not_build(_settings):
+        nonlocal built
+        built = True
+        raise AssertionError("async submitter must not be built")
+
+    monkeypatch.setattr(exec_cmd, "_build_async_execution_submitter", should_not_build)
+
+    result = CliRunner().invoke(
+        app,
+        ["exec", "--file", str(source), "--no-history", "--async"],
+    )
 
     assert result.exit_code == 2
-    assert "--no-history requires --code" in result.stderr
+    assert "--no-history cannot be combined with --async" in result.stderr
+    assert built is False
 
 
 def test_exec_hidden_code_rejects_async_before_task_submission(monkeypatch) -> None:

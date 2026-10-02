@@ -69,6 +69,8 @@ class ExecutionResultPresenter:
         serialized_body = result.payload.decode("utf-8", errors="strict")
         if self._keeps_artifact_inline(serialized_body):
             payload["result"] = result.inline_value()
+            if self._mode is ExecutionPresentationMode.FULL:
+                payload["result_kind"] = result.kind
             return
 
         resource = self._store().put_bytes(result.payload)

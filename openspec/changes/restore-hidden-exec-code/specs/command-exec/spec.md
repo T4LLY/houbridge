@@ -1,21 +1,27 @@
 ## ADDED Requirements
 
-### Requirement: Provide a hidden wrapper-only direct-source path
+### Requirement: Provide hidden wrapper-only synchronous transport controls
 
-Houbridge Exec SHALL accept the hidden option pair `--code TEXT --no-history` solely as a wrapper-oriented synchronous source path while keeping the documented/public command surface file-backed. Both `--code` and `--no-history` SHALL be omitted from generated `exec --help` output. The implementation SHALL document in source that the options are hidden so AI/tool-facing command discovery continues to prefer the normal file-backed contract.
+Houbridge Exec SHALL accept hidden `--code TEXT` and `--no-history` options for trusted wrapper integrations while keeping the documented/public command surface file-backed. Both options SHALL be omitted from generated `exec --help` output. The implementation SHALL document in source that the options are hidden so AI/tool-facing command discovery continues to prefer the normal file-backed contract.
 
-The hidden path SHALL obey all of the following constraints:
+The hidden controls SHALL obey all of the following constraints:
 
 - `--code` requires `--no-history`,
-- `--no-history` is valid only with `--code`,
+- `--no-history` MAY accompany synchronous `--file`,
+- `--no-history` SHALL be rejected with `--async`,
 - `--code` is mutually exclusive with `--file`,
 - `--code` is synchronous-only and SHALL be rejected with `--async`,
-- trailing script arguments after `--` are accepted for hidden `--code --no-history` and preserve caller order and duplicates,
+- trailing script arguments after `--` are accepted for both file-backed and direct-source synchronous execution and preserve caller order and duplicates,
 - direct source SHALL still pass normal source validation before dispatch.
 
 #### Scenario: Wrapper executes direct source
 - **WHEN** a wrapper invokes `houbridge exec --code "result = 1" --no-history`
 - **THEN** Houbridge executes that exact source synchronously
+- **AND** no Action History setup or entry is created for the invocation
+
+#### Scenario: Wrapper executes a file without History
+- **WHEN** a wrapper invokes `houbridge exec --file tool.py --no-history`
+- **THEN** Houbridge executes `tool.py` synchronously under the normal file-backed source contract
 - **AND** no Action History setup or entry is created for the invocation
 
 #### Scenario: Hidden options are not advertised
@@ -30,9 +36,9 @@ The hidden path SHALL obey all of the following constraints:
 - **WHEN** `--code` is supplied without `--no-history`
 - **THEN** Exec rejects the invocation as a CLI usage error before dispatch
 
-#### Scenario: History suppression is used with file execution
-- **WHEN** `--no-history` is supplied with `--file`
-- **THEN** Exec rejects the invocation as a CLI usage error before dispatch
+#### Scenario: File History suppression requests asynchronous execution
+- **WHEN** `--file` and `--no-history` are combined with `--async`
+- **THEN** Exec rejects the invocation as a CLI usage error before Task submission
 
 #### Scenario: Direct source receives script arguments
 - **WHEN** arguments after `--` accompany `--code --no-history`

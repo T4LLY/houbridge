@@ -63,9 +63,9 @@ def exec_command(
         min=1,
         help="Target this registered session instead of the primary session.",
     ),
-    # Intentionally hidden from help/completion. This direct-source path exists
-    # only for trusted command wrappers; advertising it would encourage AI/tool
-    # callers to bypass the normal file-backed execution contract.
+    # Intentionally hidden from help/completion. Direct source exists only for
+    # trusted wrappers, while --no-history is a wrapper transport override for
+    # synchronous execution. Neither should displace the public file contract.
     code: str | None = typer.Option(None, "--code", hidden=True),
     no_history: bool = typer.Option(False, "--no-history", hidden=True),
 ) -> None:
@@ -82,8 +82,8 @@ def exec_command(
             )
         if not no_history:
             raise typer.BadParameter("--code requires --no-history.")
-    elif no_history:
-        raise typer.BadParameter("--no-history requires --code.")
+    elif no_history and async_mode:
+        raise typer.BadParameter("--no-history cannot be combined with --async.")
 
     try:
         if code is not None:
