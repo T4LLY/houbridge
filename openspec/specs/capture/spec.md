@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define shared Scene Viewer pane discovery, viewport/window/camera screenshots, OCR, and turntable video capture while preserving the user's Houdini viewer state and keeping temporary image/video output bounded. Command JSON schemas are specified separately.
+Define shared Scene Viewer pane discovery, viewport/window/camera screenshots, and turntable video capture while preserving the user's Houdini viewer state and keeping temporary image/video output bounded. Command JSON schemas are specified separately.
 
 ## Requirements
 
@@ -266,53 +266,6 @@ Capture SHALL lazily remove expired Houbridge-created screenshot and turntable o
 #### Scenario: A capture was moved elsewhere
 - **WHEN** prior output no longer resides in the managed temporary capture location
 - **THEN** cleanup does not chase and delete the moved copy
-
-### Requirement: Extract OCR text and compact bounding boxes
-
-OCR SHALL accept an existing image path, run detection and recognition, normalize line breaks in recognized text, group duplicate recognized strings, and represent each occurrence with recognition score when available plus a compact axis-aligned bounding box.
-
-#### Scenario: Recognize screenshot text
-- **WHEN** OCR finds a text polygon
-- **THEN** the recognized text is normalized to one line
-- **AND** the polygon is reduced to integer `[min_x, min_y, max_x, max_y]` bounds
-
-#### Scenario: Same text occurs multiple times
-- **WHEN** identical normalized text appears at several locations
-- **THEN** all occurrences are retained under that text rather than overwriting one another
-
-#### Scenario: OCR finds no text
-- **WHEN** the engine returns no boxes
-- **THEN** OCR succeeds with an empty recognition mapping
-
-#### Scenario: OCR receives a missing image
-- **WHEN** the input image does not exist
-- **THEN** OCR fails before initializing the OCR runtime
-
-### Requirement: Keep OCR runtime quiet and cache models predictably
-
-OCR engine initialization SHALL suppress library progress/noise that would corrupt machine-readable CLI output. OCR model assets SHALL use the standard Hugging Face assets cache hierarchy, including `HF_ASSETS_CACHE`, `HF_HOME`, and `XDG_CACHE_HOME` precedence before the normal user cache fallback.
-
-#### Scenario: OCR initializes models
-- **WHEN** the OCR runtime is first constructed
-- **THEN** initialization does not emit uncontrolled progress output to stdout/stderr
-- **AND** model assets are placed under the selected shared cache root
-
-### Requirement: Use the defined OCR engine profile
-
-The default OCR runtime SHALL use RapidOCR with ONNX Runtime for detection and recognition, tiny PP-OCRv6 detection/recognition models, and classification disabled for the recognition call.
-
-#### Scenario: Build the default OCR engine
-- **WHEN** no injected test engine is supplied
-- **THEN** RapidOCR uses ONNX Runtime for detection and recognition
-- **AND** the tiny PP-OCRv6 detection and recognition models are selected
-
-### Requirement: Route oversized OCR results through the common Output Policy
-
-OCR SHALL return its complete logical recognition result to the common Output subsystem. OCR-specific code SHALL NOT implement an independent output token threshold.
-
-#### Scenario: OCR recognizes a very large amount of text
-- **WHEN** the logical OCR result exceeds the common inline budget
-- **THEN** the common Output subsystem Resource-backs the oversized result
 
 ### Requirement: Capture a clockwise turntable and encode video
 

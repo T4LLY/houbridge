@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the public syntax, options, validation rules, preset format, image bounds, and JSON response contracts for shared Scene Viewer pane discovery, viewport/window/camera capture, OCR, and turntable video capture.
+Define the public syntax, options, validation rules, preset format, image bounds, and JSON response contracts for shared Scene Viewer pane discovery, viewport/window/camera capture, and turntable video capture.
 
 ## Requirements
 
@@ -347,43 +347,6 @@ The bounds document SHALL describe the final PNG coordinate space after DPI conv
 - **WHEN** Houdini publishes a valid window PNG and bounds document
 - **THEN** the command emits `path` and `bounds`
 - **AND** `bounds.width` and `bounds.height` match the final PNG
-
-### Requirement: Expose screenshot OCR
-
-The syntax SHALL be:
-
-```text
-houbridge capture ocr IMAGE
-```
-
-`IMAGE` is a required path argument. Missing/non-file input SHALL fail with `ocr_image_not_found` after dispatch.
-
-Normal OCR success SHALL emit:
-
-```json
-{
-  "ocr": {
-    "File": [
-      {"score":0.99,"bbox":[1,2,100,20]}
-    ]
-  }
-}
-```
-
-Each recognized text string is a key. Its value is an array because the same text MAY occur multiple times. Each item contains OCR `score` (`number` or `null`) and `bbox` as `[left, top, right, bottom]` integer coordinates. OCR scores are not Search scores and are not transformed by the Search score formatter.
-
-If no OCR boxes are returned, success SHALL be:
-
-```json
-{"ocr":{}}
-```
-
-Large OCR logical output SHALL use the common Output Resource fallback rather than a capture-specific threshold implementation.
-
-#### Scenario: OCR result exceeds common output budget
-- **WHEN** the logical `ocr` object is too large for inline output
-- **THEN** the complete OCR object is stored as a Resource
-- **AND** the command emits the common minimal Resource fallback
 
 ### Requirement: Expose turntable video capture
 

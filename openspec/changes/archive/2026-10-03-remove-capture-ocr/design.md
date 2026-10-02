@@ -47,3 +47,5 @@ Tests should prove both sides of the boundary:
 ## Specification maintenance
 
 The existing `capture` and `command-capture` Purpose summaries mention OCR. OpenSpec delta operations do not update Purpose for an existing capability, so those Purpose summaries must be updated directly when the removal is synchronized/archived so the resulting main specs do not continue to describe OCR as part of Houbridge.
+
+Synchronize `add-exec-full-transport` first. This removal's `output-policy` replacement must preserve the bounded Resource-inspection exception, synchronous `exec --full` exception, and complete-transport scenario from that change. OpenSpec validates `MODIFIED` requirements against all current baseline scenarios; delete only the obsolete `A large OCR result is produced` baseline scenario directly before strict validation, then leave the OCR requirement removals to this change's validated archive.
