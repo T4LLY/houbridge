@@ -5,6 +5,7 @@ import sys
 import threading
 import time
 import types
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -16,9 +17,13 @@ from houbridge.task import (
     FrozenDispatchContext,
     TaskInvocationRunner,
     TaskInvocationStore,
+    TaskRuntime,
     TaskStore,
     TaskSubmission,
 )
+from houbridge.task.runtime_store import TaskRuntimeStateStore
+from houbridge.task.service import TaskCommandService
+from houbridge.task.supervisor import TaskRuntimeSupervisor
 from houbridge.task.streaming import TaskStreamCollector
 from houbridge.temporary_workspace import TemporaryWorkspace, TemporaryWorkspaceService
 
@@ -630,6 +635,97 @@ def test_terminal_task_workspace_left_by_crash_is_cleanup_recoverable(tmp_path: 
 
     assert invocations.get(task_id) is None
     assert not workspace.directory.exists()
+
+
+def _expired_terminal_service(tmp_path: Path):
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    runner, invocations, workspaces = _runner(store, tmp_path, CompleteSuccess(store))
+    workspace = workspaces.allocate(prefix="expired-task")
+    invocations.create(task_id, workspace.directory)
+    store.mark_running(task_id)
+    store.append_stream(task_id, "stdout", "retained output\n")
+    store.mark_completed(task_id, finished_at=datetime(2000, 1, 1, tzinfo=timezone.utc))
+    state = TaskRuntimeStateStore(store.database)
+    starter = ProcessIdentity(9001, "starter")
+    runtime = TaskRuntime(store, state, runner, max_concurrency=1)
+    supervisor = TaskRuntimeSupervisor(
+        state,
+        identity_reader=lambda _pid: starter,
+        current_identity_reader=lambda: starter,
+        token_factory=lambda: "cleanup-runtime",
+    )
+    service = TaskCommandService(
+        store,
+        supervisor,
+        lambda token: runtime.run(
+            token, runtime_identity=ProcessIdentity(9002, "runtime")
+        ),
+        ttl_hours=72,
+    )
+    return store, task_id, invocations, workspace, state, service
+
+
+def test_expired_task_retention_waits_for_public_runtime_workspace_cleanup(
+    tmp_path: Path,
+) -> None:
+    store, task_id, invocations, workspace, state, service = _expired_terminal_service(
+        tmp_path
+    )
+
+    first_list = service.list()["tasks"]
+
+    assert [item["id"] for item in first_list] == [task_id]
+    assert not workspace.directory.exists()
+    assert invocations.get(task_id) is None
+    assert not state.recoverable_work_exists()
+    assert store.get(task_id) is not None
+    assert store.accumulated_stream(task_id, "stdout") == "retained output\n"
+
+    assert service.list() == {"tasks": []}
+    assert store.get(task_id) is None
+    assert store.accumulated_stream(task_id, "stdout") == ""
+    assert _submit(store) == "stream-recovery-work-001"
+
+
+def test_terminal_workspace_cleanup_retry_and_missing_directory(
+    tmp_path: Path, monkeypatch
+) -> None:
+    store, task_id, invocations, workspace, _state, service = _expired_terminal_service(
+        tmp_path
+    )
+    original_remove = TemporaryWorkspace.remove
+
+    def fail_remove(_workspace):
+        raise PermissionError("workspace is temporarily locked")
+
+    monkeypatch.setattr(TemporaryWorkspace, "remove", fail_remove)
+    with pytest.raises(PermissionError, match="temporarily locked"):
+        service.list()
+    assert workspace.directory.is_dir()
+    assert invocations.get(task_id) is not None
+    assert store.get(task_id) is not None
+
+    monkeypatch.setattr(TemporaryWorkspace, "remove", original_remove)
+    assert [item["id"] for item in service.list()["tasks"]] == [task_id]
+    assert not workspace.directory.exists()
+    assert invocations.get(task_id) is None
+    assert store.get(task_id) is not None
+    assert service.list() == {"tasks": []}
+
+
+def test_missing_terminal_workspace_still_retires_invocation_metadata(
+    tmp_path: Path,
+) -> None:
+    store, task_id, invocations, workspace, _state, service = _expired_terminal_service(
+        tmp_path
+    )
+    workspace.remove()
+
+    assert [item["id"] for item in service.list()["tasks"]] == [task_id]
+    assert invocations.get(task_id) is None
+    assert store.get(task_id) is not None
+    assert service.list() == {"tasks": []}
 
 
 def test_started_python_without_finished_marker_has_no_post_start_timeout(tmp_path: Path) -> None:

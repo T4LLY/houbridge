@@ -168,6 +168,11 @@ class TaskStore:
                 WHERE status IN ('completed', 'failed')
                   AND finished_at IS NOT NULL
                   AND finished_at <= ?
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM task_invocations AS invocation
+                      WHERE invocation.task_id = tasks.id
+                  )
                 """,
                 (cutoff.isoformat(),),
             )
