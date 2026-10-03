@@ -16,6 +16,7 @@ from .models import TaskRecord
 from .script import TaskScriptBuilder
 from .store import TaskStore
 from .streaming import TaskStreamCollector
+from .target import TaskTargetValidator
 from .workspace import (
     TaskCompletion,
     python_finished_marker_exists,
@@ -75,6 +76,7 @@ class TaskInvocationRunner:
         history: TaskHistoryBoundary | None = None,
         dispatcher: TaskDispatcher | None = None,
         script_builder: TaskScriptBuilder | None = None,
+        target_validator: TaskTargetValidator | None = None,
         identity_reader: Callable[[int], ProcessIdentity] = process_identity_for_pid,
         sleep: Callable[[float], None] = time.sleep,
         now: Callable[[], datetime] | None = None,
@@ -89,6 +91,7 @@ class TaskInvocationRunner:
         self._history = history
         self._dispatcher = dispatcher or FrozenTaskDispatcher()
         self._script_builder = script_builder or TaskScriptBuilder()
+        self._target_validator = target_validator or TaskTargetValidator()
         self._identity_reader = identity_reader
         self._sleep = sleep
         self._now = now or (lambda: datetime.now(timezone.utc))
@@ -106,6 +109,7 @@ class TaskInvocationRunner:
                 history=history_preparation,
             )
             staged = self._script_builder.stage(workspace, request_path)
+            self._target_validator.validate(task)
             state = self._invocations.mark_dispatch_started(task.id)
             dispatch = self._dispatcher.start(task, staged.script_path)
         except BridgeError as exc:

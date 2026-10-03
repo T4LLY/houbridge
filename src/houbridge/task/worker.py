@@ -15,6 +15,7 @@ from .runner import TaskInvocationRunner
 from .runtime import TaskRuntime
 from .runtime_store import TaskRuntimeStateStore
 from .store import TaskStore
+from .target import TaskTargetValidator
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,18 +54,21 @@ def main(argv: list[str] | None = None) -> int:
         ),
         resource_store=resource_store,
     )
+    target_validator = TaskTargetValidator()
     runner = TaskInvocationRunner(
         task_store,
         invocations,
         TemporaryWorkspaceService(),
         finalizer,
         history=history,
+        target_validator=target_validator,
     )
     runtime = TaskRuntime(
         task_store,
         runtime_state,
         runner,
         max_concurrency=args.max_concurrency,
+        target_validator=target_validator,
     )
     runtime.run(args.owner_token)
     return 0

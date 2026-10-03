@@ -67,6 +67,11 @@ class NeverDispatch:
         raise AssertionError("History preflight failure must prevent dispatch")
 
 
+class AcceptTarget:
+    def validate(self, _task) -> None:
+        return None
+
+
 class FailingHistoryFinalization:
     def prepare(self, _task, _workspace):
         raise AssertionError("recovery must not replay History preflight")
@@ -174,6 +179,7 @@ def test_enabled_history_preflight_failure_marks_task_failed_without_dispatch(tm
         CompletingSuccess(store),
         history=history,
         dispatcher=dispatcher,
+        target_validator=AcceptTarget(),
         identity_reader=lambda _pid: task.dispatch.process_identity,
         sleep=lambda _seconds: None,
     )
@@ -359,6 +365,7 @@ def test_history_finalization_failure_after_started_success_does_not_change_task
         CompletingSuccess(store),
         history=FailingHistoryFinalization(),  # type: ignore[arg-type]
         dispatcher=dispatcher,
+        target_validator=AcceptTarget(),
         identity_reader=lambda _pid: task.dispatch.process_identity,
         sleep=lambda _seconds: None,
     )

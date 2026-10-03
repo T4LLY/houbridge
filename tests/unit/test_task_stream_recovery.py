@@ -72,6 +72,11 @@ class CompleteSuccess:
         self.store.mark_completed(task.id)
 
 
+class AcceptTarget:
+    def validate(self, _task) -> None:
+        return None
+
+
 class NeverDispatch:
     def __init__(self) -> None:
         self.calls = 0
@@ -134,6 +139,7 @@ def _runner(
     *,
     dispatcher=None,
     identity_reader=None,
+    target_validator=None,
 ) -> tuple[TaskInvocationRunner, TaskInvocationStore, TemporaryWorkspaceService]:
     invocations = TaskInvocationStore(store.database)
     workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
@@ -145,6 +151,7 @@ def _runner(
             workspaces,
             success,
             dispatcher=dispatcher,
+            target_validator=target_validator or AcceptTarget(),
             identity_reader=identity_reader or (lambda _pid: expected),
             poll_interval_seconds=0.01,
         ),
@@ -378,6 +385,7 @@ def test_recovery_before_started_marker_does_not_replay_when_target_is_gone(tmp_
         workspaces,
         success,
         dispatcher=dispatcher,
+        target_validator=AcceptTarget(),
         identity_reader=lambda _pid: ProcessIdentity(4242, "different-incarnation"),
         sleep=lambda _seconds: None,
         poll_interval_seconds=0.01,
@@ -392,6 +400,7 @@ def test_recovery_before_started_marker_does_not_replay_when_target_is_gone(tmp_
     assert failed.status == "failed"
     assert failed.runtime_failure_code == "task_target_changed"
     assert dispatcher.calls == 0
+
 
 def test_runtime_failure_survives_stream_drain_error(tmp_path: Path) -> None:
     store = _store(tmp_path)
@@ -761,6 +770,7 @@ def test_started_python_without_finished_marker_has_no_post_start_timeout(tmp_pa
         workspaces,
         CompleteSuccess(store),
         dispatcher=Dispatcher(),
+        target_validator=AcceptTarget(),
         identity_reader=lambda _pid: ProcessIdentity(4242, "process-4242"),
         sleep=lambda _seconds: (_ for _ in ()).throw(StopMonitor()),
         now=lambda: base + timedelta(seconds=20),
@@ -808,6 +818,7 @@ def test_dispatch_timeout_applies_only_before_started_marker(tmp_path: Path) -> 
         workspaces,
         CompleteSuccess(store),
         dispatcher=Dispatcher(),
+        target_validator=AcceptTarget(),
         identity_reader=lambda _pid: ProcessIdentity(4242, "process-4242"),
         sleep=lambda _seconds: None,
         now=lambda: base + timedelta(seconds=2),
@@ -835,11 +846,21 @@ def test_preflight_does_not_consume_dispatch_timeout_budget(tmp_path: Path) -> N
     workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp-preflight")
     sleep_durations: list[float] = []
     dispatch_timestamps: list[str] = []
+    validation_times: list[datetime] = []
+    validation_dispatch_timestamps: list[str] = []
 
     class SlowHistory:
         def prepare(self, _task, _workspace):
             clock[0] += timedelta(seconds=10)
             return None
+
+    class AdvancingTargetValidator:
+        def validate(self, _task) -> None:
+            state = invocations.get(task_id)
+            assert state is not None
+            validation_dispatch_timestamps.append(state.dispatch_started_at)
+            validation_times.append(clock[0])
+            clock[0] += timedelta(seconds=20)
 
     class Handle:
         terminated = False
@@ -870,6 +891,7 @@ def test_preflight_does_not_consume_dispatch_timeout_budget(tmp_path: Path) -> N
         CompleteSuccess(store),
         history=SlowHistory(),
         dispatcher=Dispatcher(),
+        target_validator=AdvancingTargetValidator(),  # type: ignore[arg-type]
         identity_reader=lambda _pid: ProcessIdentity(4242, "process-4242"),
         sleep=sleep,
         now=lambda: clock[0],
@@ -885,7 +907,9 @@ def test_preflight_does_not_consume_dispatch_timeout_budget(tmp_path: Path) -> N
     assert failed.status == "failed"
     assert failed.runtime_failure_code == "task_dispatch_timeout"
     assert len(sleep_durations) == 5
-    assert dispatch_timestamps == [(base + timedelta(seconds=10)).isoformat()]
+    assert validation_times == [base + timedelta(seconds=10)]
+    assert validation_dispatch_timestamps == [base.isoformat()]
+    assert dispatch_timestamps == [(base + timedelta(seconds=30)).isoformat()]
     assert handle.terminated
 
 
@@ -909,6 +933,7 @@ def test_recovery_keeps_creation_timestamp_before_dispatch_refresh(
         workspaces,
         CompleteSuccess(store),
         dispatcher=dispatcher,
+        target_validator=AcceptTarget(),
         identity_reader=lambda _pid: ProcessIdentity(4242, "process-4242"),
         now=lambda: base + timedelta(seconds=2),
         sleep=lambda _seconds: None,
@@ -1008,6 +1033,7 @@ def test_dispatch_timestamp_storage_error_fails_closed_before_dispatch(
         workspaces,
         CompleteSuccess(store),
         dispatcher=dispatcher,
+        target_validator=AcceptTarget(),
         identity_reader=lambda _pid: ProcessIdentity(4242, "process-4242"),
     )
     task = store.get(task_id)
@@ -1023,3 +1049,92 @@ def test_dispatch_timestamp_storage_error_fails_closed_before_dispatch(
     assert workspaces.workspace is not None
     assert not workspaces.workspace.directory.exists()
     assert invocations.get(task_id) is None
+
+
+def test_final_target_validation_after_wrapper_staging_prevents_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from houbridge.task.script import TaskScriptBuilder
+
+    store = _store(tmp_path)
+    task_id = _submit(store)
+    invocations = TaskInvocationStore(store.database)
+    expected = ProcessIdentity(4242, "process-4242")
+    current_identity = [expected]
+
+    class CapturingWorkspaces(TemporaryWorkspaceService):
+        workspace: TemporaryWorkspace | None = None
+
+        def allocate(self, *, prefix: str = "invocation") -> TemporaryWorkspace:
+            self.workspace = super().allocate(prefix=prefix)
+            return self.workspace
+
+    workspaces = CapturingWorkspaces(temp_root=tmp_path / "temp-final-validation")
+    mark_dispatch_calls: list[str] = []
+    original_mark_dispatch_started = invocations.mark_dispatch_started
+
+    def mark_dispatch_started(task_id: str):
+        mark_dispatch_calls.append(task_id)
+        return original_mark_dispatch_started(task_id)
+
+    monkeypatch.setattr(invocations, "mark_dispatch_started", mark_dispatch_started)
+
+    class InvalidatingScriptBuilder:
+        def __init__(self) -> None:
+            self._delegate = TaskScriptBuilder()
+
+        def stage(self, workspace, request_path):
+            staged = self._delegate.stage(workspace, request_path)
+            current_identity[0] = ProcessIdentity(4242, "replacement-process")
+            return staged
+
+    class CountingDispatcher:
+        calls = 0
+
+        def start(self, _task, _script_path):
+            self.calls += 1
+
+            class Handle:
+                def poll(self):
+                    return None
+
+                def terminate(self):
+                    pass
+
+            return Handle()
+
+    class FinalTargetValidator:
+        def validate(self, _task) -> None:
+            if current_identity[0] != expected:
+                raise BridgeError(
+                    "task_target_changed",
+                    "Task target changed after wrapper staging.",
+                    "simulated replacement during wrapper staging",
+                )
+
+    dispatcher = CountingDispatcher()
+    runner = TaskInvocationRunner(
+        store,
+        invocations,
+        workspaces,
+        CompleteSuccess(store),
+        dispatcher=dispatcher,
+        script_builder=InvalidatingScriptBuilder(),  # type: ignore[arg-type]
+        target_validator=FinalTargetValidator(),  # type: ignore[arg-type]
+        identity_reader=lambda _pid: current_identity[0],
+        poll_interval_seconds=0.01,
+    )
+    task = store.get(task_id)
+    assert task is not None
+
+    runner.run(task)
+
+    failed = store.get(task_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_target_changed"
+    assert dispatcher.calls == 0
+    assert mark_dispatch_calls == []
+    assert invocations.get(task_id) is None
+    assert workspaces.workspace is not None
+    assert not workspaces.workspace.directory.exists()
