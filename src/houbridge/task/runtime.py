@@ -156,6 +156,11 @@ class TaskRuntime:
             except ManagedExecutionLockTimeout as exc:
                 self._fail_claimed(task, owner_token, _lock_timeout_error(task, exc))
                 return
+            except OSError as exc:
+                self._fail_claimed(
+                    task, owner_token, _lock_acquisition_error(task, exc)
+                )
+                return
             if not self._validate_or_fail(task, owner_token):
                 return
             self._runner.run(task)
@@ -248,4 +253,12 @@ def _lock_timeout_error(
         "task_execution_lock_timeout",
         f"Task {task.id} could not acquire the managed execution lock.",
         str(error),
+    )
+
+
+def _lock_acquisition_error(task: TaskRecord, error: OSError) -> BridgeError:
+    return BridgeError(
+        "task_execution_lock_failed",
+        f"Task {task.id} could not acquire the managed execution lock.",
+        f"{type(error).__name__}: {error}",
     )

@@ -290,6 +290,137 @@ def test_managed_execution_lock_timeout_fails_task_and_scheduler_continues(
     assert state.claim_count() == 0
 
 
+@pytest.mark.parametrize("max_concurrency", [1, 2])
+@pytest.mark.parametrize("error_type", [PermissionError, OSError])
+def test_managed_execution_lock_os_error_fails_queued_task_and_scheduler_continues(
+    tmp_path: Path, max_concurrency: int, error_type: type[OSError]
+) -> None:
+    store = _store(tmp_path)
+    failed_id = _submit(store, 0, pid=4350)
+    healthy_id = _submit(store, 1, pid=4351)
+    state = _runtime_state(store)
+    _reserve(state)
+    runner = CompletingRunner(store)
+
+    class FailingLock:
+        def acquire(self, identity, *, timeout_seconds=None):
+            from contextlib import contextmanager
+
+            @contextmanager
+            def _acquire():
+                if identity.pid == 4350:
+                    raise error_type("simulated managed execution lock failure")
+                yield
+
+            return _acquire()
+
+    runtime = TaskRuntime(
+        store,
+        state,
+        runner,
+        max_concurrency=max_concurrency,
+        execution_lock=FailingLock(),  # type: ignore[arg-type]
+        target_validator=AcceptTarget(),
+    )
+
+    runtime.run("runtime-token", runtime_identity=ProcessIdentity(9002, "runtime"))
+
+    failed = store.get(failed_id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.runtime_failure_code == "task_execution_lock_failed"
+    assert failed.runtime_failure_message is not None
+    assert (
+        "could not acquire the managed execution lock" in failed.runtime_failure_message
+    )
+    assert failed.runtime_failure_detail is not None
+    assert error_type.__name__ in failed.runtime_failure_detail
+    assert runner.run_ids == [healthy_id]
+    assert store.get(healthy_id).status == "completed"  # type: ignore[union-attr]
+    assert state.claim_count() == 0
+
+
+def test_runner_body_os_error_still_propagates_with_claim_intact(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store, 0, pid=4360)
+    state = _runtime_state(store)
+    _reserve(state)
+
+    class FailingRunner(CompletingRunner):
+        def run(self, task) -> None:
+            self.store.mark_running(task.id)
+            raise OSError("runner body failure")
+
+    class PassingLock:
+        def acquire(self, _identity, *, timeout_seconds=None):
+            from contextlib import contextmanager
+
+            @contextmanager
+            def _acquire():
+                yield
+
+            return _acquire()
+
+    runtime = TaskRuntime(
+        store,
+        state,
+        FailingRunner(store),
+        max_concurrency=1,
+        execution_lock=PassingLock(),  # type: ignore[arg-type]
+        target_validator=AcceptTarget(),
+    )
+
+    with pytest.raises(OSError, match="runner body failure"):
+        runtime.run("runtime-token", runtime_identity=ProcessIdentity(9002, "runtime"))
+
+    assert store.get(task_id).status == "running"  # type: ignore[union-attr]
+    assert state.claim_count() == 1
+
+
+def test_recovery_lock_os_error_still_propagates_with_claim_intact(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    task_id = _submit(store, 0, pid=4370)
+    state = _runtime_state(store)
+    _reserve(state, "old-owner")
+    assert state.claim_runtime_owner("old-owner", ProcessIdentity(9001, "old-runtime"))
+    assert state.claim_next_queued("old-owner", max_concurrency=1) == task_id
+    store.mark_running(task_id)
+    assert state.clear_runtime_owner("old-owner")
+    assert state.reserve_runtime_start(
+        "runtime-token", ProcessIdentity(9002, "starter")
+    )
+
+    class FailingLock:
+        def acquire(self, _identity, *, timeout_seconds=None):
+            from contextlib import contextmanager
+
+            @contextmanager
+            def _acquire():
+                raise OSError("recovery lock failure")
+                yield
+
+            return _acquire()
+
+    runtime = TaskRuntime(
+        store,
+        state,
+        CompletingRunner(store),
+        max_concurrency=1,
+        execution_lock=FailingLock(),  # type: ignore[arg-type]
+        target_validator=AcceptTarget(),
+    )
+
+    with pytest.raises(OSError, match="recovery lock failure"):
+        runtime.run("runtime-token", runtime_identity=ProcessIdentity(9003, "runtime"))
+
+    assert store.get(task_id).status == "running"  # type: ignore[union-attr]
+    assert state.claim_count() == 1
+
+
 def test_recovery_probe_failure_recovers_existing_invocation_without_replay(
     tmp_path: Path,
 ) -> None:
