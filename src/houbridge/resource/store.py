@@ -148,6 +148,9 @@ class ResourceStore:
                     sqlite3.Binary(payload),
                 ),
             )
+            connection.execute(
+                "DELETE FROM resources WHERE expires_at <= ?", (created_at,)
+            )
             row = connection.execute(
                 """
                 SELECT

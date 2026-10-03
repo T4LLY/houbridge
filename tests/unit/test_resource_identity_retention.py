@@ -260,3 +260,94 @@ def test_canonical_identity_remains_sha256_of_exact_payload(tmp_path: Path, monk
     resource = store.put_bytes(payload)
 
     assert resource.canonical_id == hashlib.sha256(payload).hexdigest()
+
+
+def test_successful_write_cleans_at_expiry_without_losing_aliases(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import houbridge.resource.classifier as classifier
+
+    monkeypatch.setattr(classifier.filetype, "guess", lambda _payload: None)
+    start = datetime(2026, 9, 11, 0, 0, tzinfo=timezone.utc)
+    clock = Clock(start)
+    generator = FixedSemanticGenerator()
+    database = tmp_path / "resources.db"
+    store = make_store(database, generator=generator, clock=clock)
+
+    expired = store.put_text("expires at boundary")
+    also_expired = store.put_text("another expires at boundary")
+    clock.value = start + timedelta(hours=24)
+    active = store.put_text("not expired")
+    clock.value = start + timedelta(hours=72)
+
+    assert store.get(expired.semantic_alias).expires_at == expired.expires_at
+    assert store.get_bytes(expired.canonical_id) == b"expires at boundary"
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM resources WHERE canonical_id = ?",
+            (expired.canonical_id,),
+        ).fetchone() == (1,)
+
+    restored = store.put_text("expires at boundary")
+
+    assert store.get(expired.semantic_alias) == restored
+    assert store.get(also_expired.semantic_alias) is None
+    assert store.get(active.semantic_alias) == active
+    assert datetime.fromisoformat(restored.expires_at) == clock.value + timedelta(
+        hours=72
+    )
+    assert store.resolve_canonical_id(expired.semantic_alias) == expired.canonical_id
+    written = store.put_text("boundary write")
+    following = store.put_text("after restore")
+    assert written.semantic_alias == "node-graph-python003"
+    assert following.semantic_alias == "node-graph-python004"
+    assert generator.seen_text == [
+        "expires at boundary",
+        "another expires at boundary",
+        "not expired",
+        "boundary write",
+        "after restore",
+    ]
+
+
+def test_failed_write_rolls_back_expiry_cleanup_and_alias_allocation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import houbridge.resource.classifier as classifier
+
+    monkeypatch.setattr(classifier.filetype, "guess", lambda _payload: None)
+    start = datetime(2026, 9, 11, 0, 0, tzinfo=timezone.utc)
+    clock = Clock(start)
+    database = tmp_path / "resources.db"
+    store = make_store(database, clock=clock)
+    expired = store.put_text("expired")
+    clock.value = start + timedelta(hours=72)
+
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TRIGGER reject_expiry_cleanup
+            BEFORE DELETE ON resources
+            BEGIN
+                SELECT RAISE(ABORT, 'forced cleanup failure');
+            END
+            """
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="forced cleanup failure"):
+        store.put_text("attempted write")
+
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM resources").fetchone() == (1,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM resource_semantic_aliases"
+        ).fetchone() == (1,)
+    assert store.get(expired.semantic_alias) is not None
+    assert store.resolve_canonical_id("node-graph-python001") is None
+
+    with sqlite3.connect(database) as connection:
+        connection.execute("DROP TRIGGER reject_expiry_cleanup")
+
+    written = store.put_text("attempted write")
+    assert written.semantic_alias == "node-graph-python001"
+    assert store.get(expired.semantic_alias) is None
