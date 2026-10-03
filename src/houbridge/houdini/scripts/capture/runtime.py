@@ -333,15 +333,21 @@ def create_attribute_visualizers(viewport, preset, hou):
         hou.viewportVisualizerCategory.Common,
         viewport=viewport,
     )
-    for item in attributes:
-        visualizer = hou.viewportVisualizers.createVisualizer(
-            marker_type,
-            hou.viewportVisualizerCategory.Common,
-        )
-        visualizer.setLabel(item["name"])
-        soputils.setupVisualizer(visualizer, item["name"], ATTR_CLASSES[item["class"]])
-        visualizer.setIsActive(True, viewport)
-        visualizers.append(visualizer)
+    try:
+        for item in attributes:
+            visualizer = hou.viewportVisualizers.createVisualizer(
+                marker_type,
+                hou.viewportVisualizerCategory.Common,
+            )
+            visualizers.append(visualizer)
+            visualizer.setLabel(item["name"])
+            soputils.setupVisualizer(
+                visualizer, item["name"], ATTR_CLASSES[item["class"]]
+            )
+            visualizer.setIsActive(True, viewport)
+    except BaseException:
+        destroy_visualizers(visualizers)
+        raise
     return visualizers
 
 
