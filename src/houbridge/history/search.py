@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections import defaultdict
+from dataclasses import replace
 
 import numpy as np
 
@@ -64,12 +65,12 @@ class HistorySearchService:
             self._store.database,
             lock_timeout_seconds=self._store.lock_timeout_seconds,
         )
-        entries = reader.all_for_search()
+        entries = reader.all_metadata_for_search()
         if not entries:
             return {"hits": []}
 
         try:
-            dense, lexical = self._synchronize_indexes(entries, profile)
+            dense, lexical = self._synchronize_indexes(entries, profile, reader)
             query_vector = self._query_vector(normalized_query, profile)
 
             source_groups: dict[str, list[HistoryEntryRecord]] = defaultdict(list)
@@ -148,6 +149,7 @@ class HistorySearchService:
         self,
         entries: list[HistoryEntryRecord],
         profile: str,
+        reader: HistoryReader,
     ) -> tuple[SQLiteVecIndex, SQLiteFtsIndex]:
         assert self._store is not None
         factory = lambda: history_connection_scope(
@@ -165,6 +167,14 @@ class HistorySearchService:
         ]
         if not pending_entries:
             return dense, lexical
+
+        changes_by_entry = reader.changes_for_search(
+            [entry.id for entry in pending_entries]
+        )
+        pending_entries = [
+            replace(entry, changes=changes_by_entry.get(entry.id, ()))
+            for entry in pending_entries
+        ]
 
         vectors: list[DenseVectorRecord] = []
         for source_hash in sorted({entry.source_hash for entry in pending_entries}):

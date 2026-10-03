@@ -128,14 +128,33 @@ def test_history_search_does_not_reindex_unchanged_entries(
     from houbridge.search.lexical import SQLiteFtsIndex
 
     lexical_upserts: list[list[str]] = []
+    change_fetches: list[list[int]] = []
+    decoded_change_rows: list[int] = []
     original_upsert = SQLiteFtsIndex.upsert
+    original_changes_for_search = HistoryReader.changes_for_search
+    import houbridge.history.reader as reader_module
+
+    original_decode_changes = reader_module._decode_changes
 
     def tracking_upsert(self, documents) -> None:
         batch = list(documents)
         lexical_upserts.append([document.entry_id for document in batch])
         original_upsert(self, batch)
 
+    def tracking_changes_for_search(self, entry_ids: list[int]):
+        change_fetches.append(list(entry_ids))
+        return original_changes_for_search(self, entry_ids)
+
+    def tracking_decode_changes(change_rows, entry_id: int):
+        rows = list(change_rows)
+        decoded_change_rows.extend([entry_id] * len(rows))
+        return original_decode_changes(rows, entry_id)
+
     monkeypatch.setattr(SQLiteFtsIndex, "upsert", tracking_upsert)
+    monkeypatch.setattr(
+        HistoryReader, "changes_for_search", tracking_changes_for_search
+    )
+    monkeypatch.setattr(reader_module, "_decode_changes", tracking_decode_changes)
     service = HistorySearchService(
         store,
         provider=FakeEmbeddingProvider(),
@@ -148,6 +167,106 @@ def test_history_search_does_not_reindex_unchanged_entries(
     assert first == second
     assert FakeDenseIndex.upsert_calls == [[source_hash]]
     assert lexical_upserts == [["1", "2"]]
+    assert change_fetches == [[1, 2]]
+    assert decoded_change_rows == [2]
+
+
+def test_history_search_indexes_only_appended_entry_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, source_hash = _store_with_two_entries(tmp_path)
+    FakeDenseIndex.records = []
+    FakeDenseIndex.upsert_calls = []
+    monkeypatch.setattr("houbridge.history.search.SQLiteVecIndex", FakeDenseIndex)
+    monkeypatch.setattr(FakeDenseIndex, "search", lambda _self, *_args, **_kwargs: [])
+    from houbridge.search.lexical import SQLiteFtsIndex
+
+    lexical_upserts: list[list[str]] = []
+    change_fetches: list[list[int]] = []
+    original_upsert = SQLiteFtsIndex.upsert
+    original_changes_for_search = HistoryReader.changes_for_search
+
+    def tracking_upsert(self, documents) -> None:
+        batch = list(documents)
+        lexical_upserts.append([document.entry_id for document in batch])
+        original_upsert(self, batch)
+
+    def tracking_changes_for_search(self, entry_ids: list[int]):
+        change_fetches.append(list(entry_ids))
+        return original_changes_for_search(self, entry_ids)
+
+    monkeypatch.setattr(SQLiteFtsIndex, "upsert", tracking_upsert)
+    monkeypatch.setattr(
+        HistoryReader, "changes_for_search", tracking_changes_for_search
+    )
+    service = HistorySearchService(
+        store,
+        provider=FakeEmbeddingProvider(),
+        hybrid=SearchHybridConfig(rrf_k=60, candidate_multiplier=4, candidate_min=20),
+    )
+
+    service.search("sizex", top_k=10)
+    appended_id = store.commit_entry(
+        expected_code_profile="profile-a",
+        time="2026-09-09T13:30:00",
+        cwd=str(tmp_path.resolve()),
+        status="completed",
+        file=str((tmp_path / "third.py").resolve()),
+        args=(),
+        purpose="third entry",
+        source_hash=source_hash,
+        changes=(
+            ParmChangedChange(
+                node=417,
+                path="/obj/geo1/box1",
+                parm="thirdmarker",
+                before="off",
+                after="on",
+            ),
+        ),
+    )
+    result = service.search("thirdmarker", top_k=10)
+
+    assert [hit["id"] for hit in result["hits"]] == [appended_id]
+    assert change_fetches == [[1, 2], [appended_id]]
+    assert lexical_upserts == [["1", "2"], [str(appended_id)]]
+    assert FakeDenseIndex.upsert_calls == [[source_hash], [source_hash]]
+
+
+def test_history_search_decodes_corrupt_changes_for_pending_entries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, _source_hash = _store_with_two_entries(tmp_path)
+    monkeypatch.setattr("houbridge.history.search.SQLiteVecIndex", FakeDenseIndex)
+    with store._connect_existing() as connection:
+        connection.execute(
+            "UPDATE history_changes SET payload_json = ? WHERE entry_id = ?",
+            ("not json", 2),
+        )
+
+    service = HistorySearchService(
+        store,
+        provider=FakeEmbeddingProvider(),
+        hybrid=SearchHybridConfig(rrf_k=60, candidate_multiplier=4, candidate_min=20),
+    )
+
+    with pytest.raises(BridgeError) as exc_info:
+        service.search("sizex")
+    assert exc_info.value.code == "history_store_invalid"
+
+
+def test_history_search_reader_metadata_handles_scene_reset_without_recreating_db(
+    tmp_path: Path,
+) -> None:
+    store, _source_hash = _store_with_two_entries(tmp_path)
+    reader = HistoryReader(store.database)
+    store.database.unlink()
+
+    assert reader.all_metadata_for_search() == []
+    assert reader.changes_for_search([1, 2]) == {}
+    assert not store.database.exists()
 
 
 def test_history_get_and_list_use_public_shapes_and_newest_first(tmp_path: Path) -> None:

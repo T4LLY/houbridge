@@ -13,6 +13,7 @@ from houbridge.history.locking import (
 )
 from houbridge.errors import BridgeError
 from houbridge.formatting import format_public_datetime
+from houbridge.search.sqlite_filter import append_membership_filter
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +145,73 @@ class HistoryReader:
             for row in rows
         ]
 
+    def all_metadata_for_search(self) -> list[HistoryEntryRecord]:
+        """Read search metadata without hydrating Action Change payloads."""
+        try:
+            with history_connection_scope(
+                self._database,
+                require_existing=True,
+                lock_timeout_seconds=self._lock_timeout_seconds,
+            ) as connection:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM history_entries
+                    ORDER BY id ASC
+                    """
+                ).fetchall()
+        except HistoryDatabaseMissingError:
+            return []
+        except sqlite3.Error as exc:
+            raise _database_error(exc) from exc
+        return [_decode_entry(row, ()) for row in rows]
+
+    def changes_for_search(
+        self,
+        entry_ids: list[int],
+    ) -> dict[int, tuple[dict[str, object], ...]]:
+        """Hydrate Action Changes only for entries that still need indexing."""
+        if not entry_ids:
+            return {}
+        requested_ids = [str(entry_id) for entry_id in entry_ids]
+        try:
+            with history_connection_scope(
+                self._database,
+                require_existing=True,
+                lock_timeout_seconds=self._lock_timeout_seconds,
+            ) as connection:
+                where: list[str] = []
+                params: list[object] = []
+                append_membership_filter(
+                    connection,
+                    where,
+                    params,
+                    column="entry_id",
+                    values=requested_ids,
+                    temp_table="houbridge_history_search_entry_filter",
+                )
+                rows = connection.execute(
+                    f"""
+                    SELECT entry_id, payload_json
+                    FROM history_changes
+                    WHERE {" AND ".join(where)}
+                    ORDER BY entry_id ASC, ordinal ASC
+                    """,
+                    tuple(params),
+                ).fetchall()
+        except HistoryDatabaseMissingError:
+            return {}
+        except sqlite3.Error as exc:
+            raise _database_error(exc) from exc
+
+        changes_by_entry: dict[int, list[sqlite3.Row]] = {}
+        for row in rows:
+            changes_by_entry.setdefault(int(row["entry_id"]), []).append(row)
+        return {
+            entry_id: _decode_changes(changes_by_entry.get(entry_id, ()), entry_id)
+            for entry_id in entry_ids
+        }
+
 
 class HistoryReadService:
     def __init__(self, reader: HistoryReader | None) -> None:
@@ -184,24 +252,6 @@ def _decode_entry(row: sqlite3.Row, change_rows: Iterable[sqlite3.Row]) -> Histo
             f"entry={row['id']}",
         )
 
-    changes: list[dict[str, object]] = []
-    for change_row in change_rows:
-        try:
-            payload = json.loads(str(change_row["payload_json"]))
-        except (TypeError, ValueError, json.JSONDecodeError) as exc:
-            raise BridgeError(
-                "history_store_invalid",
-                "History entry contains invalid Action Change data.",
-                f"entry={row['id']}: {exc}",
-            ) from exc
-        if not isinstance(payload, dict):
-            raise BridgeError(
-                "history_store_invalid",
-                "History entry contains invalid Action Change data.",
-                f"entry={row['id']}",
-            )
-        changes.append(payload)
-
     return HistoryEntryRecord(
         id=int(row["id"]),
         time=str(row["time"]),
@@ -211,8 +261,32 @@ def _decode_entry(row: sqlite3.Row, change_rows: Iterable[sqlite3.Row]) -> Histo
         args=tuple(args_raw),
         purpose=None if row["purpose"] is None else str(row["purpose"]),
         source_hash=str(row["source_hash"]),
-        changes=tuple(changes),
+        changes=_decode_changes(change_rows, int(row["id"])),
     )
+
+
+def _decode_changes(
+    change_rows: Iterable[sqlite3.Row],
+    entry_id: int,
+) -> tuple[dict[str, object], ...]:
+    changes: list[dict[str, object]] = []
+    for change_row in change_rows:
+        try:
+            payload = json.loads(str(change_row["payload_json"]))
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise BridgeError(
+                "history_store_invalid",
+                "History entry contains invalid Action Change data.",
+                f"entry={entry_id}: {exc}",
+            ) from exc
+        if not isinstance(payload, dict):
+            raise BridgeError(
+                "history_store_invalid",
+                "History entry contains invalid Action Change data.",
+                f"entry={entry_id}",
+            )
+        changes.append(payload)
+    return tuple(changes)
 
 
 def _public_time(value: str) -> str:
