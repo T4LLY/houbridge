@@ -13,7 +13,7 @@ def task_get_payload(store: TaskStore, task: TaskRecord) -> dict[str, Any]:
         "id": task.id,
         "status": task.status,
         "file": task.file_path,
-        "args": list(task.argv),
+        "args": list(task.argv[1:]),
     }
     if task.status == "queued":
         return payload
@@ -41,5 +41,5 @@ def task_list_item(task: TaskRecord) -> dict[str, Any]:
         "id": task.id,
         "status": task.status,
         "file": task.file_path,
-        "args": list(task.argv),
+        "args": list(task.argv[1:]),
     }

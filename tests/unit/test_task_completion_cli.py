@@ -11,14 +11,17 @@ from typer.testing import CliRunner
 from houbridge.cli import task_cmd
 from houbridge.cli.main import app
 from houbridge.errors import BridgeError
+from houbridge.execution.source import prepare_file_invocation
 from houbridge.process_coordination import ProcessIdentity
 from houbridge.semantic_id import SemanticBase
 from houbridge.task.completion import TaskCompletionResourceFinalizer
 from houbridge.task.models import FrozenDispatchContext, TaskSubmission
+from houbridge.task.presentation import task_get_payload, task_list_item
 from houbridge.task.runtime import TaskRuntime
 from houbridge.task.runtime_store import TaskRuntimeStateStore
 from houbridge.task.service import TaskCommandService
 from houbridge.task.store import TaskStore
+from houbridge.task.submission import freeze_task_submission
 
 
 class FixedSemanticGenerator:
@@ -31,7 +34,7 @@ def _submission(source: str = "print('x')\n") -> TaskSubmission:
     return TaskSubmission(
         source=source,
         file_path="/workspace/build.py",
-        argv=("--quality", "high"),
+        argv=("/workspace/build.py", "--quality", "high"),
         purpose=None,
         origin_cwd="/workspace",
         dispatch=FrozenDispatchContext(
@@ -168,6 +171,50 @@ def test_task_service_shapes_and_list_order(tmp_path: Path) -> None:
     assert [item["id"] for item in listed] == [running.id, queued.id]
     assert all(set(item) == {"id", "status", "file", "args"} for item in listed)
     assert supervisor.calls == 3
+
+
+@pytest.mark.parametrize("script_args", [(), ("one",), ("one", "two")])
+def test_real_file_submission_presents_only_public_script_args(
+    tmp_path: Path, script_args: tuple[str, ...]
+) -> None:
+    source_path = tmp_path / "build.py"
+    source_path.write_text("print('x')\n", encoding="utf-8")
+    invocation = prepare_file_invocation(
+        source_path, args=script_args, origin_cwd=tmp_path
+    )
+    transport = SimpleNamespace(
+        executable=Path("hcommand"),
+        timeout_seconds=5,
+        subprocess_environment=lambda: {},
+    )
+    frozen = freeze_task_submission(
+        invocation,
+        session=SimpleNamespace(
+            record=SimpleNamespace(session=1, port=1714),
+            identity=ProcessIdentity(4242, "start-4242"),
+        ),
+        transport=transport,
+        lock_timeout_seconds=5,
+        history_enabled=False,
+        history_code_profile="profile-a",
+    )
+    store = _store(tmp_path)
+
+    task = store.submit(frozen)
+    restored = store.get(task.id)
+    assert restored is not None
+    got = task_get_payload(store, restored)
+    listed = task_list_item(store.list_tasks()[0])
+
+    assert (
+        invocation.argv
+        == frozen.argv
+        == restored.argv
+        == (str(source_path), *script_args)
+    )
+    assert got["args"] == listed["args"] == list(script_args)
+    # AsyncTaskHistory.finalize uses this same internal argv slice for metadata.
+    assert restored.argv[1:] == tuple(got["args"]) == tuple(listed["args"])
 
 
 def test_task_get_missing_uses_shared_error_envelope(monkeypatch) -> None:
