@@ -204,6 +204,7 @@ def fake_hou(monkeypatch: pytest.MonkeyPatch):
         ParmTupleChanged=object(),
         InputRewired=object(),
         FlagChanged=object(),
+        SpareParmTemplatesChanged=object(),
     )
     hou._nodes = {}
     root = FakeNode(hou, 1, "/", "root")
@@ -231,6 +232,43 @@ def _node_and_recorder(fake_hou, *, created: bool, parms: dict[str, str]):
         node = FakeNode(hou, 11, "/obj/witness", parent=obj, parms=parms)
         recorder = _recorder_class()()
     return node, recorder
+
+
+def test_existing_parameter_addition_tracks_spare_template_event(fake_hou) -> None:
+    hou, _root, obj = fake_hou
+    node = FakeNode(hou, 11, "/obj/witness", parent=obj)
+    recorder = _recorder_class()()
+
+    node._parms["text"] = FakeParm("text", "0")
+    node.emit(hou.nodeEventType.SpareParmTemplatesChanged)
+
+    assert recorder.finalize() == [
+        {
+            "type": "parm_changed",
+            "node": 11,
+            "path": "/obj/witness",
+            "parm": "text",
+            "before": None,
+            "after": "0",
+        }
+    ]
+    assert node.callbacks == []
+
+
+def test_existing_parameter_addition_and_removal_cancel_on_spare_template_event(
+    fake_hou,
+) -> None:
+    hou, _root, obj = fake_hou
+    node = FakeNode(hou, 11, "/obj/witness", parent=obj)
+    recorder = _recorder_class()()
+
+    node._parms["text"] = FakeParm("text", "0")
+    node.emit(hou.nodeEventType.SpareParmTemplatesChanged)
+    del node._parms["text"]
+    node.emit(hou.nodeEventType.SpareParmTemplatesChanged)
+
+    assert recorder.finalize() == []
+    assert node.callbacks == []
 
 
 @pytest.mark.parametrize("created", [False, True], ids=["existing", "created"])

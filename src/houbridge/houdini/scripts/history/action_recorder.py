@@ -129,6 +129,7 @@ class ActionRecorder:
             event.BeingDeleted,
             event.NameChanged,
             event.ParmTupleChanged,
+            event.SpareParmTemplatesChanged,
             event.InputRewired,
             event.FlagChanged,
         ):
@@ -142,6 +143,7 @@ class ActionRecorder:
             event.BeingDeleted,
             event.NameChanged,
             event.ParmTupleChanged,
+            event.SpareParmTemplatesChanged,
             event.InputRewired,
             event.FlagChanged,
         )

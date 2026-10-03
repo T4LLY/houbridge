@@ -152,6 +152,7 @@ def _install_fake_hou(monkeypatch: pytest.MonkeyPatch, *, root: FakeNode | None 
         BeingDeleted=object(),
         NameChanged=object(),
         ParmTupleChanged=object(),
+        SpareParmTemplatesChanged=object(),
         InputRewired=object(),
         FlagChanged=object(),
     )
