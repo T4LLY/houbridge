@@ -3,7 +3,7 @@ from __future__ import annotations
 from houbridge.errors import BridgeError
 from houbridge.houdini.transport import HoudiniTransport
 from houbridge.process_coordination import ManagedExecutionLock
-from houbridge.session.resolver import ResolvedSession
+from houbridge.session.resolver import ResolvedSession, SessionResolver
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
 from .history import ExecutionHistoryBoundary
@@ -22,6 +22,7 @@ class ExecutionRuntime:
         transport: HoudiniTransport,
         workspaces: TemporaryWorkspaceService,
         execution_lock: ManagedExecutionLock,
+        resolver: SessionResolver,
         lock_timeout_seconds: float,
         script_builder: ExecutionScriptBuilder | None = None,
         history: ExecutionHistoryBoundary | None = None,
@@ -29,6 +30,7 @@ class ExecutionRuntime:
         self._transport = transport
         self._workspaces = workspaces
         self._execution_lock = execution_lock
+        self._resolver = resolver
         self._lock_timeout_seconds = lock_timeout_seconds
         self._script_builder = script_builder or ExecutionScriptBuilder()
         self._history = history
@@ -56,6 +58,13 @@ class ExecutionRuntime:
                     history=history_preparation,
                 )
                 staged = self._script_builder.stage(workspace, request_path)
+                revalidated = self._resolver.resolve_record(session.record)
+                if revalidated.identity != session.identity:
+                    raise BridgeError(
+                        "session_unreachable",
+                        f"Registered Houdini session {session.record.session} is unavailable.",
+                        "The Houdini process incarnation changed while preparing execution.",
+                    )
                 try:
                     self._transport.execute_script(session.target, staged.script_path)
                 except BridgeError as exc:

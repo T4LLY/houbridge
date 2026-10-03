@@ -26,7 +26,7 @@ from houbridge.paths import GlobalDataPaths
 from houbridge.process_coordination import ProcessIdentity
 from houbridge.session.probe import SessionProbeResult
 from houbridge.session.registry import SessionRecord
-from houbridge.session.resolver import ResolvedSession
+from houbridge.session.resolver import ResolvedSession, SessionResolver
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
 
@@ -188,6 +188,25 @@ def _resolved_session() -> ResolvedSession:
     )
 
 
+def _session_resolver() -> SessionResolver:
+    class Probe:
+        def inspect(self, port: int) -> SessionProbeResult:
+            return SessionProbeResult(
+                pid=1001,
+                version="22.0.1",
+                license="Commercial",
+                file=None,
+                headless=False,
+                open_ports=(port,),
+            )
+
+    return SessionResolver(
+        None,  # type: ignore[arg-type]  # resolve_record does not consult registry.
+        Probe(),  # type: ignore[arg-type]
+        identity_reader=lambda _pid: ProcessIdentity(1001, "start-a"),
+    )
+
+
 def _invocation(tmp_path: Path, source: str, *, purpose: str | None = "build preview"):
     source_path = tmp_path / "tool.py"
     return ExecutionInvocation(
@@ -215,6 +234,7 @@ def _history_runtime(
         transport=transport,  # type: ignore[arg-type]
         workspaces=TemporaryWorkspaceService(temp_root=tmp_path / "temp"),
         execution_lock=RecordingLock(),  # type: ignore[arg-type]
+        resolver=_session_resolver(),
         lock_timeout_seconds=1,
         history=history,
     )
@@ -387,6 +407,7 @@ def test_history_finalization_failure_does_not_replay_or_redefine_success(
         transport=transport,  # type: ignore[arg-type]
         workspaces=TemporaryWorkspaceService(temp_root=tmp_path / "temp"),
         execution_lock=RecordingLock(),  # type: ignore[arg-type]
+        resolver=_session_resolver(),
         lock_timeout_seconds=1,
         history=history,  # type: ignore[arg-type]
     )
@@ -579,6 +600,7 @@ def test_history_disabled_runs_without_history_storage_or_embedding(
         transport=transport,  # type: ignore[arg-type]
         workspaces=TemporaryWorkspaceService(temp_root=tmp_path / "temp"),
         execution_lock=RecordingLock(),  # type: ignore[arg-type]
+        resolver=_session_resolver(),
         lock_timeout_seconds=1,
         history=None,
     )

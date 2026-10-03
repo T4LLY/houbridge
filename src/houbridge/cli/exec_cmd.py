@@ -157,6 +157,7 @@ def _build_sync_execution_service(
         transport=transport,
         workspaces=TemporaryWorkspaceService(),
         execution_lock=ManagedExecutionLock(),
+        resolver=resolver,
         lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
         history=history,
     )

@@ -15,7 +15,7 @@ from houbridge.houdini.transport import HoudiniTarget, TransportResult
 from houbridge.process_coordination import ProcessIdentity
 from houbridge.session.probe import SessionProbeResult
 from houbridge.session.registry import SessionRecord
-from houbridge.session.resolver import ResolvedSession
+from houbridge.session.resolver import ResolvedSession, SessionResolver
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
 
@@ -92,6 +92,27 @@ def _resolved_session() -> ResolvedSession:
     )
 
 
+def _resolver(identity_reader=None, *, identity: ProcessIdentity | None = None):
+    current = identity or ProcessIdentity(1001, "start-a")
+
+    class Probe:
+        def inspect(self, port: int) -> SessionProbeResult:
+            return SessionProbeResult(
+                pid=current.pid,
+                version="22.0.1",
+                license="Commercial",
+                file=None,
+                headless=False,
+                open_ports=(port,),
+            )
+
+    return SessionResolver(
+        None,  # type: ignore[arg-type]  # resolve_record does not consult registry.
+        Probe(),  # type: ignore[arg-type]
+        identity_reader=identity_reader or (lambda _pid: current),
+    )
+
+
 def _invocation(source: str) -> ExecutionInvocation:
     return ExecutionInvocation(
         source=source,
@@ -115,6 +136,7 @@ def test_execution_runtime_stages_locks_dispatches_collects_and_cleans(
         transport=transport,  # type: ignore[arg-type]
         workspaces=workspaces,
         execution_lock=lock,  # type: ignore[arg-type]
+        resolver=_resolver(),
         lock_timeout_seconds=12.5,
     )
 
@@ -135,6 +157,144 @@ def test_execution_runtime_stages_locks_dispatches_collects_and_cleans(
     assert list(workspaces.root.iterdir()) == []
 
 
+def test_runtime_rejects_replaced_pid_after_lock_wait_and_releases_workspace(
+    tmp_path: Path,
+) -> None:
+    session = _resolved_session()
+    current_identity = [session.identity]
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+
+    class RebindingLock(RecordingLock):
+        @contextmanager
+        def acquire(self, identity, *, timeout_seconds=None):
+            self.identities.append(identity)
+            self.timeouts.append(timeout_seconds)
+            self.active = True
+            current_identity[0] = ProcessIdentity(2002, "replacement")
+            try:
+                yield
+            finally:
+                self.active = False
+
+    class NoDispatch:
+        calls = 0
+
+        def execute_script(self, target, script_path):
+            self.calls += 1
+            raise AssertionError("stale Session must not dispatch")
+
+    lock = RebindingLock()
+    transport = NoDispatch()
+    runtime = ExecutionRuntime(
+        transport=transport,  # type: ignore[arg-type]
+        workspaces=workspaces,
+        execution_lock=lock,  # type: ignore[arg-type]
+        resolver=_resolver(lambda _pid: current_identity[0]),
+        lock_timeout_seconds=1,
+    )
+
+    with pytest.raises(BridgeError) as caught:
+        runtime.execute(session, _invocation("result = 1\n"))
+
+    assert caught.value.code == "session_unreachable"
+    assert transport.calls == 0
+    assert lock.active is False
+    assert list(workspaces.root.iterdir()) == []
+
+
+def test_runtime_rejects_same_pid_new_incarnation_for_legacy_record(
+    tmp_path: Path,
+) -> None:
+    legacy_record = SessionRecord(1, 49152, 1001, None)
+    session = ResolvedSession(
+        record=legacy_record,
+        identity=ProcessIdentity(1001, "old-incarnation"),
+        probe=_resolved_session().probe,
+    )
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+    lock = RecordingLock()
+
+    class NoDispatch:
+        calls = 0
+
+        def execute_script(self, target, script_path):
+            self.calls += 1
+            raise AssertionError("replacement incarnation must not dispatch")
+
+    transport = NoDispatch()
+    runtime = ExecutionRuntime(
+        transport=transport,  # type: ignore[arg-type]
+        workspaces=workspaces,
+        execution_lock=lock,  # type: ignore[arg-type]
+        resolver=_resolver(lambda _pid: ProcessIdentity(1001, "new-incarnation")),
+        lock_timeout_seconds=1,
+    )
+
+    with pytest.raises(BridgeError) as caught:
+        runtime.execute(session, _invocation("result = 1\n"))
+
+    assert caught.value.code == "session_unreachable"
+    assert transport.calls == 0
+    assert lock.active is False
+    assert list(workspaces.root.iterdir()) == []
+
+
+@pytest.mark.parametrize("change_at", ["history_prepare", "script_staging"])
+def test_runtime_revalidates_after_history_preparation_and_script_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change_at: str
+) -> None:
+    from houbridge.execution import runtime as runtime_module
+
+    session = _resolved_session()
+    current_identity = [session.identity]
+    workspaces = TemporaryWorkspaceService(temp_root=tmp_path / "temp")
+    lock = RecordingLock()
+    staged = []
+
+    class History:
+        def prepare(self, invocation, original_session, workspace):
+            if change_at == "history_prepare":
+                current_identity[0] = ProcessIdentity(1001, "new-incarnation")
+            return None
+
+    original_stage = runtime_module.ExecutionScriptBuilder.stage
+
+    def tracking_stage(builder, workspace, request_path):
+        result = original_stage(builder, workspace, request_path)
+        staged.append(result.script_path)
+        if change_at == "script_staging":
+            current_identity[0] = ProcessIdentity(1001, "new-incarnation")
+        return result
+
+    monkeypatch.setattr(runtime_module.ExecutionScriptBuilder, "stage", tracking_stage)
+
+    class NoDispatch:
+        calls = 0
+
+        def execute_script(self, target, script_path):
+            self.calls += 1
+            raise AssertionError("changed Session must not dispatch")
+
+    transport = NoDispatch()
+    runtime = ExecutionRuntime(
+        transport=transport,  # type: ignore[arg-type]
+        workspaces=workspaces,
+        execution_lock=lock,  # type: ignore[arg-type]
+        resolver=_resolver(lambda _pid: current_identity[0]),
+        lock_timeout_seconds=1,
+        history=History(),  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(BridgeError) as caught:
+        runtime.execute(session, _invocation("result = 1\n"))
+
+    assert caught.value.code == "session_unreachable"
+    assert staged
+    assert transport.calls == 0
+    assert lock.active is False
+    assert list(workspaces.root.iterdir()) == []
+
+
 def test_transport_failure_propagates_and_workspace_is_removed(tmp_path: Path) -> None:
     workspaces = TemporaryWorkspaceService(temp_root=tmp_path)
     lock = RecordingLock()
@@ -142,6 +302,7 @@ def test_transport_failure_propagates_and_workspace_is_removed(tmp_path: Path) -
         transport=FailingTransport(),  # type: ignore[arg-type]
         workspaces=workspaces,
         execution_lock=lock,  # type: ignore[arg-type]
+        resolver=_resolver(),
         lock_timeout_seconds=1,
     )
 
@@ -191,6 +352,7 @@ def test_history_enabled_timeout_after_terminal_status_preserves_python_outcome(
         transport=transport,  # type: ignore[arg-type]
         workspaces=workspaces,
         execution_lock=lock,  # type: ignore[arg-type]
+        resolver=_resolver(),
         lock_timeout_seconds=1,
         history=history,  # type: ignore[arg-type]
     )
@@ -220,6 +382,7 @@ def test_timeout_after_terminal_status_without_history_remains_transport_failure
         transport=TimeoutAfterScriptTransport(fake_hou_root, lock),  # type: ignore[arg-type]
         workspaces=workspaces,
         execution_lock=lock,  # type: ignore[arg-type]
+        resolver=_resolver(),
         lock_timeout_seconds=1,
         history=None,
     )
@@ -238,6 +401,7 @@ def test_runtime_rejects_nul_before_workspace_or_transport(tmp_path: Path) -> No
         transport=FailingTransport(),  # type: ignore[arg-type]
         workspaces=workspaces,
         execution_lock=lock,  # type: ignore[arg-type]
+        resolver=_resolver(),
         lock_timeout_seconds=1,
     )
 
