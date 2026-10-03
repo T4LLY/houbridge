@@ -45,6 +45,7 @@ def _screenshot_service(
     publisher = CaptureArtifactPublisher(
         TemporaryArtifactService(),
         settings.screenshot.retention_hours,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
     )
     return ScreenshotService(
         transport,
@@ -60,6 +61,7 @@ def _turntable_service(
     publisher = CaptureArtifactPublisher(
         TemporaryArtifactService(),
         settings.screenshot.retention_hours,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
     )
     return TurntableService(
         transport,
@@ -75,6 +77,7 @@ def _camera_service(
     publisher = CaptureArtifactPublisher(
         TemporaryArtifactService(),
         settings.screenshot.retention_hours,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
     )
     return CameraService(
         transport,

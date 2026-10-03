@@ -21,11 +21,15 @@ class CaptureSequenceAllocator:
         default_factory=InterprocessFileLock,
         repr=False,
     )
+    lock_timeout_seconds: float = 120.0
 
     def reserve(self, key: str) -> int:
         state_directory = self._state_directory()
         lock_path = state_directory / _LOCK_FILENAME
-        with self._file_lock.acquire(lock_path):
+        with self._file_lock.acquire(
+            lock_path,
+            timeout_seconds=self.lock_timeout_seconds,
+        ):
             state_path = state_directory / f"{key}.seq"
             last_reserved = self._read_last_reserved(state_path)
             existing_max = self._existing_max_sequence(key)
@@ -40,7 +44,10 @@ class CaptureSequenceAllocator:
 
         removed = 0
         lock_path = state_directory / _LOCK_FILENAME
-        with self._file_lock.acquire(lock_path):
+        with self._file_lock.acquire(
+            lock_path,
+            timeout_seconds=self.lock_timeout_seconds,
+        ):
             for path in state_directory.glob("*.seq"):
                 try:
                     if path.stat().st_mtime <= cutoff_timestamp:

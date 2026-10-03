@@ -133,6 +133,28 @@ def _install(monkeypatch):
     return resolver, service, turntable
 
 
+def test_capture_services_propagate_configured_sequence_lock_timeout() -> None:
+    timeout = 0.37
+    settings = SimpleNamespace(
+        houdini=SimpleNamespace(lock_timeout_seconds=timeout),
+        screenshot=SimpleNamespace(retention_hours=24),
+    )
+
+    services = (
+        capture_cmd._screenshot_service(settings, object()),
+        capture_cmd._turntable_service(settings, object()),
+        capture_cmd._camera_service(settings, object()),
+    )
+
+    assert [
+        service._publisher._sequences.lock_timeout_seconds for service in services
+    ] == [
+        timeout,
+        timeout,
+        timeout,
+    ]
+
+
 def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     root = runner.invoke(app, ["--help"])
     capture = runner.invoke(app, ["capture", "--help"])

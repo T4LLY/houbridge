@@ -22,6 +22,7 @@ class CaptureArtifactPublisher:
     retention_hours: int
     now_timestamp: Callable[[], float] = field(default=time.time, repr=False)
     now_datetime: Callable[[], datetime] = field(default=datetime.now, repr=False)
+    lock_timeout_seconds: float = 120.0
     _sequences: CaptureSequenceAllocator = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -30,6 +31,7 @@ class CaptureArtifactPublisher:
         self._sequences = CaptureSequenceAllocator(
             self.artifacts.root,
             _CAPTURE_NAMESPACE,
+            lock_timeout_seconds=self.lock_timeout_seconds,
         )
 
     def cleanup_expired(self) -> None:
