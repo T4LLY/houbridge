@@ -263,16 +263,23 @@ class ResourceReader:
         resource, text = self._require_text_payload(resource_id)
         matches = _substring_matches(text, query)
         if resource.content_class == "json":
-            all_hits = self._json_hits(text, matches)
+            hit_count, hits = self._json_hits(
+                text,
+                matches,
+                offset=offset,
+                limit=self.search_limit,
+            )
         else:
             all_hits = [{"offset": start} for start, _end in matches]
+            hit_count = len(all_hits)
+            hits = all_hits[offset : offset + self.search_limit]
 
         end = offset + self.search_limit
         response: dict[str, object] = {
-            "hit_count": len(all_hits),
-            "hits": all_hits[offset:end],
+            "hit_count": hit_count,
+            "hits": hits,
         }
-        if end < len(all_hits):
+        if end < hit_count:
             response["truncated"] = True
         return response
 
@@ -280,33 +287,52 @@ class ResourceReader:
         self,
         text: str,
         matches: list[tuple[int, int]],
-    ) -> list[dict[str, object]]:
-        spans = _JsonSpanParser(text).parse()
+        *,
+        offset: int,
+        limit: int,
+    ) -> tuple[int, list[dict[str, object]]]:
+        spans = sorted(
+            _JsonSpanParser(text).parse(),
+            key=lambda span: (span.start, -span.end),
+        )
         hits: list[dict[str, object]] = []
         token_cache: dict[tuple[int, int], int] = {}
+        active: list[_JsonMatchSpan] = []
+        span_index = 0
+        hit_count = 0
 
         for start, end in matches:
-            containing = [
-                span
-                for span in spans
-                if span.start <= start and end <= span.end
-            ]
-            if not containing:
+            while span_index < len(spans) and spans[span_index].start <= start:
+                candidate = spans[span_index]
+                span_index += 1
+                while active and active[-1].end < candidate.start:
+                    active.pop()
+                active.append(candidate)
+
+            while active and active[-1].end < end:
+                active.pop()
+            if not active:
                 continue
-            span = min(containing, key=lambda item: item.end - item.start)
-            token_span = (span.value_start, span.value_end)
-            if token_span not in token_cache:
-                token_cache[token_span] = self.token_estimator.count(
-                    text[span.value_start : span.value_end]
+            span = active[-1]
+            if span.start > start:
+                continue
+
+            logical_index = hit_count
+            hit_count += 1
+            if offset <= logical_index < offset + limit:
+                token_span = (span.value_start, span.value_end)
+                if token_span not in token_cache:
+                    token_cache[token_span] = self.token_estimator.count(
+                        text[span.value_start : span.value_end]
+                    )
+                hits.append(
+                    {
+                        "path": span.path,
+                        "offset": start,
+                        "tokens": token_cache[token_span],
+                    }
                 )
-            hits.append(
-                {
-                    "path": span.path,
-                    "offset": start,
-                    "tokens": token_cache[token_span],
-                }
-            )
-        return hits
+        return hit_count, hits
 
     def _require_resource(self, resource_id: str) -> Resource:
         self._validate_resource_id(resource_id)

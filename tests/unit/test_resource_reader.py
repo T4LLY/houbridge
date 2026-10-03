@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 
@@ -7,14 +8,20 @@ import pytest
 
 from houbridge.errors import BridgeError
 from houbridge.output.tokens import FallbackTokenEstimator
-from houbridge.resource.reader import ResourceReader
+from houbridge.resource.reader import (
+    ResourceReader,
+    _JsonSpanParser,
+    _substring_matches,
+)
 from houbridge.resource.store import ResourceStore
 from houbridge.semantic_id import SemanticBase
 
 
 class _FixedSemanticGenerator:
     def generate(self, _text: str, *, fallback_stem: str) -> SemanticBase:
-        return SemanticBase(prefix="resource-test-payload", tags=("resource", "test", "payload"))
+        return SemanticBase(
+            prefix="resource-test-payload", tags=("resource", "test", "payload")
+        )
 
 
 def _store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ResourceStore:
@@ -184,7 +191,7 @@ def test_search_json_reports_narrowest_value_path_and_key_value_path(
     assert hits[0]["path"] == "$.nodes[0].name"
     assert hits[0]["offset"] == text.index("Alpha")
     assert hits[0]["tokens"] == FallbackTokenEstimator().count('"Alpha"')
-    assert hits[1]["path"] == '$.nodes[0].meta.AlphaKey'
+    assert hits[1]["path"] == "$.nodes[0].meta.AlphaKey"
     assert hits[1]["offset"] == text.index("AlphaKey")
     assert hits[1]["tokens"] == FallbackTokenEstimator().count('"value"')
 
@@ -273,7 +280,9 @@ def test_slice_at_end_omits_continuation_fields(
     resource = store.put_text("hello")
     reader = _reader(store)
 
-    assert reader.slice(resource.semantic_alias, offset=2, limit=10) == {"result": "llo"}
+    assert reader.slice(resource.semantic_alias, offset=2, limit=10) == {
+        "result": "llo"
+    }
 
 
 def test_search_limit_never_exposes_more_than_fixed_hundred_hits(
@@ -289,3 +298,134 @@ def test_search_limit_never_exposes_more_than_fixed_hundred_hits(
     assert result["hit_count"] == 150
     assert len(result["hits"]) == 100
     assert result["truncated"] is True
+
+
+def _old_json_search_hits(
+    text: str,
+    query: str,
+    *,
+    offset: int,
+    limit: int,
+) -> tuple[int, list[dict[str, object]]]:
+    spans = _JsonSpanParser(text).parse()
+    hits: list[dict[str, object]] = []
+    logical_count = 0
+    for start, end in _substring_matches(text, query):
+        containing = [span for span in spans if span.start <= start and end <= span.end]
+        if not containing:
+            continue
+        span = min(containing, key=lambda item: item.end - item.start)
+        if offset <= logical_count < offset + limit:
+            hits.append(
+                {
+                    "path": span.path,
+                    "offset": start,
+                    "tokens": FallbackTokenEstimator().count(
+                        text[span.value_start : span.value_end]
+                    ),
+                }
+            )
+        logical_count += 1
+    return logical_count, hits
+
+
+@pytest.mark.parametrize(
+    ("text", "queries"),
+    [
+        (
+            '  {"a":"needle","b": ["nee","dle", {"needle":"needle"}]}  ',
+            ("needle", "nee", '"needle"', "  "),
+        ),
+        ('{"outer":{"same":"same"},"same":"same"}', ("same", '"same":"same"', "outer")),
+        ('["a","a","a",{"a":["a","a"]}]', ("a", '"a","a"', "missing")),
+        (
+            '{"x":"left\\"needle-right","needleKey":"v"}',
+            ("needle", "needleKey", '"needleKey"'),
+        ),
+    ],
+)
+def test_json_search_ordered_sweep_matches_old_containment_oracle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    text: str,
+    queries: tuple[str, ...],
+) -> None:
+    store = _store(tmp_path, monkeypatch)
+    resource = store.put_bytes(text.encode("utf-8"))
+    reader = _reader(store, search_limit=2)
+
+    for query in queries:
+        for offset in (0, 1, 3, 20):
+            expected_count, expected_hits = _old_json_search_hits(
+                text,
+                query,
+                offset=offset,
+                limit=2,
+            )
+            result = reader.search(resource.semantic_alias, query, offset=offset)
+            assert result["hit_count"] == expected_count
+            assert result["hits"] == expected_hits
+            assert result.get("truncated", False) == (offset + 2 < expected_count)
+
+
+def test_json_search_sweeps_spans_once_and_enriches_only_requested_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import houbridge.resource.reader as reader_module
+
+    text = "[" + ",".join('"needle"' for _ in range(400)) + "]"
+    needle_offsets = [match.start() for match in re.finditer("needle", text)]
+    store = _store(tmp_path, monkeypatch)
+    resource = store.put_bytes(text.encode("utf-8"))
+    visits = 0
+    parsed_spans = 0
+    original_parse = reader_module._JsonSpanParser.parse
+
+    class _CountingSpans(list):
+        def __iter__(self):
+            nonlocal visits
+            for span in super().__iter__():
+                visits += 1
+                yield span
+
+    def counted_parse(parser):
+        nonlocal parsed_spans
+        spans = original_parse(parser)
+        parsed_spans = len(spans)
+        return _CountingSpans(spans)
+
+    class _CountingEstimator:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def count(self, text: str) -> int:
+            self.calls += 1
+            return FallbackTokenEstimator().count(text)
+
+    monkeypatch.setattr(reader_module._JsonSpanParser, "parse", counted_parse)
+    estimator = _CountingEstimator()
+    reader = ResourceReader(
+        store, inline_limit_bytes=16384, search_limit=2, token_estimator=estimator
+    )
+
+    result = reader.search(resource.semantic_alias, "needle", offset=398)
+
+    assert result == {
+        "hit_count": 400,
+        "hits": [
+            {
+                "path": "$[398]",
+                "offset": needle_offsets[398],
+                "tokens": FallbackTokenEstimator().count('"needle"'),
+            },
+            {
+                "path": "$[399]",
+                "offset": text.rindex("needle"),
+                "tokens": FallbackTokenEstimator().count('"needle"'),
+            },
+        ],
+    }
+    assert visits <= parsed_spans
+    assert estimator.calls == 2
+    assert result.get("truncated", False) is False
