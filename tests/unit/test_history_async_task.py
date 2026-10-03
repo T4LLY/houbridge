@@ -370,3 +370,144 @@ def test_history_finalization_failure_after_started_success_does_not_change_task
     assert terminal.status == "completed"
     assert terminal.runtime_failure_code is None
     assert dispatcher.calls == 0
+
+
+def test_stream_flush_failure_closes_houdini_history_recorder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from houbridge.history.locking import history_database_lock_path
+    from houbridge.houdini.scripts.history import execution as history_runtime
+    from houbridge.houdini.scripts.task import runtime as task_runtime
+    from test_history_sync_execution import FakeNode, _install_fake_hou
+
+    monkeypatch.delitem(
+        sys.modules, "_houbridge_history_scene_lifecycle_v1", raising=False
+    )
+    root = FakeNode()
+    _install_fake_hou(monkeypatch, root=root)
+    store = _store(tmp_path)
+    task = store.submit(_submission(source="result = 1\n"))
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path / "temp").allocate(
+        prefix="task"
+    )
+    history_request = workspace.path_for("history-request.json")
+    database = tmp_path / "history.db"
+    history_request.write_text(
+        json.dumps(
+            {
+                "database_path": str(database),
+                "database_lock_path": str(history_database_lock_path(database)),
+                "capture_file": str(workspace.path_for("history-capture.json")),
+            }
+        ),
+        encoding="utf-8",
+    )
+    preparation = SimpleNamespace(
+        runtime_script=Path(history_runtime.__file__), request_path=history_request
+    )
+    request_path = stage_task_request(workspace, task, history=preparation)
+    monkeypatch.setattr(
+        task_runtime,
+        "_flush_file",
+        lambda _stream: (_ for _ in ()).throw(OSError("stream flush failed")),
+    )
+
+    with pytest.raises(OSError, match="stream flush failed"):
+        run_task_script(str(request_path))
+
+    assert root._callbacks == []
+    assert workspace.path_for("started.json").exists()
+    assert not workspace.path_for("completion.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("failure_point", "caller_runs"),
+    [
+        ("stdout_open", False),
+        ("started_marker", False),
+        ("completion_marker", True),
+    ],
+)
+def test_async_artifact_failures_close_history_recorder(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_point: str,
+    caller_runs: bool,
+) -> None:
+    from houbridge.history.locking import history_database_lock_path
+    from houbridge.houdini.scripts.history import execution as history_runtime
+    from houbridge.houdini.scripts.task import runtime as task_runtime
+    from test_history_sync_execution import FakeNode, _install_fake_hou
+
+    monkeypatch.delitem(
+        sys.modules, "_houbridge_history_scene_lifecycle_v1", raising=False
+    )
+    root = FakeNode()
+    _install_fake_hou(monkeypatch, root=root)
+    store = _store(tmp_path)
+    caller_marker = tmp_path / "caller-ran.txt"
+    task = store.submit(
+        _submission(
+            source=(
+                "from pathlib import Path\n"
+                f"Path({str(caller_marker)!r}).write_text('ran')\n"
+            )
+        )
+    )
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path / "temp").allocate(
+        prefix="task"
+    )
+    history_request = workspace.path_for("history-request.json")
+    database = tmp_path / "history.db"
+    history_request.write_text(
+        json.dumps(
+            {
+                "database_path": str(database),
+                "database_lock_path": str(history_database_lock_path(database)),
+                "capture_file": str(workspace.path_for("history-capture.json")),
+            }
+        ),
+        encoding="utf-8",
+    )
+    preparation = SimpleNamespace(
+        runtime_script=Path(history_runtime.__file__), request_path=history_request
+    )
+    request_path = stage_task_request(workspace, task, history=preparation)
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    failure = OSError(f"injected {failure_point}")
+
+    if failure_point == "stdout_open":
+        original_open = Path.open
+        stdout_path = Path(request["stdout_file"])
+
+        def fail_stdout_open(path, *args, **kwargs):
+            if path == stdout_path:
+                raise failure
+            return original_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", fail_stdout_open)
+    else:
+        marker_key = (
+            "started_marker"
+            if failure_point == "started_marker"
+            else "completion_marker"
+        )
+        marker_path = Path(request[marker_key])
+        atomic_write = task_runtime._atomic_write_json
+
+        def fail_marker(path, payload):
+            if path == marker_path:
+                raise failure
+            atomic_write(path, payload)
+
+        monkeypatch.setattr(task_runtime, "_atomic_write_json", fail_marker)
+
+    with pytest.raises(OSError, match=f"injected {failure_point}"):
+        run_task_script(str(request_path))
+
+    assert root._callbacks == []
+    assert caller_marker.exists() is caller_runs
+    assert workspace.path_for("started.json").exists() is (
+        failure_point != "started_marker" and failure_point != "stdout_open"
+    )
+    assert not workspace.path_for("completion.json").exists()

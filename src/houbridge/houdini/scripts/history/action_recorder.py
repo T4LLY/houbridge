@@ -35,8 +35,12 @@ class ActionRecorder:
         root = hou.node("/")
         if root is None:
             raise RuntimeError("Houdini root node is unavailable.")
-        for node in (root, *root.allSubChildren()):
-            self._attach_existing(node)
+        try:
+            for node in (root, *root.allSubChildren()):
+                self._attach_existing(node)
+        except BaseException:
+            self.close()
+            raise
 
     def finalize(self) -> list[dict[str, object]] | None:
         """Return net changes, or None when scene replacement invalidated the action."""
@@ -102,8 +106,8 @@ class ActionRecorder:
 
     def _attach(self, node) -> None:
         session_id = int(node.sessionId())
-        node.addEventCallback(self._events, self._callback)
         self._attached[session_id] = node
+        node.addEventCallback(self._events, self._callback)
 
     def _on_event(self, node, event_type, **kwargs) -> None:
         event = self._hou.nodeEventType

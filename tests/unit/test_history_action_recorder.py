@@ -520,6 +520,43 @@ def test_scene_replacement_discards_pending_baseline_and_changes(fake_hou) -> No
     assert node.callbacks == []
 
 
+def test_constructor_rolls_back_callbacks_when_later_baseline_snapshot_fails(
+    fake_hou,
+) -> None:
+    hou, root, _obj = fake_hou
+
+    class BrokenNode(FakeNode):
+        def parms(self):
+            raise RuntimeError("node disappeared while establishing baseline")
+
+    broken = BrokenNode(hou, 3, "/obj/broken")
+    root.allSubChildren = lambda: (broken,)
+
+    with pytest.raises(RuntimeError, match="node disappeared"):
+        _recorder_class()()
+
+    assert root.callbacks == []
+    assert broken.callbacks == []
+
+
+def test_constructor_removes_callback_when_attachment_raises_after_registration(
+    fake_hou,
+) -> None:
+    _hou, root, _obj = fake_hou
+    attach = root.addEventCallback
+
+    def attach_then_fail(events, callback):
+        attach(events, callback)
+        raise RuntimeError("callback attachment failed")
+
+    root.addEventCallback = attach_then_fail
+
+    with pytest.raises(RuntimeError, match="callback attachment failed"):
+        _recorder_class()()
+
+    assert root.callbacks == []
+
+
 def test_ancestor_rename_does_not_emit_child_rename_when_child_later_changes(fake_hou) -> None:
     hou, _root, obj = fake_hou
     parent = FakeNode(hou, 10, "/obj/geo1", "geo", parent=obj)

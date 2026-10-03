@@ -59,16 +59,20 @@ def run(request_path_value: str) -> None:
     caller_finished = False
 
     try:
-        with stdout_path.open("w", encoding="utf-8", newline="") as stdout_file, stderr_path.open(
-            "w", encoding="utf-8", newline=""
-        ) as stderr_file:
+        with (
+            stdout_path.open("w", encoding="utf-8", newline="") as stdout_file,
+            stderr_path.open("w", encoding="utf-8", newline="") as stderr_file,
+        ):
             previous_argv = sys.argv
             try:
                 sys.argv = source_argv
                 # Caller Python can only begin after this marker has been fully
                 # flushed and atomically published.
                 _atomic_write_json(started_path, {"version": 1, "task_id": task_id})
-                with contextlib.redirect_stdout(stdout_file), contextlib.redirect_stderr(stderr_file):
+                with (
+                    contextlib.redirect_stdout(stdout_file),
+                    contextlib.redirect_stderr(stderr_file),
+                ):
                     try:
                         exec(compile(source, source_path, "exec"), namespace, namespace)
                     except BaseException:
@@ -108,6 +112,13 @@ def run(request_path_value: str) -> None:
         if caller_finished:
             _publish_wrapper_failure_best_effort(wrapper_failed_path, task_id, exc)
         raise
+    finally:
+        if history_runtime is not None and history_context is not None:
+            try:
+                history_runtime["close"](history_context)
+            except Exception:
+                # Recorder cleanup must not mask wrapper errors or caller outcome.
+                pass
 
 
 def _publish_wrapper_failure_best_effort(path: Path, task_id: str, exc: BaseException) -> None:

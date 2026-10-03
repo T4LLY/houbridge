@@ -397,12 +397,15 @@ def test_history_finalization_failure_does_not_replay_or_redefine_success(
     assert transport.calls == 1
     assert history.finalize_calls == 1
 
+
 def test_sync_status_is_published_before_in_houdini_history_finalize(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install_fake_hou(monkeypatch, root=FakeNode())
-    workspace = TemporaryWorkspaceService(temp_root=tmp_path / "temp").allocate(prefix="exec")
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path / "temp").allocate(
+        prefix="exec"
+    )
     status_path = workspace.path_for("execution.json")
     marker_path = workspace.path_for("history-finalize-observed.txt")
     history_request = workspace.path_for("history-request.json")
@@ -420,11 +423,15 @@ def test_sync_status_is_published_before_in_houdini_history_finalize(
         "    status = Path(context['status_file'])\n"
         "    if not status.is_file():\n"
         "        raise RuntimeError('execution status was not published before History finalize')\n"
-        "    Path(context['marker_file']).write_text(status.read_text(encoding='utf-8'), encoding='utf-8')\n",
+        "    Path(context['marker_file']).write_text(status.read_text(encoding='utf-8'), encoding='utf-8')\n"
+        "def close(context):\n"
+        "    raise RuntimeError('injected recorder close failure')\n",
         encoding="utf-8",
     )
     invocation = _invocation(tmp_path, "result = 7\n")
-    preparation = SimpleNamespace(runtime_script=history_runtime, request_path=history_request)
+    preparation = SimpleNamespace(
+        runtime_script=history_runtime, request_path=history_request
+    )
     request = stage_invocation(workspace, invocation, history=preparation)
 
     run_execution_script(str(request))
@@ -437,6 +444,129 @@ def test_sync_status_is_published_before_in_houdini_history_finalize(
         "python_ok": True,
         "result_kind": "json",
     }
+
+
+def test_sync_result_publication_failure_closes_history_recorder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delitem(sys.modules, LIFECYCLE_STATE, raising=False)
+    root = FakeNode()
+    _install_fake_hou(monkeypatch, root=root)
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path / "temp").allocate(
+        prefix="exec"
+    )
+    from houbridge.houdini.scripts.history import execution as history_runtime
+
+    database = tmp_path / "history.db"
+    history_request = workspace.path_for("history-request.json")
+    history_request.write_text(
+        json.dumps(
+            {
+                "database_path": str(database),
+                "database_lock_path": str(history_database_lock_path(database)),
+                "capture_file": str(workspace.path_for("history-capture.json")),
+            }
+        ),
+        encoding="utf-8",
+    )
+    invocation = ExecutionInvocation(
+        source="result = '\\ud800'\n",
+        source_path=str(tmp_path / "tool.py"),
+        argv=(str(tmp_path / "tool.py"),),
+        purpose=None,
+        origin_cwd=str(tmp_path),
+    )
+    preparation = SimpleNamespace(
+        runtime_script=Path(history_runtime.__file__), request_path=history_request
+    )
+    request = stage_invocation(workspace, invocation, history=preparation)
+
+    with pytest.raises(UnicodeEncodeError):
+        run_execution_script(str(request))
+
+    assert root._callbacks == []
+    assert not workspace.path_for("execution.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("failure_point", "caller_runs"),
+    [("stdout_open", False), ("stderr_open", False), ("status_write", True)],
+)
+def test_sync_artifact_failures_close_history_recorder(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_point: str,
+    caller_runs: bool,
+) -> None:
+    monkeypatch.delitem(sys.modules, LIFECYCLE_STATE, raising=False)
+    root = FakeNode()
+    _install_fake_hou(monkeypatch, root=root)
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path / "temp").allocate(
+        prefix="exec"
+    )
+    from houbridge.houdini.scripts.history import execution as history_runtime
+    from houbridge.houdini.scripts.execution import runtime as execution_runtime
+
+    database = tmp_path / "history.db"
+    history_request = workspace.path_for("history-request.json")
+    history_request.write_text(
+        json.dumps(
+            {
+                "database_path": str(database),
+                "database_lock_path": str(history_database_lock_path(database)),
+                "capture_file": str(workspace.path_for("history-capture.json")),
+            }
+        ),
+        encoding="utf-8",
+    )
+    caller_marker = tmp_path / "caller-ran.txt"
+    invocation = ExecutionInvocation(
+        source=(
+            "from pathlib import Path\n"
+            f"Path({str(caller_marker)!r}).write_text('ran')\n"
+            "result = 1\n"
+        ),
+        source_path=str(tmp_path / "tool.py"),
+        argv=(str(tmp_path / "tool.py"),),
+        purpose=None,
+        origin_cwd=str(tmp_path),
+    )
+    preparation = SimpleNamespace(
+        runtime_script=Path(history_runtime.__file__), request_path=history_request
+    )
+    request = stage_invocation(workspace, invocation, history=preparation)
+    request_payload = json.loads(request.read_text(encoding="utf-8"))
+    artifact = {
+        "stdout_open": Path(request_payload["stdout_file"]),
+        "stderr_open": Path(request_payload["stderr_file"]),
+        "status_write": Path(request_payload["status_file"]),
+    }[failure_point]
+    failure = OSError(f"injected {failure_point}")
+
+    if failure_point == "status_write":
+        atomic_write = execution_runtime._atomic_write_json
+
+        def fail_status(path, payload):
+            if path == artifact:
+                raise failure
+            atomic_write(path, payload)
+
+        monkeypatch.setattr(execution_runtime, "_atomic_write_json", fail_status)
+    else:
+        original_open = Path.open
+
+        def fail_stream_open(path, *args, **kwargs):
+            if path == artifact:
+                raise failure
+            return original_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", fail_stream_open)
+
+    with pytest.raises(OSError, match=f"injected {failure_point}"):
+        run_execution_script(str(request))
+
+    assert root._callbacks == []
+    assert caller_marker.exists() is caller_runs
 
 
 def test_history_disabled_runs_without_history_storage_or_embedding(

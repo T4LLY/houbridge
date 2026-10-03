@@ -45,59 +45,79 @@ def run(request_path_value: str) -> None:
         history_runtime = runpy.run_path(runtime_script)
         history_context = history_runtime["prepare"](request_file)
 
-    status: dict[str, object] = {"python_ok": False, "result_kind": None}
-    namespace = {
-        "__name__": "__main__",
-        # Preserve the useful native-Houdini execution convenience from the
-        # previous runtime without importing any History behavior.
-        "hou": hou,
-    }
-    compile_filename = "<houbridge --code>"
-    if source_path is not None:
-        namespace["__file__"] = source_path
-        compile_filename = source_path
+    try:
+        status: dict[str, object] = {"python_ok": False, "result_kind": None}
+        namespace = {
+            "__name__": "__main__",
+            # Preserve the useful native-Houdini execution convenience from the
+            # previous runtime without importing any History behavior.
+            "hou": hou,
+        }
+        compile_filename = "<houbridge --code>"
+        if source_path is not None:
+            namespace["__file__"] = source_path
+            compile_filename = source_path
 
-    with stdout_path.open("w", encoding="utf-8", newline="") as stdout_file, stderr_path.open(
-        "w", encoding="utf-8", newline=""
-    ) as stderr_file:
-        previous_argv = sys.argv
-        previous_sys_path = list(sys.path)
-        try:
-            sys.argv = list(source_argv)
-            if source_import_root is not None:
-                if not isinstance(source_import_root, str) or not source_import_root:
-                    raise RuntimeError("Execution source import root is invalid.")
-                sys.path.insert(0, source_import_root)
-            with contextlib.redirect_stdout(stdout_file), contextlib.redirect_stderr(stderr_file):
-                exec(compile(source, compile_filename, "exec"), namespace, namespace)
-        except BaseException:
-            with traceback_path.open("w", encoding="utf-8", newline="") as traceback_file:
-                traceback.print_exc(file=traceback_file)
-        else:
-            status["python_ok"] = True
-            if "result" in namespace:
-                result_kind = _write_declared_result(
-                    namespace["result"],
-                    result_json_path=result_json_path,
-                    result_text_path=result_text_path,
-                )
-                status["result_kind"] = result_kind
-        finally:
-            sys.argv = previous_argv
-            sys.path[:] = previous_sys_path
+        with (
+            stdout_path.open("w", encoding="utf-8", newline="") as stdout_file,
+            stderr_path.open("w", encoding="utf-8", newline="") as stderr_file,
+        ):
+            previous_argv = sys.argv
+            previous_sys_path = list(sys.path)
+            try:
+                sys.argv = list(source_argv)
+                if source_import_root is not None:
+                    if (
+                        not isinstance(source_import_root, str)
+                        or not source_import_root
+                    ):
+                        raise RuntimeError("Execution source import root is invalid.")
+                    sys.path.insert(0, source_import_root)
+                with (
+                    contextlib.redirect_stdout(stdout_file),
+                    contextlib.redirect_stderr(stderr_file),
+                ):
+                    exec(
+                        compile(source, compile_filename, "exec"), namespace, namespace
+                    )
+            except BaseException:
+                with traceback_path.open(
+                    "w", encoding="utf-8", newline=""
+                ) as traceback_file:
+                    traceback.print_exc(file=traceback_file)
+            else:
+                status["python_ok"] = True
+                if "result" in namespace:
+                    result_kind = _write_declared_result(
+                        namespace["result"],
+                        result_json_path=result_json_path,
+                        result_text_path=result_text_path,
+                    )
+                    status["result_kind"] = result_kind
+            finally:
+                sys.argv = previous_argv
+                sys.path[:] = previous_sys_path
 
-    # Publish the caller Python outcome before best-effort History finalization.
-    # The host can then distinguish a terminal caller outcome from a transport
-    # timeout caused only by post-Python History bookkeeping.
-    _atomic_write_json(status_path, status)
+        # Publish the caller Python outcome before best-effort History finalization.
+        # The host can then distinguish a terminal caller outcome from a transport
+        # timeout caused only by post-Python History bookkeeping.
+        _atomic_write_json(status_path, status)
 
-    if history_runtime is not None and history_context is not None:
-        try:
-            history_runtime["finalize"](history_context)
-        except Exception:
-            # Caller Python has already reached a terminal outcome. History is
-            # best-effort after start and must not redefine that outcome.
-            pass
+        if history_runtime is not None and history_context is not None:
+            try:
+                history_runtime["finalize"](history_context)
+            except Exception:
+                # Caller Python has already reached a terminal outcome. History is
+                # best-effort after start and must not redefine that outcome.
+                pass
+    finally:
+        if history_runtime is not None and history_context is not None:
+            try:
+                history_runtime["close"](history_context)
+            except Exception:
+                # Recorder cleanup is post-start best-effort and must not mask
+                # an artifact failure or redefine the caller outcome.
+                pass
 
 
 def _write_declared_result(

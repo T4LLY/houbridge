@@ -59,6 +59,12 @@ def finalize(context: HistoryCaptureContext) -> None:
     _atomic_write_json(context.capture_path, payload)
 
 
+def close(context: HistoryCaptureContext) -> None:
+    """Release this invocation's recorder callbacks without finalizing capture."""
+
+    context.recorder.close()
+
+
 def _required_string(payload: object, key: str) -> str:
     if not isinstance(payload, dict):
         raise RuntimeError("History execution request must be a JSON object.")
