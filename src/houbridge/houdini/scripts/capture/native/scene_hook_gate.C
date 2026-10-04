@@ -8,6 +8,7 @@
 
 #include "depth_grid.h"
 #include "normal.h"
+#include "object_id.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -96,7 +97,9 @@ void run_analysis_if_armed(
         return;
     const bool grid_mode = std::strcmp(capture_pass, "grid") == 0;
     const bool normal_mode = std::strcmp(capture_pass, "normal") == 0;
-    if (!grid_mode && !normal_mode && std::strcmp(capture_pass, "depth") != 0)
+    const bool object_id_mode = std::strcmp(capture_pass, "object-id") == 0;
+    if (!grid_mode && !normal_mode && !object_id_mode &&
+        std::strcmp(capture_pass, "depth") != 0)
         return;
     double grid_unit = 0.0;
     if (grid_mode)
@@ -115,10 +118,15 @@ void run_analysis_if_armed(
         return;
     const char *models = std::getenv(kAnalysisModelsEnv);
     const UT_Array<OP_Node *> *node_filter = models && *models ? &nodes : nullptr;
-    const bool rendered = normal_mode
-        ? houbridge_normal_preview::render(
-            viewport, context, data, rv, node_filter, output)
-        : houbridge_depth_grid::render(
+    bool rendered = false;
+    if (normal_mode)
+        rendered = houbridge_normal_preview::render(
+            viewport, context, data, rv, node_filter, output);
+    else if (object_id_mode)
+        rendered = houbridge_object_id_preview::render(
+            viewport, context, data, rv, node_filter, output);
+    else
+        rendered = houbridge_depth_grid::render(
             viewport, context, data, rv, node_filter, grid_mode, grid_unit, output);
     if (rendered)
         g_last_analysis_request = request;

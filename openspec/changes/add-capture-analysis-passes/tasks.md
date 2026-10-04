@@ -32,8 +32,8 @@
 
 ## 6. Object ID
 
-- [ ] 6.1 Add flat per-object Object ID rendering for viewport and camera on the shared displayed-geometry layer.
-- [ ] 6.2 Verify excluded/non-selected objects do not contribute to the analysis image.
+- [x] 6.1 Add flat per-object Object ID rendering for viewport and camera on the shared displayed-geometry layer.
+- [x] 6.2 Verify excluded/non-selected objects do not contribute to the analysis image.
 
 ## 7. Curvature
 

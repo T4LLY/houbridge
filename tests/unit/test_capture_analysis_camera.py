@@ -39,7 +39,7 @@ class _Prim:
         return SimpleNamespace(resolution=lambda: (1280, 720))
 
 
-def _run_camera(monkeypatch, *, resolved, camera_path: str):
+def _run_camera(monkeypatch, *, resolved, camera_path: str, capture_pass: str = "depth"):
     viewport = _Viewport()
     scene = _Scene(viewport)
     source_scene = object()
@@ -81,7 +81,7 @@ def _run_camera(monkeypatch, *, resolved, camera_path: str):
 
     hou = SimpleNamespace(geometryViewportLayout=SimpleNamespace(Single="single"))
     request = {
-        "analysis": {"pass": "depth", "model_paths": ["/obj/a"], "unit": None},
+        "analysis": {"pass": capture_pass, "model_paths": ["/obj/a"], "unit": None},
         "dso_path": "D:/cache/capture.dll",
         "generation": "abc123",
         "camera_path": camera_path,
@@ -145,3 +145,26 @@ def test_analysis_camera_preserves_sop_camera_selector(monkeypatch) -> None:
     assert resolution_calls == []
     assert calls[0][1]["resolution"] == (640, 360)
     assert calls[0][1]["crop_camera"] is True
+
+
+def test_analysis_camera_accepts_object_id_without_changing_composition(monkeypatch) -> None:
+    node = _Node()
+    resolved = {
+        "type": "obj",
+        "node": node,
+        "prim": None,
+        "viewport_selector": None,
+    }
+
+    result, viewport, _scene, calls, _closed, _processed, _resolution_calls = _run_camera(
+        monkeypatch,
+        resolved=resolved,
+        camera_path="/obj/cam1",
+        capture_pass="object-id",
+    )
+
+    assert result == {"ok": True}
+    assert viewport.camera_calls == [(node,)]
+    assert viewport.frame_all_calls == 0
+    assert calls[0][1]["capture_pass"] == "object-id"
+    assert calls[0][1]["model_paths"] == ("/obj/a",)

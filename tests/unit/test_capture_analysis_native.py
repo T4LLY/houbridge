@@ -128,7 +128,7 @@ def test_native_backend_rejects_unimplemented_viewport_pass_before_build(tmp_pat
     builder = _Builder(artifact)
     backend = NativeAnalysisCaptureBackend(_Transport(), builder)
     workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
-    request = build_analysis_request("object-id")
+    request = build_analysis_request("curvature")
     assert request is not None
 
     with pytest.raises(BridgeError) as caught:
@@ -202,7 +202,7 @@ def test_native_backend_rejects_unimplemented_camera_pass_before_build(tmp_path:
     builder = _Builder(artifact)
     backend = NativeAnalysisCaptureBackend(_Transport(), builder)
     workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
-    request = build_analysis_request("object-id")
+    request = build_analysis_request("curvature")
     assert request is not None
 
     with pytest.raises(BridgeError) as caught:
@@ -269,3 +269,70 @@ def test_native_backend_forwards_normal_for_viewport_and_camera(tmp_path: Path) 
     assert [item["analysis"]["pass"] for item in transport.requests] == ["normal", "normal"]
     assert all(item["analysis"]["model_paths"] == ["/obj/a"] for item in transport.requests)
     assert len(builder.calls) == 2
+
+
+def test_native_backend_forwards_object_id_for_viewport_and_camera(tmp_path: Path) -> None:
+    artifact = NativeCaptureArtifact(
+        path=tmp_path / "capture.dll",
+        generation="objectid123",
+        houdini_build="22.0.429",
+    )
+    artifact.path.write_bytes(b"dll")
+    builder = _Builder(artifact)
+    transport = _Transport()
+    backend = NativeAnalysisCaptureBackend(transport, builder)
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
+    request = build_analysis_request(
+        "object-id",
+        model_paths=("/obj/target_a", "/obj/target_b"),
+    )
+    assert request is not None
+
+    backend.render_viewport(
+        _session(),
+        request,
+        ViewportAnalysisSource(
+            png_paths=(workspace.path_for("viewport-object-id.png"),),
+            requested_views=(),
+            scale=1.0,
+            max_width=2048,
+            max_height=2048,
+            preset=ScreenshotPreset(),
+            pane=None,
+        ),
+        workspace,
+    )
+    backend.render_camera(
+        _session(),
+        request,
+        CameraAnalysisSource(
+            png_path=workspace.path_for("camera-object-id.png"),
+            camera_path="/obj/cam1",
+            scale=1.0,
+            max_width=2048,
+            max_height=2048,
+            pane=None,
+        ),
+        workspace,
+    )
+
+    assert [item["analysis"]["pass"] for item in transport.requests] == [
+        "object-id",
+        "object-id",
+    ]
+    assert all(
+        item["analysis"]["model_paths"] == ["/obj/target_a", "/obj/target_b"]
+        for item in transport.requests
+    )
+    assert len(builder.calls) == 2
+
+
+def test_object_id_renderer_reuses_shared_displayed_geometry_filter() -> None:
+    from houbridge.houdini.scripts.capture import native
+
+    source = (Path(native.__file__).parent / "object_id.h").read_text(encoding="utf-8")
+
+    assert "houbridge_displayed_geometry::for_each_polygon_mesh(" in source
+    assert "viewport, targets," in source
+    assert "viewport.getNumOpaqueObjects" not in source
+    assert "rv->setBlendEnable(false);" in source
