@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import houbridge.houdini.transport as transport_module
 from houbridge.config import HoudiniConfig
 from houbridge.errors import BridgeError
 from houbridge.houdini.transport import HoudiniTarget, HoudiniTransport
@@ -32,6 +33,7 @@ def test_transport_invokes_hcommand_with_port_and_python_file(
         return subprocess.CompletedProcess(args=args, returncode=0, stdout="ok", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(transport_module, "hidden_window_creationflags", lambda: 0x08000000)
     transport = HoudiniTransport("hcommand-test", timeout_seconds=7)
 
     result = transport.execute_script(HoudiniTarget("127.0.0.1", 1714), script)
@@ -42,6 +44,7 @@ def test_transport_invokes_hcommand_with_port_and_python_file(
         f'python "{script.resolve().as_posix()}"',
     ]
     assert captured["kwargs"]["timeout"] == 7  # type: ignore[index]
+    assert captured["kwargs"]["creationflags"] == 0x08000000  # type: ignore[index]
     assert result.stdout == "ok"
 
 
@@ -215,6 +218,7 @@ def test_transport_can_start_async_script_without_sync_timeout(
         return FakeProcess()
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(transport_module, "hidden_window_creationflags", lambda: 0x08000000)
     process = HoudiniTransport("hcommand-test", timeout_seconds=0.01).start_script(
         HoudiniTarget("localhost", 1714),
         script,
@@ -227,3 +231,4 @@ def test_transport_can_start_async_script_without_sync_timeout(
         f'python "{script.resolve().as_posix()}"',
     ]
     assert "timeout" not in captured["kwargs"]  # type: ignore[operator]
+    assert captured["kwargs"]["creationflags"] == 0x08000000  # type: ignore[index]

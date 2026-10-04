@@ -13,6 +13,7 @@ from houbridge.houdini.installations import (
     resolve_transport_hcommand,
     subprocess_environment_for,
 )
+from houbridge.subprocesses import hidden_window_creationflags
 
 
 @dataclass(frozen=True)
@@ -114,6 +115,7 @@ class HoudiniTransport:
                     self.executable,
                     environ=self._environ,
                 ),
+                creationflags=hidden_window_creationflags(),
             )
         except FileNotFoundError as exc:
             raise BridgeError(
@@ -177,6 +179,7 @@ class HoudiniTransport:
                     self.executable,
                     environ=self._environ,
                 ),
+                creationflags=hidden_window_creationflags(),
             )
         except FileNotFoundError as exc:
             raise BridgeError(

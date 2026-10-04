@@ -4,8 +4,8 @@
 
 - [ ] 1.1 Verify the existing cloned Scene Viewer plus `scene.flipbook(...)` triggers the required DM_SceneHook without creating a Flipbook ROP or any other scene node.
 - [ ] 1.2 Stop and revise OpenSpec before further implementation if node-free hook triggering is not possible.
-- [ ] 1.3 Add the responsibility-separated native source layout and persistent/rebuildable DSO cache keyed by Houdini build and native-source hash.
-- [ ] 1.4 Compile/load the native capture component without visible Windows console windows while retaining bounded stdout/stderr diagnostics and structured failures.
+- [x] 1.3 Add the responsibility-separated native source layout and persistent/rebuildable DSO cache keyed by Houdini build and native-source hash.
+- [x] 1.4 Compile/load the native capture component without visible Windows console windows while retaining bounded stdout/stderr diagnostics and structured failures.
 
 ## 2. Shared analysis request boundary
 

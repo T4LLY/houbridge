@@ -41,6 +41,10 @@ class GlobalDataPaths:
     def history_directory(self) -> Path:
         return self.data_dir / "history"
 
+    @property
+    def capture_native_directory(self) -> Path:
+        return self.data_dir / "capture-native"
+
     def history_session(self, session_key: str) -> HistorySessionPaths:
         # Session owns process-incarnation identity and its key representation.
         # Path ownership only places that opaque key below the global History root.

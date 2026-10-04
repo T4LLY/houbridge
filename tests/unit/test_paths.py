@@ -26,6 +26,7 @@ def test_global_operational_paths_are_independent_of_workspace_cwd(
     assert first.tasks_database == data_dir / "tasks.db"
     assert first.resources_database == data_dir / "resources.db"
     assert first.history_directory == data_dir / "history"
+    assert first.capture_native_directory == data_dir / "capture-native"
 
 
 def test_workspace_search_paths_are_separate_for_different_working_directories(
