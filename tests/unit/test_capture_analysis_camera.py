@@ -47,6 +47,7 @@ def _run_camera(
     capture_pass: str = "depth",
     curvature_scale: float = 1.0,
     curvature_colormap: str = "rg",
+    scale: float = 0.5,
 ):
     viewport = _Viewport()
     scene = _Scene(viewport)
@@ -77,6 +78,14 @@ def _run_camera(
         "install_dso": lambda path: None,
         "resolve_models": lambda paths, _hou, _error: tuple(paths),
         "flipbook_analysis": lambda *args, **kwargs: flipbook_calls.append((args, kwargs)),
+        "camera_flipbook_resolution_plan": lambda resolution: (
+            (tuple(value * 2 for value in resolution), 0.5)
+            if min(resolution) < 2
+            else (tuple(resolution), 1.0)
+        ),
+        "resize_png_to_resolution": lambda path, resolution: flipbook_calls.append(
+            ("resize", (path, resolution))
+        ),
     }
     camera_runtime = {
         "resolve_camera": lambda path, _hou, _runtime: resolved if path == camera_path else None,
@@ -101,7 +110,7 @@ def _run_camera(
         "camera_path": camera_path,
         "png_path": "D:/Temp/camera.png",
         "trigger_path": "D:/Temp/trigger.png",
-        "scale": 0.5,
+        "scale": scale,
         "max_width": 800,
         "max_height": 600,
         "pane": "panetab4",
@@ -208,3 +217,24 @@ def test_analysis_camera_forwards_curvature_settings_without_changing_compositio
     assert calls[0][1]["capture_pass"] == "curvature"
     assert calls[0][1]["curvature_scale"] == 2.0
     assert calls[0][1]["curvature_colormap"] == "gray"
+
+
+def test_analysis_camera_matches_beauty_tiny_resolution_workaround(monkeypatch) -> None:
+    node = _Node()
+    resolved = {
+        "type": "obj",
+        "node": node,
+        "prim": None,
+        "viewport_selector": None,
+    }
+
+    result, _viewport, _scene, calls, _closed, _processed, _resolution_calls = _run_camera(
+        monkeypatch,
+        resolved=resolved,
+        camera_path="/obj/cam1",
+        scale=0.0001,
+    )
+
+    assert result == {"ok": True}
+    assert calls[0][1]["resolution"] == (2, 2)
+    assert calls[1] == ("resize", (Path("D:/Temp/camera.png"), (1, 1)))

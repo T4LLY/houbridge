@@ -83,3 +83,11 @@ def test_flipbook_analysis_publishes_curvature_environment_only_during_capture(t
     }
     assert "HOUBRIDGE_CAPTURE_CURVATURE_SCALE" not in os.environ
     assert "HOUBRIDGE_CAPTURE_CURVATURE_COLORMAP" not in os.environ
+
+
+def test_camera_flipbook_resolution_plan_matches_beauty_tiny_resolution_contract() -> None:
+    from houbridge.houdini.scripts.capture.analysis_runtime import camera_flipbook_resolution_plan
+
+    assert camera_flipbook_resolution_plan((640, 360)) == ((640, 360), 1.0)
+    assert camera_flipbook_resolution_plan((1, 100)) == ((2, 200), 0.5)
+    assert camera_flipbook_resolution_plan((100, 1)) == ((200, 2), 0.5)

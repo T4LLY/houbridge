@@ -27,6 +27,30 @@ def install_dso(path: Path) -> None:
     keepalive.append(library)
 
 
+def camera_flipbook_resolution_plan(output_resolution):
+    resolution = tuple(int(value) for value in output_resolution)
+    if min(resolution) < 2:
+        return tuple(value * 2 for value in resolution), 0.5
+    return resolution, 1.0
+
+
+def resize_png_to_resolution(path: Path, resolution) -> None:
+    from PySide6 import QtCore, QtGui
+
+    pixmap = QtGui.QPixmap(str(path))
+    if pixmap.isNull():
+        raise RuntimeError("Qt failed to load analysis capture PNG.")
+    width, height = (int(value) for value in resolution)
+    final = pixmap.scaled(
+        width,
+        height,
+        QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+        QtCore.Qt.TransformationMode.SmoothTransformation,
+    )
+    if not final.save(str(path), "PNG"):
+        raise RuntimeError("Qt failed to save resized analysis capture PNG.")
+
+
 def resolve_models(paths, hou, error_type):
     resolved = []
     for path in paths:

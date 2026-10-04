@@ -44,6 +44,8 @@ def _run(request: dict[str, object], hou, QtWidgets) -> dict[str, object]:
     install_dso = analysis_runtime["install_dso"]
     resolve_models = analysis_runtime["resolve_models"]
     flipbook_analysis = analysis_runtime["flipbook_analysis"]
+    camera_flipbook_resolution_plan = analysis_runtime["camera_flipbook_resolution_plan"]
+    resize_png_to_resolution = analysis_runtime["resize_png_to_resolution"]
     resolve_camera = camera_runtime["resolve_camera"]
 
     analysis = request["analysis"]
@@ -80,10 +82,12 @@ def _run(request: dict[str, object], hou, QtWidgets) -> dict[str, object]:
             int(request["max_width"]),
             int(request["max_height"]),
         )
+        flipbook_resolution, output_scale = camera_flipbook_resolution_plan(output_resolution)
+        output_path = Path(str(request["png_path"]))
         flipbook_analysis(
             scene,
             viewport,
-            output_path=Path(str(request["png_path"])),
+            output_path=output_path,
             trigger_path=Path(str(request["trigger_path"])),
             generation=str(request["generation"]),
             capture_pass=capture_pass,
@@ -91,10 +95,12 @@ def _run(request: dict[str, object], hou, QtWidgets) -> dict[str, object]:
             grid_unit=grid_unit,
             curvature_scale=curvature_scale,
             curvature_colormap=curvature_colormap,
-            resolution=output_resolution,
+            resolution=flipbook_resolution,
             crop_camera=True,
             hou=hou,
         )
+        if output_scale != 1.0:
+            resize_png_to_resolution(output_path, output_resolution)
     finally:
         close_scene_viewer(scene)
     return {"ok": True}
