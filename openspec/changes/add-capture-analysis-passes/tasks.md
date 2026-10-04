@@ -27,8 +27,8 @@
 
 ## 5. Shared displayed-geometry layer and Normal
 
-- [ ] 5.1 Extract one shared `DM_GeoDetail -> GU_Detail -> GT polygon mesh -> RV_Geometry` layer.
-- [ ] 5.2 Add Normal for viewport and camera using that shared layer without scene attribute mutation.
+- [x] 5.1 Extract one shared `DM_GeoDetail -> GU_Detail -> GT polygon mesh -> RV_Geometry` layer.
+- [x] 5.2 Add Normal for viewport and camera using that shared layer without scene attribute mutation.
 
 ## 6. Object ID
 

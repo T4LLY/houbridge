@@ -7,6 +7,7 @@
 #include <UT/UT_Array.h>
 
 #include "depth_grid.h"
+#include "normal.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -94,7 +95,8 @@ void run_analysis_if_armed(
     if (!generation_matches() || g_last_analysis_request == request || !context.isVulkan())
         return;
     const bool grid_mode = std::strcmp(capture_pass, "grid") == 0;
-    if (!grid_mode && std::strcmp(capture_pass, "depth") != 0)
+    const bool normal_mode = std::strcmp(capture_pass, "normal") == 0;
+    if (!grid_mode && !normal_mode && std::strcmp(capture_pass, "depth") != 0)
         return;
     double grid_unit = 0.0;
     if (grid_mode)
@@ -113,15 +115,12 @@ void run_analysis_if_armed(
         return;
     const char *models = std::getenv(kAnalysisModelsEnv);
     const UT_Array<OP_Node *> *node_filter = models && *models ? &nodes : nullptr;
-    if (houbridge_depth_grid::render(
-            viewport,
-            context,
-            data,
-            rv,
-            node_filter,
-            grid_mode,
-            grid_unit,
-            output))
+    const bool rendered = normal_mode
+        ? houbridge_normal_preview::render(
+            viewport, context, data, rv, node_filter, output)
+        : houbridge_depth_grid::render(
+            viewport, context, data, rv, node_filter, grid_mode, grid_unit, output);
+    if (rendered)
         g_last_analysis_request = request;
 }
 

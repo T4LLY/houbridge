@@ -49,7 +49,7 @@ def _run(request: dict[str, object], hou, QtWidgets) -> dict[str, object]:
 
     analysis = request["analysis"]
     capture_pass = str(analysis["pass"])
-    if capture_pass not in {"depth", "grid"}:
+    if capture_pass not in {"depth", "grid", "normal"}:
         raise error_type(
             "capture_analysis_pass_unavailable",
             f"Capture pass {capture_pass!r} is not implemented yet.",

@@ -128,7 +128,7 @@ def test_native_backend_rejects_unimplemented_viewport_pass_before_build(tmp_pat
     builder = _Builder(artifact)
     backend = NativeAnalysisCaptureBackend(_Transport(), builder)
     workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
-    request = build_analysis_request("normal")
+    request = build_analysis_request("object-id")
     assert request is not None
 
     with pytest.raises(BridgeError) as caught:
@@ -202,7 +202,7 @@ def test_native_backend_rejects_unimplemented_camera_pass_before_build(tmp_path:
     builder = _Builder(artifact)
     backend = NativeAnalysisCaptureBackend(_Transport(), builder)
     workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
-    request = build_analysis_request("normal")
+    request = build_analysis_request("object-id")
     assert request is not None
 
     with pytest.raises(BridgeError) as caught:
@@ -222,3 +222,50 @@ def test_native_backend_rejects_unimplemented_camera_pass_before_build(tmp_path:
 
     assert caught.value.code == "capture_analysis_pass_unavailable"
     assert builder.calls == []
+
+
+def test_native_backend_forwards_normal_for_viewport_and_camera(tmp_path: Path) -> None:
+    artifact = NativeCaptureArtifact(
+        path=tmp_path / "capture.dll",
+        generation="normal123",
+        houdini_build="22.0.429",
+    )
+    artifact.path.write_bytes(b"dll")
+    builder = _Builder(artifact)
+    transport = _Transport()
+    backend = NativeAnalysisCaptureBackend(transport, builder)
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
+    request = build_analysis_request("normal", model_paths=("/obj/a",))
+    assert request is not None
+
+    backend.render_viewport(
+        _session(),
+        request,
+        ViewportAnalysisSource(
+            png_paths=(workspace.path_for("viewport-normal.png"),),
+            requested_views=(),
+            scale=1.0,
+            max_width=2048,
+            max_height=2048,
+            preset=ScreenshotPreset(),
+            pane=None,
+        ),
+        workspace,
+    )
+    backend.render_camera(
+        _session(),
+        request,
+        CameraAnalysisSource(
+            png_path=workspace.path_for("camera-normal.png"),
+            camera_path="/obj/cam1",
+            scale=1.0,
+            max_width=2048,
+            max_height=2048,
+            pane=None,
+        ),
+        workspace,
+    )
+
+    assert [item["analysis"]["pass"] for item in transport.requests] == ["normal", "normal"]
+    assert all(item["analysis"]["model_paths"] == ["/obj/a"] for item in transport.requests)
+    assert len(builder.calls) == 2
