@@ -162,7 +162,7 @@ class CaptureRenderHook final : public DM_SceneRenderHook
 {
 public:
     explicit CaptureRenderHook(DM_VPortAgent &viewport)
-        : DM_SceneRenderHook(viewport, DM_VIEWPORT_ALL_3D)
+        : DM_SceneRenderHook(viewport, DM_VIEWPORT_ALL_3D | DM_VIEWPORT_UV)
     {
     }
 
