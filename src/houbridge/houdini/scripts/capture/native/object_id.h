@@ -9,11 +9,12 @@
 #include <GT/GT_Transform.h>
 #include <RE/RE_RenderContext.h>
 #include <RE/RE_Shader.h>
-#include <RV/RV_Framebuffer.h>
 #include <RV/RV_Geometry.h>
 #include <RV/RV_Render.h>
 #include <RV/RV_ShaderProgram.h>
 #include <RV/RV_VKBuffer.h>
+#include <RV/RV_VKFramebuffer.h>
+#include <RV/RV_VKImage.h>
 #include <RV/RV_VKShaderCompile.h>
 #include <UT/UT_String.h>
 #include <UT/UT_StringHolder.h>

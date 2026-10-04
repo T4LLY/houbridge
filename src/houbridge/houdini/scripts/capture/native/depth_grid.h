@@ -1,5 +1,7 @@
 #pragma once
 
+#include "displayed_geometry.h"
+
 #include <DM/DM_VPortAgent.h>
 #include <GR/GR_Defines.h>
 #include <GUI/GUI_ViewState.h>
@@ -205,31 +207,31 @@ inline bool render(
 
     framebuffer->setClearColor(UT_Vector4F(0.0f, 0.0f, 0.0f, 0.0f));
     framebuffer->setClearDepth(rv->isReverseDepth() ? 0.0f : 1.0f);
+    UT_Array<OP_Node *> displayed_nodes;
+    const UT_Array<OP_Node *> *render_nodes = nodes;
+    if (!render_nodes)
+    {
+        houbridge_displayed_geometry::collect_displayed_objects(viewport, displayed_nodes);
+        render_nodes = &displayed_nodes;
+    }
+
     rv->pushDrawFramebuffer(framebuffer.get());
     const bool begin_ok = rv->beginRendering(RV_IMAGE_CLEAR);
     if (begin_ok)
     {
-        if (nodes)
+        if (render_nodes->size() > 0)
         {
             viewport.renderSomeGeometry(
                 context,
                 0,
                 0,
-                nodes,
+                render_nodes,
                 nullptr,
                 nullptr,
                 GR_RENDER_DEPTH,
                 GR_SHADING_SOLID,
                 GR_ALPHA_PASS_ALL,
                 true);
-        }
-        else
-        {
-            viewport.renderGeometry(
-                context,
-                GR_RENDER_DEPTH,
-                GR_SHADING_SOLID,
-                GR_ALPHA_PASS_ALL);
         }
         rv->runDraws();
         rv->endRendering();

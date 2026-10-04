@@ -126,7 +126,7 @@ wheels = [
 
 [[package]]
 name = "houbridge"
-version = "0.3.13"
+version = "0.3.14"
 source = { editable = "." }
 dependencies = [
     { name = "filetype" },

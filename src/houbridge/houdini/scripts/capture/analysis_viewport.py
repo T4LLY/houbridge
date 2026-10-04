@@ -91,12 +91,12 @@ def _run(request: dict[str, object], hou, QtWidgets) -> dict[str, object]:
             hou=hou,
         )
 
-    if not requested_views:
-        capture(source_scene, source_scene.curViewport(), 0)
-        return {"ok": True}
-
     scene = clone_scene_viewer(source_scene, hou, QtWidgets)
     try:
+        if not requested_views:
+            capture(scene, scene.curViewport(), 0)
+            return {"ok": True}
+
         scene.setViewportLayout(hou.geometryViewportLayout.Single)
         process_events(hou, QtWidgets)
         viewport = scene.curViewport()

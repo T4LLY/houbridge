@@ -69,6 +69,35 @@ struct Vec4D
     double w = 1.0;
 };
 
+template <typename Consumer>
+void for_each_displayed_detail(
+    DM_VPortAgent &viewport,
+    Consumer &&consumer)
+{
+    for (int index = 0; index < viewport.getNumOpaqueObjects(); ++index)
+        consumer(viewport.getOpaqueObject(index));
+    for (int index = 0; index < viewport.getNumTransparentObjects(); ++index)
+        consumer(viewport.getTransparentObject(index));
+    for (int index = 0; index < viewport.getNumUnlitObjects(); ++index)
+        consumer(viewport.getUnlitObject(index));
+    for (int index = 0; index < viewport.getNumXRayObjects(); ++index)
+        consumer(viewport.getXRayObject(index));
+}
+
+inline void collect_displayed_objects(
+    DM_VPortAgent &viewport,
+    UT_Array<OP_Node *> &objects)
+{
+    std::unordered_set<OP_Node *> seen;
+    for_each_displayed_detail(viewport, [&](const DM_GeoDetail &geo_detail) {
+        if (!geo_detail.isValid())
+            return;
+        OP_Node *object = geo_detail.getObject();
+        if (object && seen.insert(object).second)
+            objects.append(object);
+    });
+}
+
 template <typename MatrixT>
 Vec4D transform_row(const Vec4D &value, const MatrixT &matrix)
 {
@@ -176,14 +205,7 @@ bool for_each_polygon_mesh(
         }
     };
 
-    for (int index = 0; index < viewport.getNumOpaqueObjects(); ++index)
-        consume_detail(viewport.getOpaqueObject(index));
-    for (int index = 0; index < viewport.getNumTransparentObjects(); ++index)
-        consume_detail(viewport.getTransparentObject(index));
-    for (int index = 0; index < viewport.getNumUnlitObjects(); ++index)
-        consume_detail(viewport.getUnlitObject(index));
-    for (int index = 0; index < viewport.getNumXRayObjects(); ++index)
-        consume_detail(viewport.getXRayObject(index));
+    for_each_displayed_detail(viewport, consume_detail);
 
     return appended;
 }
