@@ -1,0 +1,148 @@
+from __future__ import annotations
+
+import json
+import struct
+import zlib
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from houbridge.capture.analysis import ViewportAnalysisSource, build_analysis_request
+from houbridge.capture.analysis_native import NativeAnalysisCaptureBackend
+from houbridge.capture.models import ScreenshotPreset
+from houbridge.capture.native import NativeCaptureArtifact
+from houbridge.errors import BridgeError
+from houbridge.houdini.transport import HoudiniTarget
+from houbridge.temporary_workspace import TemporaryWorkspaceService
+
+
+def _png(width: int, height: int) -> bytes:
+    signature = b"\x89PNG\r\n\x1a\n"
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        body = kind + data
+        return (
+            struct.pack(">I", len(data))
+            + body
+            + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+        )
+
+    raw = b"\x00" + b"\x00\x00\x00\x00" * width
+    return signature + chunk(b"IHDR", ihdr_data) + chunk(b"IDAT", zlib.compress(raw * height)) + chunk(b"IEND", b"")
+
+
+class _Builder:
+    def __init__(self, artifact: NativeCaptureArtifact) -> None:
+        self.artifact = artifact
+        self.calls = []
+
+    def ensure(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.artifact
+
+
+class _Transport:
+    executable = "hcommand-test"
+
+    def __init__(self) -> None:
+        self.requests = []
+
+    def subprocess_environment(self):
+        return {"PATH": "test"}
+
+    def execute_script(self, _target, runner: Path):
+        request_path = runner.parent / "analysis-request.json"
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        self.requests.append(request)
+        for output in request["png_paths"]:
+            Path(output).write_bytes(_png(320, 180))
+        Path(request["result_path"]).write_text('{"ok":true}', encoding="utf-8")
+
+
+def _session():
+    return SimpleNamespace(
+        target=HoudiniTarget("127.0.0.1", 1714),
+        probe=SimpleNamespace(version="22.0.429"),
+    )
+
+
+def test_native_backend_builds_cached_dso_and_forwards_viewport_request(tmp_path: Path) -> None:
+    artifact = NativeCaptureArtifact(
+        path=tmp_path / "capture.dll",
+        generation="abc123",
+        houdini_build="22.0.429",
+    )
+    artifact.path.write_bytes(b"dll")
+    builder = _Builder(artifact)
+    transport = _Transport()
+    backend = NativeAnalysisCaptureBackend(transport, builder)
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
+    output = workspace.path_for("capture-000.png")
+    request = build_analysis_request(
+        "grid",
+        model_paths=("/obj/a", "/obj/b"),
+        unit=0.5,
+    )
+    assert request is not None
+
+    backend.render_viewport(
+        _session(),
+        request,
+        ViewportAnalysisSource(
+            png_paths=(output,),
+            requested_views=("front",),
+            scale=1.5,
+            max_width=2048,
+            max_height=1024,
+            preset=ScreenshotPreset(view="front"),
+            pane="panetab4",
+        ),
+        workspace,
+    )
+
+    assert output.is_file()
+    assert builder.calls == [
+        {
+            "houdini_build": "22.0.429",
+            "hcommand": "hcommand-test",
+            "environ": {"PATH": "test"},
+        }
+    ]
+    sent = transport.requests[0]
+    assert sent["generation"] == "abc123"
+    assert sent["analysis"]["pass"] == "grid"
+    assert sent["analysis"]["model_paths"] == ["/obj/a", "/obj/b"]
+    assert sent["analysis"]["unit"] == 0.5
+    assert sent["requested_views"] == ["front"]
+    assert sent["scale"] == 1.5
+    assert sent["pane"] == "panetab4"
+
+
+def test_native_backend_rejects_unimplemented_viewport_pass_before_build(tmp_path: Path) -> None:
+    artifact = NativeCaptureArtifact(tmp_path / "capture.dll", "abc", "22.0.429")
+    builder = _Builder(artifact)
+    backend = NativeAnalysisCaptureBackend(_Transport(), builder)
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
+    request = build_analysis_request("normal")
+    assert request is not None
+
+    with pytest.raises(BridgeError) as caught:
+        backend.render_viewport(
+            _session(),
+            request,
+            ViewportAnalysisSource(
+                png_paths=(workspace.path_for("capture.png"),),
+                requested_views=(),
+                scale=1.0,
+                max_width=2048,
+                max_height=2048,
+                preset=ScreenshotPreset(),
+                pane=None,
+            ),
+            workspace,
+        )
+
+    assert caught.value.code == "capture_analysis_pass_unavailable"
+    assert builder.calls == []

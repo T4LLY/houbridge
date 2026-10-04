@@ -7,9 +7,12 @@ import typer
 from houbridge.capture import (
     CameraService,
     CaptureArtifactPublisher,
+    NativeAnalysisCaptureBackend,
+    NativeCaptureBuilder,
     ScreenshotService,
     TurntableService,
     ViewportInfoService,
+    build_analysis_request,
     parse_turntable_pivot,
 )
 from houbridge.cli.common import create_cli_app, emit_result, terminate_with_bridge_error
@@ -47,10 +50,16 @@ def _screenshot_service(
         settings.screenshot.retention_hours,
         lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
     )
+    paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
+    analysis_backend = NativeAnalysisCaptureBackend(
+        transport,
+        NativeCaptureBuilder(paths.capture_native_directory),
+    )
     return ScreenshotService(
         transport,
         settings.screenshot,
         publisher,
+        analysis_backend=analysis_backend,
     )
 
 
@@ -146,6 +155,31 @@ def viewport_command(
         "--pane",
         help="Capture from this Scene Viewer pane-tab name.",
     ),
+    capture_pass: str = typer.Option(
+        "beauty",
+        "--pass",
+        help="Render beauty, depth, grid, normal, object-id, or curvature.",
+    ),
+    model: list[str] | None = typer.Option(
+        None,
+        "--model",
+        help="Filter a non-beauty pass to this OBJ path; repeat as needed.",
+    ),
+    unit: float | None = typer.Option(
+        None,
+        "--unit",
+        help="World-space grid spacing; required with --pass grid.",
+    ),
+    curvature_scale: float | None = typer.Option(
+        None,
+        "--curvature-scale",
+        help="Curvature response multiplier; valid only with --pass curvature.",
+    ),
+    curvature_colormap: str | None = typer.Option(
+        None,
+        "--curvature-colormap",
+        help="Curvature colormap gray or rg; valid only with --pass curvature.",
+    ),
     session: int | None = typer.Option(
         None,
         "--session",
@@ -167,7 +201,20 @@ def viewport_command(
         )
         if enabled
     )
-    if info and (selected or scale != 1.0 or preset is not None or pane is not None):
+    analysis_options_selected = (
+        capture_pass.strip().lower() != "beauty"
+        or bool(model)
+        or unit is not None
+        or curvature_scale is not None
+        or curvature_colormap is not None
+    )
+    if info and (
+        selected
+        or scale != 1.0
+        or preset is not None
+        or pane is not None
+        or analysis_options_selected
+    ):
         terminate_with_bridge_error(
             BridgeError(
                 "capture_info_conflict",
@@ -179,14 +226,26 @@ def viewport_command(
         if info:
             payload = _scene_viewer_catalog(settings, session)
         else:
+            analysis = build_analysis_request(
+                capture_pass,
+                model_paths=tuple(model or ()),
+                unit=unit,
+                curvature_scale=curvature_scale,
+                curvature_colormap=curvature_colormap,
+            )
             resolver, transport = _resolver_and_transport(settings)
             resolved = resolver.resolve(session)
+            capture_kwargs = {
+                "views": selected,
+                "scale": scale,
+                "preset_path": preset,
+                "pane": pane,
+            }
+            if analysis is not None:
+                capture_kwargs["analysis"] = analysis
             payload = _screenshot_service(settings, transport).capture_viewport(
                 resolved,
-                views=selected,
-                scale=scale,
-                preset_path=preset,
-                pane=pane,
+                **capture_kwargs,
             )
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:

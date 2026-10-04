@@ -15,9 +15,9 @@
 
 ## 3. Viewport Depth and Grid
 
-- [ ] 3.1 Add viewport `depth` through the validated private depth-attachment and CPU-linearization path, publishing PNG only.
-- [ ] 3.2 Add viewport `grid` using world-space unprojection and the validated X/Y/Z grid rendering.
-- [ ] 3.3 Cover active, directed, preset-view, `--pane`, `--scale`, and repeated `--model` behavior.
+- [x] 3.1 Add viewport `depth` through the validated private depth-attachment and CPU-linearization path, publishing PNG only.
+- [x] 3.2 Add viewport `grid` using world-space unprojection and the validated X/Y/Z grid rendering.
+- [x] 3.3 Cover active, directed, preset-view, `--pane`, `--scale`, and repeated `--model` behavior.
 
 ## 4. Camera Depth and Grid
 

@@ -89,10 +89,20 @@ def build_analysis_request(
     normalized_models = _validate_model_paths(model_paths)
 
     if normalized_pass == "beauty":
-        if normalized_models or unit is not None or curvature_scale is not None or curvature_colormap is not None:
+        if normalized_models:
             raise BridgeError(
-                "capture_analysis_option_invalid",
-                "Analysis-only options require a non-beauty capture pass.",
+                "capture_pass_option_conflict",
+                "--model is valid only with a non-beauty capture pass.",
+            )
+        if unit is not None:
+            raise BridgeError(
+                "capture_pass_option_conflict",
+                "--unit is only valid with --pass grid.",
+            )
+        if curvature_scale is not None or curvature_colormap is not None:
+            raise BridgeError(
+                "capture_pass_option_conflict",
+                "Curvature options are valid only with --pass curvature.",
             )
         return None
 
@@ -107,8 +117,8 @@ def build_analysis_request(
     else:
         if unit is not None:
             raise BridgeError(
-                "capture_analysis_option_invalid",
-                "--unit is valid only with --pass grid.",
+                "capture_pass_option_conflict",
+                "--unit is only valid with --pass grid.",
             )
         normalized_unit = None
 
@@ -124,7 +134,7 @@ def build_analysis_request(
     else:
         if curvature_scale is not None or curvature_colormap is not None:
             raise BridgeError(
-                "capture_analysis_option_invalid",
+                "capture_pass_option_conflict",
                 "Curvature options are valid only with --pass curvature.",
             )
         normalized_scale = 1.0
@@ -150,13 +160,13 @@ def validate_analysis_preset(preset: ScreenshotPreset) -> None:
 def _validate_capture_pass(value: object) -> CapturePass:
     if not isinstance(value, str):
         raise BridgeError(
-            "capture_pass_invalid",
+            "invalid_capture_pass",
             "Capture pass must be beauty, depth, grid, normal, object-id, or curvature.",
         )
     normalized = value.strip().lower()
     if normalized not in _ALLOWED_PASSES:
         raise BridgeError(
-            "capture_pass_invalid",
+            "invalid_capture_pass",
             "Capture pass must be beauty, depth, grid, normal, object-id, or curvature.",
         )
     return normalized  # type: ignore[return-value]
@@ -167,13 +177,13 @@ def _validate_model_paths(values: tuple[str, ...]) -> tuple[str, ...]:
     for value in values:
         if not isinstance(value, str):
             raise BridgeError(
-                "capture_model_path_invalid",
+                "capture_model_invalid",
                 "Model paths must be absolute Houdini OBJ node paths.",
             )
         path = value.strip()
         if not path.startswith("/") or path == "/":
             raise BridgeError(
-                "capture_model_path_invalid",
+                "capture_model_invalid",
                 "Model paths must be absolute Houdini OBJ node paths.",
             )
         normalized.append(path)

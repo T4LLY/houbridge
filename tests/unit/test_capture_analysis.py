@@ -39,7 +39,7 @@ def test_analysis_request_rejects_invalid_pass(value: object) -> None:
     with pytest.raises(BridgeError) as caught:
         build_analysis_request(value)  # type: ignore[arg-type]
 
-    assert caught.value.code == "capture_pass_invalid"
+    assert caught.value.code == "invalid_capture_pass"
 
 
 def test_grid_requires_positive_finite_unit() -> None:
@@ -64,9 +64,9 @@ def test_mode_specific_options_are_not_silently_ignored() -> None:
     with pytest.raises(BridgeError) as depth_curvature:
         build_analysis_request("depth", curvature_scale=2.0)
 
-    assert beauty_model.value.code == "capture_analysis_option_invalid"
-    assert normal_unit.value.code == "capture_analysis_option_invalid"
-    assert depth_curvature.value.code == "capture_analysis_option_invalid"
+    assert beauty_model.value.code == "capture_pass_option_conflict"
+    assert normal_unit.value.code == "capture_pass_option_conflict"
+    assert depth_curvature.value.code == "capture_pass_option_conflict"
 
 
 def test_curvature_validates_scale_and_colormap() -> None:
@@ -94,8 +94,8 @@ def test_model_paths_must_be_absolute() -> None:
     with pytest.raises(BridgeError) as root:
         build_analysis_request("normal", model_paths=("/",))
 
-    assert relative.value.code == "capture_model_path_invalid"
-    assert root.value.code == "capture_model_path_invalid"
+    assert relative.value.code == "capture_model_invalid"
+    assert root.value.code == "capture_model_invalid"
 
 
 def test_analysis_preset_allows_view_only() -> None:

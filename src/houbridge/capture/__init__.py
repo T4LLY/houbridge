@@ -8,8 +8,10 @@ from .analysis import (
     build_analysis_request,
     validate_analysis_preset,
 )
+from .analysis_native import NativeAnalysisCaptureBackend
 from .artifacts import CaptureArtifactPublisher
 from .camera import CameraService
+from .native import NativeCaptureBuilder
 from .models import AttributeVisualizerPreset, ScreenshotPreset
 from .preset import load_screenshot_preset, validate_screenshot_view
 from .screenshot import ScreenshotService
@@ -22,6 +24,8 @@ __all__ = [
     "AttributeVisualizerPreset",
     "CaptureArtifactPublisher",
     "CameraAnalysisSource",
+    "NativeAnalysisCaptureBackend",
+    "NativeCaptureBuilder",
     "CameraService",
     "ScreenshotPreset",
     "ScreenshotService",

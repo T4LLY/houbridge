@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from typer.testing import CliRunner
@@ -136,6 +137,7 @@ def _install(monkeypatch):
 def test_capture_services_propagate_configured_sequence_lock_timeout() -> None:
     timeout = 0.37
     settings = SimpleNamespace(
+        storage=SimpleNamespace(data_dir=Path("D:/Temp/houbridge-test")),
         houdini=SimpleNamespace(lock_timeout_seconds=timeout),
         screenshot=SimpleNamespace(retention_hours=24),
     )
@@ -184,7 +186,8 @@ def test_capture_help_exposes_phase26_commands_and_current_options() -> None:
     assert "--session" in panes.stdout
     for option in (
         "--info", "--top", "--bottom", "--front", "--back", "--left", "--right",
-        "--persp", "--uv", "--scale", "--preset", "--pane", "--session",
+        "--persp", "--uv", "--scale", "--preset", "--pane", "--pass",
+        "--model", "--unit", "--curvature-scale", "--curvature-colormap", "--session",
     ):
         assert option in viewport.stdout
     assert "--quad" not in viewport.stdout
@@ -374,3 +377,43 @@ def test_camera_command_requires_path_unless_list_and_rejects_mode_conflicts(mon
     assert '"code":"capture_camera_list_conflict"' in list_path.stdout
     assert '"code":"capture_camera_detail_conflict"' in detail_scale.stdout
     assert resolver.calls == []
+
+
+def test_viewport_analysis_options_build_shared_request(monkeypatch) -> None:
+    _resolver, service, _turntable = _install(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        [
+            "capture", "viewport", "--front", "--pass", "grid",
+            "--unit", "0.5", "--model", "/obj/a", "--model", "/obj/b",
+            "--pane", "panetab4",
+        ],
+    )
+
+    assert result.exit_code == 0
+    kwargs = service.viewport_calls[0][1]
+    assert kwargs["views"] == ("front",)
+    assert kwargs["pane"] == "panetab4"
+    analysis = kwargs["analysis"]
+    assert analysis.capture_pass == "grid"
+    assert analysis.grid_unit == 0.5
+    assert analysis.model_paths == ("/obj/a", "/obj/b")
+
+
+def test_viewport_analysis_info_conflicts_before_session_resolution(monkeypatch) -> None:
+    _resolver, _service, _turntable = _install(monkeypatch)
+
+    result = runner.invoke(app, ["capture", "viewport", "--info", "--pass", "depth"])
+
+    assert result.exit_code == 1
+    assert '"code":"capture_info_conflict"' in result.stdout
+
+
+def test_viewport_grid_without_unit_uses_spec_error(monkeypatch) -> None:
+    _resolver, _service, _turntable = _install(monkeypatch)
+
+    result = runner.invoke(app, ["capture", "viewport", "--pass", "grid"])
+
+    assert result.exit_code == 1
+    assert '"code":"grid_unit_required"' in result.stdout
