@@ -9,9 +9,9 @@
 
 ## 2. Shared analysis request boundary
 
-- [ ] 2.1 Add shared pass/model/grid/curvature request types and validation without placing renderer logic in `capture_cmd.py`.
-- [ ] 2.2 Keep Beauty on the current capture path and route only non-beauty passes through the shared analysis boundary.
-- [ ] 2.3 Reuse the existing artifact publisher, screenshot scale/clamp rules, pane resolver, and temporary-workspace lifecycle.
+- [x] 2.1 Add shared pass/model/grid/curvature request types and validation without placing renderer logic in `capture_cmd.py`.
+- [x] 2.2 Keep Beauty on the current capture path and route only non-beauty passes through the shared analysis boundary.
+- [x] 2.3 Reuse the existing artifact publisher, screenshot scale/clamp rules, pane resolver, and temporary-workspace lifecycle.
 
 ## 3. Viewport Depth and Grid
 

@@ -93,7 +93,7 @@ class _CaptureTransport:
         Path(request["result_path"]).write_text('{"ok":true}', encoding="utf-8")
 
 
-def _service(tmp_path: Path, transport=None) -> ScreenshotService:
+def _service(tmp_path: Path, transport=None, *, analysis_backend=None) -> ScreenshotService:
     artifacts = TemporaryArtifactService(temp_root=tmp_path / "os-temp")
     publisher = CaptureArtifactPublisher(
         artifacts,
@@ -106,6 +106,7 @@ def _service(tmp_path: Path, transport=None) -> ScreenshotService:
         ScreenshotConfig(retention_hours=1, max_width=2048, max_height=2048),
         publisher,
         workspaces=TemporaryWorkspaceService(temp_root=tmp_path / "os-temp"),
+        analysis_backend=analysis_backend,
     )
 
 
@@ -386,3 +387,42 @@ def test_capture_retention_cleanup_is_lazy_and_scoped_to_capture_namespace(tmp_p
 
     assert not old.exists()
     assert unrelated.exists()
+
+
+def test_viewport_analysis_uses_shared_backend_and_existing_publication(tmp_path: Path) -> None:
+    from houbridge.capture.analysis import build_analysis_request
+
+    class _AnalysisBackend:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def render_viewport(self, session, request, source, workspace) -> None:
+            self.calls.append((session, request, source, workspace))
+            for path in source.png_paths:
+                path.write_bytes(_png(640, 360))
+
+        def render_camera(self, session, request, source, workspace) -> None:
+            raise AssertionError("camera route not expected")
+
+    transport = _CaptureTransport()
+    backend = _AnalysisBackend()
+    service = _service(tmp_path, transport, analysis_backend=backend)
+    request = build_analysis_request("normal", model_paths=("/obj/geo1",))
+
+    result = service.capture_viewport(
+        _Session(),
+        views=("front", "right"),
+        scale=0.5,
+        pane="panetab4",
+        analysis=request,
+    )
+
+    assert [item["view"] for item in result["captures"]] == ["front", "right"]
+    assert transport.requests == []
+    assert len(backend.calls) == 1
+    source = backend.calls[0][2]
+    assert source.requested_views == ("front", "right")
+    assert source.scale == 0.5
+    assert source.pane == "panetab4"
+    assert request.model_paths == ("/obj/geo1",)
+    assert all(Path(item["path"]).is_file() for item in result["captures"])

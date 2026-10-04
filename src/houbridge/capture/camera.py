@@ -11,6 +11,7 @@ from houbridge.session.resolver import ResolvedSession
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
 from ._injected import write_runpy_runner
+from .analysis import AnalysisCaptureBackend, AnalysisCaptureRequest, CameraAnalysisSource
 from .artifacts import CaptureArtifactPublisher
 from .png import png_size
 
@@ -24,11 +25,13 @@ class CameraService:
         *,
         workspaces: TemporaryWorkspaceService | None = None,
         script_path: Path | None = None,
+        analysis_backend: AnalysisCaptureBackend | None = None,
     ) -> None:
         self._transport = transport
         self._config = screenshot_config
         self._publisher = publisher
         self._workspaces = workspaces or TemporaryWorkspaceService()
+        self._analysis_backend = analysis_backend
         if script_path is None:
             from houbridge.houdini.scripts.capture import camera
 
@@ -56,6 +59,7 @@ class CameraService:
         *,
         scale: float = 1.0,
         pane: str | None = None,
+        analysis: AnalysisCaptureRequest | None = None,
     ) -> dict[str, str]:
         path = _validate_camera_path(camera_path)
         _validate_scale(scale)
@@ -63,20 +67,40 @@ class CameraService:
         published: Path | None = None
         try:
             png_path = workspace.path_for("camera.png")
-            payload = self._execute_in_workspace(
-                session,
-                workspace,
-                {
-                    "mode": "capture",
-                    "camera_path": path,
-                    "png_path": str(png_path),
-                    "scale": float(scale),
-                    "max_width": self._config.max_width,
-                    "max_height": self._config.max_height,
-                    "pane": pane,
-                },
-            )
-            _require_success_payload(payload, expected_fields={"ok"})
+            if analysis is None:
+                payload = self._execute_in_workspace(
+                    session,
+                    workspace,
+                    {
+                        "mode": "capture",
+                        "camera_path": path,
+                        "png_path": str(png_path),
+                        "scale": float(scale),
+                        "max_width": self._config.max_width,
+                        "max_height": self._config.max_height,
+                        "pane": pane,
+                    },
+                )
+                _require_success_payload(payload, expected_fields={"ok"})
+            else:
+                if self._analysis_backend is None:
+                    raise BridgeError(
+                        "capture_analysis_unavailable",
+                        "Analysis capture backend is not configured.",
+                    )
+                self._analysis_backend.render_camera(
+                    session,
+                    analysis,
+                    CameraAnalysisSource(
+                        png_path=png_path,
+                        camera_path=path,
+                        scale=float(scale),
+                        max_width=self._config.max_width,
+                        max_height=self._config.max_height,
+                        pane=pane,
+                    ),
+                    workspace,
+                )
             if not png_path.is_file():
                 raise BridgeError(
                     "camera_capture_failed",

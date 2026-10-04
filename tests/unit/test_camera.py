@@ -92,7 +92,12 @@ class _CameraTransport:
         )
 
 
-def _service(tmp_path: Path, transport=None) -> tuple[CameraService, TemporaryArtifactService]:
+def _service(
+    tmp_path: Path,
+    transport=None,
+    *,
+    analysis_backend=None,
+) -> tuple[CameraService, TemporaryArtifactService]:
     artifacts = TemporaryArtifactService(temp_root=tmp_path / "os-temp")
     publisher = CaptureArtifactPublisher(
         artifacts,
@@ -106,6 +111,7 @@ def _service(tmp_path: Path, transport=None) -> tuple[CameraService, TemporaryAr
             ScreenshotConfig(retention_hours=1, max_width=2048, max_height=2048),
             publisher,
             workspaces=TemporaryWorkspaceService(temp_root=tmp_path / "os-temp"),
+            analysis_backend=analysis_backend,
         ),
         artifacts,
     )
@@ -273,3 +279,40 @@ def test_camera_sop_name_selector_rejects_duplicate_names() -> None:
             {"path": "/obj/geo1/camera1:5", "type": "sop", "resolution": [1280, 720]},
         ]
     }
+
+
+def test_camera_analysis_uses_shared_backend_and_existing_publication(tmp_path: Path) -> None:
+    from houbridge.capture.analysis import build_analysis_request
+
+    class _AnalysisBackend:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def render_viewport(self, session, request, source, workspace) -> None:
+            raise AssertionError("viewport route not expected")
+
+        def render_camera(self, session, request, source, workspace) -> None:
+            self.calls.append((session, request, source, workspace))
+            source.png_path.write_bytes(_png(960, 540))
+
+    transport = _CameraTransport()
+    backend = _AnalysisBackend()
+    service, artifacts = _service(tmp_path, transport, analysis_backend=backend)
+    request = build_analysis_request("depth")
+
+    result = service.capture(
+        _Session(),
+        "/obj/cam1",
+        scale=0.5,
+        pane="panetab4",
+        analysis=request,
+    )
+
+    assert Path(result["path"]).name == "camera20260928-1145-001.png"
+    assert transport.requests == []
+    assert len(backend.calls) == 1
+    source = backend.calls[0][2]
+    assert source.camera_path == "/obj/cam1"
+    assert source.scale == 0.5
+    assert source.pane == "panetab4"
+    assert len(list((artifacts.root / "capture").iterdir())) == 1

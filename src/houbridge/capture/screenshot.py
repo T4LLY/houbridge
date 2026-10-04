@@ -13,6 +13,12 @@ from houbridge.session.resolver import ResolvedSession
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 
 from ._injected import write_runpy_runner
+from .analysis import (
+    AnalysisCaptureBackend,
+    AnalysisCaptureRequest,
+    ViewportAnalysisSource,
+    validate_analysis_preset,
+)
 from .artifacts import CaptureArtifactPublisher
 from .models import ScreenshotKind, ScreenshotPreset
 from .png import png_size
@@ -28,11 +34,13 @@ class ScreenshotService:
         *,
         workspaces: TemporaryWorkspaceService | None = None,
         script_path: Path | None = None,
+        analysis_backend: AnalysisCaptureBackend | None = None,
     ) -> None:
         self._transport = transport
         self._config = screenshot_config
         self._publisher = publisher
         self._workspaces = workspaces or TemporaryWorkspaceService()
+        self._analysis_backend = analysis_backend
         if script_path is None:
             from houbridge.houdini.scripts.capture import screenshot
 
@@ -47,6 +55,7 @@ class ScreenshotService:
         scale: float = 1.0,
         preset_path: Path | None = None,
         pane: str | None = None,
+        analysis: AnalysisCaptureRequest | None = None,
     ) -> dict[str, object]:
         _validate_scale(scale)
         preset = (
@@ -54,6 +63,8 @@ class ScreenshotService:
             if preset_path is not None
             else ScreenshotPreset()
         )
+        if analysis is not None:
+            validate_analysis_preset(preset)
         normalized_views = tuple(validate_screenshot_view(view) for view in views)
         effective_views = normalized_views
         if not effective_views and preset.view is not None:
@@ -68,6 +79,7 @@ class ScreenshotService:
             preset=preset,
             bounds=False,
             pane=pane,
+            analysis=analysis,
         )
         paths, _bounds = published
         if len(paths) == 1:
@@ -128,6 +140,7 @@ class ScreenshotService:
         preset: ScreenshotPreset,
         bounds: bool,
         pane: str | None,
+        analysis: AnalysisCaptureRequest | None = None,
     ) -> tuple[tuple[Path, ...], dict[str, object] | None]:
         workspace = self._workspaces.allocate(prefix=f"capture-{kind}")
         published: list[Path] = []
@@ -139,33 +152,59 @@ class ScreenshotService:
             bounds_path = workspace.path_for("bounds.json") if bounds else None
             result_path = workspace.path_for("result.json")
             request_path = workspace.path_for("request.json")
-            request_path.write_text(
-                json.dumps(
-                    {
-                        "kind": kind,
-                        "png_paths": [str(path) for path in png_paths],
-                        "bounds_path": str(bounds_path) if bounds_path is not None else None,
-                        "result_path": str(result_path),
-                        "requested_views": list(requested_views),
-                        "scale": scale,
-                        "max_width": self._config.max_width,
-                        "max_height": self._config.max_height,
-                        "preset": preset.to_dict(),
-                        "pane": pane,
-                    },
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ),
-                encoding="utf-8",
-            )
-            runner = write_runpy_runner(
-                workspace,
-                script_path=self._script_path,
-                request_path=request_path,
-                filename="screenshot.py",
-            )
-            self._transport.execute_script(session.target, runner)
-            _require_capture_success(result_path)
+            if analysis is None:
+                request_path.write_text(
+                    json.dumps(
+                        {
+                            "kind": kind,
+                            "png_paths": [str(path) for path in png_paths],
+                            "bounds_path": str(bounds_path) if bounds_path is not None else None,
+                            "result_path": str(result_path),
+                            "requested_views": list(requested_views),
+                            "scale": scale,
+                            "max_width": self._config.max_width,
+                            "max_height": self._config.max_height,
+                            "preset": preset.to_dict(),
+                            "pane": pane,
+                        },
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                    encoding="utf-8",
+                )
+                runner = write_runpy_runner(
+                    workspace,
+                    script_path=self._script_path,
+                    request_path=request_path,
+                    filename="screenshot.py",
+                )
+                self._transport.execute_script(session.target, runner)
+                _require_capture_success(result_path)
+            else:
+                if kind != "viewport":
+                    raise BridgeError(
+                        "capture_analysis_internal_error",
+                        "Analysis capture is supported only for viewport and camera sources.",
+                    )
+                if self._analysis_backend is None:
+                    raise BridgeError(
+                        "capture_analysis_unavailable",
+                        "Analysis capture backend is not configured.",
+                    )
+                self._analysis_backend.render_viewport(
+                    session,
+                    analysis,
+                    ViewportAnalysisSource(
+                        png_paths=png_paths,
+                        requested_views=requested_views,
+                        scale=float(scale),
+                        max_width=self._config.max_width,
+                        max_height=self._config.max_height,
+                        preset=preset,
+                        pane=pane,
+                    ),
+                    workspace,
+                )
 
             for path in png_paths:
                 if not path.is_file():
