@@ -245,7 +245,7 @@ inline bool render(
     auto zbuffer = framebuffer->createImage(rv, RV_GPU_FLOAT32, 1, RV_DEPTH_BUFFER, 0);
     if (color.get() == nullptr || zbuffer.get() == nullptr)
         return false;
-    framebuffer->setClearColor(UT_Vector4F(0.0f, 0.0f, 0.0f, 0.0f));
+    framebuffer->setClearColor(UT_Vector4F(0.0f, 0.0f, 0.0f, 1.0f));
     framebuffer->setClearDepth(rv->isReverseDepth() ? 0.0f : 1.0f);
     rv->pushDrawFramebuffer(framebuffer.get());
     const bool begin_ok = rv->beginRendering(RV_IMAGE_CLEAR);
