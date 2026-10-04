@@ -123,34 +123,6 @@ def test_native_backend_builds_cached_dso_and_forwards_viewport_request(tmp_path
     assert sent["pane"] == "panetab4"
 
 
-def test_native_backend_rejects_unimplemented_viewport_pass_before_build(tmp_path: Path) -> None:
-    artifact = NativeCaptureArtifact(tmp_path / "capture.dll", "abc", "22.0.429")
-    builder = _Builder(artifact)
-    backend = NativeAnalysisCaptureBackend(_Transport(), builder)
-    workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
-    request = build_analysis_request("curvature")
-    assert request is not None
-
-    with pytest.raises(BridgeError) as caught:
-        backend.render_viewport(
-            _session(),
-            request,
-            ViewportAnalysisSource(
-                png_paths=(workspace.path_for("capture.png"),),
-                requested_views=(),
-                scale=1.0,
-                max_width=2048,
-                max_height=2048,
-                preset=ScreenshotPreset(),
-                pane=None,
-            ),
-            workspace,
-        )
-
-    assert caught.value.code == "capture_analysis_pass_unavailable"
-    assert builder.calls == []
-
-
 def test_native_backend_forwards_camera_depth_grid_request(tmp_path: Path) -> None:
     artifact = NativeCaptureArtifact(
         path=tmp_path / "capture.dll",
@@ -197,32 +169,62 @@ def test_native_backend_forwards_camera_depth_grid_request(tmp_path: Path) -> No
     assert sent["pane"] == "panetab4"
 
 
-def test_native_backend_rejects_unimplemented_camera_pass_before_build(tmp_path: Path) -> None:
-    artifact = NativeCaptureArtifact(tmp_path / "capture.dll", "abc", "22.0.429")
+
+
+def test_native_backend_forwards_curvature_for_viewport_and_camera(tmp_path: Path) -> None:
+    artifact = NativeCaptureArtifact(
+        path=tmp_path / "capture.dll",
+        generation="curvature123",
+        houdini_build="22.0.429",
+    )
+    artifact.path.write_bytes(b"dll")
     builder = _Builder(artifact)
-    backend = NativeAnalysisCaptureBackend(_Transport(), builder)
+    transport = _Transport()
+    backend = NativeAnalysisCaptureBackend(transport, builder)
     workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
-    request = build_analysis_request("curvature")
+    request = build_analysis_request(
+        "curvature",
+        model_paths=("/obj/a",),
+        curvature_scale=2.0,
+        curvature_colormap="gray",
+    )
     assert request is not None
 
-    with pytest.raises(BridgeError) as caught:
-        backend.render_camera(
-            _session(),
-            request,
-            CameraAnalysisSource(
-                png_path=workspace.path_for("camera.png"),
-                camera_path="/obj/cam1",
-                scale=1.0,
-                max_width=2048,
-                max_height=2048,
-                pane=None,
-            ),
-            workspace,
-        )
+    backend.render_viewport(
+        _session(),
+        request,
+        ViewportAnalysisSource(
+            png_paths=(workspace.path_for("viewport-curvature.png"),),
+            requested_views=(),
+            scale=1.0,
+            max_width=2048,
+            max_height=2048,
+            preset=ScreenshotPreset(),
+            pane=None,
+        ),
+        workspace,
+    )
+    backend.render_camera(
+        _session(),
+        request,
+        CameraAnalysisSource(
+            png_path=workspace.path_for("camera-curvature.png"),
+            camera_path="/obj/cam1",
+            scale=1.0,
+            max_width=2048,
+            max_height=2048,
+            pane=None,
+        ),
+        workspace,
+    )
 
-    assert caught.value.code == "capture_analysis_pass_unavailable"
-    assert builder.calls == []
-
+    assert [item["analysis"]["pass"] for item in transport.requests] == [
+        "curvature",
+        "curvature",
+    ]
+    assert all(item["analysis"]["curvature_scale"] == 2.0 for item in transport.requests)
+    assert all(item["analysis"]["curvature_colormap"] == "gray" for item in transport.requests)
+    assert len(builder.calls) == 2
 
 def test_native_backend_forwards_normal_for_viewport_and_camera(tmp_path: Path) -> None:
     artifact = NativeCaptureArtifact(
@@ -336,3 +338,18 @@ def test_object_id_renderer_reuses_shared_displayed_geometry_filter() -> None:
     assert "viewport, targets," in source
     assert "viewport.getNumOpaqueObjects" not in source
     assert "rv->setBlendEnable(false);" in source
+
+
+def test_curvature_renderer_reuses_shared_displayed_geometry_and_validated_mapping() -> None:
+    from houbridge.houdini.scripts.capture import native
+
+    source = (Path(native.__file__).parent / "curvature.h").read_text(encoding="utf-8")
+
+    assert "houbridge_displayed_geometry::for_each_polygon_mesh(" in source
+    assert "viewport, targets," in source
+    assert "viewport.getNumOpaqueObjects" not in source
+    assert "0.90 * static_cast<double>(magnitudes.size() - 1)" in source
+    assert "mapped * scale_multiplier" in source
+    assert "red = mapped >= 0.0 ? strength : 0.0;" in source
+    assert "green = mapped < 0.0 ? strength : 0.0;" in source
+    assert "blue = 0.0;" in source

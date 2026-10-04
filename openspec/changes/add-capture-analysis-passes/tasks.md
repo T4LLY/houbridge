@@ -37,8 +37,8 @@
 
 ## 7. Curvature
 
-- [ ] 7.1 Add the validated signed curvature approximation for viewport and camera.
-- [ ] 7.2 Add `gray` and `rg` colormaps and curvature-scale validation/mapping.
+- [x] 7.1 Add the validated signed curvature approximation for viewport and camera.
+- [x] 7.2 Add `gray` and `rg` colormaps and curvature-scale validation/mapping.
 
 ## 8. CLI, presets, errors, and regression
 

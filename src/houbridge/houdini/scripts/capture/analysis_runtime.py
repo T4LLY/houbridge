@@ -63,6 +63,8 @@ def flipbook_analysis(
     capture_pass: str,
     model_paths: tuple[str, ...],
     grid_unit,
+    curvature_scale: float,
+    curvature_colormap: str,
     resolution: tuple[int, int],
     crop_camera: bool,
     hou,
@@ -87,6 +89,9 @@ def flipbook_analysis(
     }
     if grid_unit is not None:
         values["HOUBRIDGE_CAPTURE_ANALYSIS_UNIT"] = format(float(grid_unit), ".17g")
+    if capture_pass == "curvature":
+        values["HOUBRIDGE_CAPTURE_CURVATURE_SCALE"] = format(float(curvature_scale), ".17g")
+        values["HOUBRIDGE_CAPTURE_CURVATURE_COLORMAP"] = curvature_colormap
     previous = _set_environment(values)
     try:
         scene.flipbook(viewport, settings)

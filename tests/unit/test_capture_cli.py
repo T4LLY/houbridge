@@ -471,3 +471,46 @@ def test_camera_grid_without_unit_uses_spec_error(monkeypatch) -> None:
     assert '"code":"grid_unit_required"' in result.stdout
     assert resolver.calls == []
     assert camera.calls == []
+
+
+def test_viewport_curvature_options_build_shared_request(monkeypatch) -> None:
+    _resolver, service, _turntable = _install(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        [
+            "capture", "viewport", "--pass", "curvature",
+            "--curvature-scale", "2", "--curvature-colormap", "gray",
+            "--model", "/obj/a",
+        ],
+    )
+
+    assert result.exit_code == 0
+    analysis = service.viewport_calls[0][1]["analysis"]
+    assert analysis.capture_pass == "curvature"
+    assert analysis.curvature_scale == 2.0
+    assert analysis.curvature_colormap == "gray"
+    assert analysis.model_paths == ("/obj/a",)
+
+
+def test_camera_curvature_options_build_shared_request(monkeypatch) -> None:
+    resolver, _screenshot, _turntable = _install(monkeypatch)
+    camera = _CameraService()
+    monkeypatch.setattr(capture_cmd, "_camera_service", lambda _settings, _transport: camera)
+
+    result = runner.invoke(
+        app,
+        [
+            "capture", "camera", "/obj/cam1", "--pass", "curvature",
+            "--curvature-scale", "0.5", "--curvature-colormap", "rg",
+            "--model", "/obj/a",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert resolver.calls == [None]
+    analysis = camera.calls[0][2]["analysis"]
+    assert analysis.capture_pass == "curvature"
+    assert analysis.curvature_scale == 0.5
+    assert analysis.curvature_colormap == "rg"
+    assert analysis.model_paths == ("/obj/a",)

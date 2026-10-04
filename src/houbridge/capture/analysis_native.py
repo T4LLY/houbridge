@@ -44,7 +44,7 @@ class NativeAnalysisCaptureBackend:
         source: ViewportAnalysisSource,
         workspace: TemporaryWorkspace,
     ) -> None:
-        if request.capture_pass not in {"depth", "grid", "normal", "object-id"}:
+        if request.capture_pass not in {"depth", "grid", "normal", "object-id", "curvature"}:
             raise BridgeError(
                 "capture_analysis_pass_unavailable",
                 f"Capture pass {request.capture_pass!r} is not implemented yet.",
@@ -97,7 +97,7 @@ class NativeAnalysisCaptureBackend:
         source: CameraAnalysisSource,
         workspace: TemporaryWorkspace,
     ) -> None:
-        if request.capture_pass not in {"depth", "grid", "normal", "object-id"}:
+        if request.capture_pass not in {"depth", "grid", "normal", "object-id", "curvature"}:
             raise BridgeError(
                 "capture_analysis_pass_unavailable",
                 f"Capture pass {request.capture_pass!r} is not implemented yet.",

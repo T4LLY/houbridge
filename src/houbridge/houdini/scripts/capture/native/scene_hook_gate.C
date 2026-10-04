@@ -6,6 +6,7 @@
 #include <SYS/SYS_Visibility.h>
 #include <UT/UT_Array.h>
 
+#include "curvature.h"
 #include "depth_grid.h"
 #include "normal.h"
 #include "object_id.h"
@@ -30,6 +31,8 @@ constexpr const char *kAnalysisPassEnv = "HOUBRIDGE_CAPTURE_ANALYSIS_PASS";
 constexpr const char *kAnalysisOutputEnv = "HOUBRIDGE_CAPTURE_ANALYSIS_OUTPUT";
 constexpr const char *kAnalysisModelsEnv = "HOUBRIDGE_CAPTURE_ANALYSIS_MODELS";
 constexpr const char *kAnalysisUnitEnv = "HOUBRIDGE_CAPTURE_ANALYSIS_UNIT";
+constexpr const char *kCurvatureScaleEnv = "HOUBRIDGE_CAPTURE_CURVATURE_SCALE";
+constexpr const char *kCurvatureColormapEnv = "HOUBRIDGE_CAPTURE_CURVATURE_COLORMAP";
 std::string g_last_gate_request;
 std::string g_last_analysis_request;
 
@@ -98,7 +101,8 @@ void run_analysis_if_armed(
     const bool grid_mode = std::strcmp(capture_pass, "grid") == 0;
     const bool normal_mode = std::strcmp(capture_pass, "normal") == 0;
     const bool object_id_mode = std::strcmp(capture_pass, "object-id") == 0;
-    if (!grid_mode && !normal_mode && !object_id_mode &&
+    const bool curvature_mode = std::strcmp(capture_pass, "curvature") == 0;
+    if (!grid_mode && !normal_mode && !object_id_mode && !curvature_mode &&
         std::strcmp(capture_pass, "depth") != 0)
         return;
     double grid_unit = 0.0;
@@ -109,6 +113,24 @@ void run_analysis_if_armed(
         grid_unit = unit_text ? std::strtod(unit_text, &unit_end) : 0.0;
         if (!unit_text || unit_end == unit_text || !std::isfinite(grid_unit) || grid_unit <= 0.0)
             return;
+    }
+    double curvature_scale = 1.0;
+    houbridge_curvature_preview::ColorMap curvature_colormap =
+        houbridge_curvature_preview::ColorMap::Rg;
+    if (curvature_mode)
+    {
+        const char *scale_text = std::getenv(kCurvatureScaleEnv);
+        char *scale_end = nullptr;
+        curvature_scale = scale_text ? std::strtod(scale_text, &scale_end) : 0.0;
+        if (!scale_text || scale_end == scale_text || !std::isfinite(curvature_scale) ||
+            curvature_scale <= 0.0)
+            return;
+        const char *colormap_text = std::getenv(kCurvatureColormapEnv);
+        if (!colormap_text ||
+            (std::strcmp(colormap_text, "rg") != 0 && std::strcmp(colormap_text, "gray") != 0))
+            return;
+        if (std::strcmp(colormap_text, "gray") == 0)
+            curvature_colormap = houbridge_curvature_preview::ColorMap::Gray;
     }
     RV_Render *rv = context.vkRender();
     if (!rv || rv->isRendering())
@@ -125,6 +147,10 @@ void run_analysis_if_armed(
     else if (object_id_mode)
         rendered = houbridge_object_id_preview::render(
             viewport, context, data, rv, node_filter, output);
+    else if (curvature_mode)
+        rendered = houbridge_curvature_preview::render(
+            viewport, context, data, rv, node_filter, curvature_scale,
+            curvature_colormap, output);
     else
         rendered = houbridge_depth_grid::render(
             viewport, context, data, rv, node_filter, grid_mode, grid_unit, output);

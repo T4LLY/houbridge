@@ -48,13 +48,15 @@ def _run(request: dict[str, object], hou, QtWidgets) -> dict[str, object]:
 
     analysis = request["analysis"]
     capture_pass = str(analysis["pass"])
-    if capture_pass not in {"depth", "grid", "normal", "object-id"}:
+    if capture_pass not in {"depth", "grid", "normal", "object-id", "curvature"}:
         raise error_type(
             "capture_analysis_pass_unavailable",
             f"Capture pass {capture_pass!r} is not implemented yet.",
         )
     model_paths = resolve_models(tuple(analysis["model_paths"]), hou, error_type)
     grid_unit = analysis.get("unit")
+    curvature_scale = float(analysis.get("curvature_scale", 1.0))
+    curvature_colormap = str(analysis.get("curvature_colormap", "rg"))
     resolved = resolve_camera(str(request["camera_path"]), hou, runtime)
 
     install_dso(Path(str(request["dso_path"])))
@@ -87,6 +89,8 @@ def _run(request: dict[str, object], hou, QtWidgets) -> dict[str, object]:
             capture_pass=capture_pass,
             model_paths=model_paths,
             grid_unit=grid_unit,
+            curvature_scale=curvature_scale,
+            curvature_colormap=curvature_colormap,
             resolution=output_resolution,
             crop_camera=True,
             hou=hou,
