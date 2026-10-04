@@ -8,16 +8,22 @@ import uuid
 
 
 def install_dso(path: Path) -> None:
+    keepalive = getattr(sys, "_houbridge_capture_native_dsos", None)
+    if keepalive is None:
+        keepalive = []
+        setattr(sys, "_houbridge_capture_native_dsos", keepalive)
+    target = os.path.normcase(os.path.abspath(str(path)))
+    for loaded in keepalive:
+        loaded_name = getattr(loaded, "_name", None)
+        if loaded_name is not None and os.path.normcase(os.path.abspath(str(loaded_name))) == target:
+            return
+
     library = ctypes.CDLL(str(path))
     install = library.houbridgeInstallCaptureSceneHookGate
     install.argtypes = []
     install.restype = ctypes.c_int
     if install() != 1:
         raise RuntimeError("Native Capture SceneHook registration failed.")
-    keepalive = getattr(sys, "_houbridge_capture_native_dsos", None)
-    if keepalive is None:
-        keepalive = []
-        setattr(sys, "_houbridge_capture_native_dsos", keepalive)
     keepalive.append(library)
 
 
