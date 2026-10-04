@@ -220,7 +220,7 @@ inline bool render(
                 nullptr,
                 GR_RENDER_DEPTH,
                 GR_SHADING_SOLID,
-                GR_ALPHA_PASS_OPAQUE,
+                GR_ALPHA_PASS_ALL,
                 true);
         }
         else
@@ -229,7 +229,7 @@ inline bool render(
                 context,
                 GR_RENDER_DEPTH,
                 GR_SHADING_SOLID,
-                GR_ALPHA_PASS_OPAQUE);
+                GR_ALPHA_PASS_ALL);
         }
         rv->runDraws();
         rv->endRendering();
