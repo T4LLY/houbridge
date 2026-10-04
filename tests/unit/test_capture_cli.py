@@ -417,3 +417,57 @@ def test_viewport_grid_without_unit_uses_spec_error(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert '"code":"grid_unit_required"' in result.stdout
+
+
+def test_camera_analysis_options_build_shared_request(monkeypatch) -> None:
+    resolver, _screenshot, _turntable = _install(monkeypatch)
+    camera = _CameraService()
+    monkeypatch.setattr(capture_cmd, "_camera_service", lambda _settings, _transport: camera)
+
+    result = runner.invoke(
+        app,
+        [
+            "capture", "camera", "/obj/cam1", "--pass", "grid",
+            "--unit", "0.5", "--model", "/obj/a", "--model", "/obj/b",
+            "--scale", "0.5", "--pane", "panetab4",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert resolver.calls == [None]
+    kwargs = camera.calls[0][2]
+    assert kwargs["camera_path"] == "/obj/cam1"
+    assert kwargs["scale"] == 0.5
+    assert kwargs["pane"] == "panetab4"
+    analysis = kwargs["analysis"]
+    assert analysis.capture_pass == "grid"
+    assert analysis.grid_unit == 0.5
+    assert analysis.model_paths == ("/obj/a", "/obj/b")
+
+
+def test_camera_analysis_options_conflict_with_list_and_detail(monkeypatch) -> None:
+    resolver, _screenshot, _turntable = _install(monkeypatch)
+
+    listed = runner.invoke(app, ["capture", "camera", "--list", "--pass", "depth"])
+    detailed = runner.invoke(
+        app,
+        ["capture", "camera", "/obj/cam1", "--detail", "--model", "/obj/a", "--pass", "depth"],
+    )
+
+    assert listed.exit_code == detailed.exit_code == 1
+    assert '"code":"capture_camera_list_conflict"' in listed.stdout
+    assert '"code":"capture_camera_detail_conflict"' in detailed.stdout
+    assert resolver.calls == []
+
+
+def test_camera_grid_without_unit_uses_spec_error(monkeypatch) -> None:
+    resolver, _screenshot, _turntable = _install(monkeypatch)
+    camera = _CameraService()
+    monkeypatch.setattr(capture_cmd, "_camera_service", lambda _settings, _transport: camera)
+
+    result = runner.invoke(app, ["capture", "camera", "/obj/cam1", "--pass", "grid"])
+
+    assert result.exit_code == 1
+    assert '"code":"grid_unit_required"' in result.stdout
+    assert resolver.calls == []
+    assert camera.calls == []

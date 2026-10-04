@@ -41,6 +41,17 @@ def _resolver_and_transport(settings: HoubridgeConfig) -> tuple[SessionResolver,
     return SessionResolver(registry, probe), transport
 
 
+def _analysis_backend(
+    settings: HoubridgeConfig,
+    transport: HoudiniTransport,
+) -> NativeAnalysisCaptureBackend:
+    paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
+    return NativeAnalysisCaptureBackend(
+        transport,
+        NativeCaptureBuilder(paths.capture_native_directory),
+    )
+
+
 def _screenshot_service(
     settings: HoubridgeConfig,
     transport: HoudiniTransport,
@@ -50,16 +61,11 @@ def _screenshot_service(
         settings.screenshot.retention_hours,
         lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
     )
-    paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
-    analysis_backend = NativeAnalysisCaptureBackend(
-        transport,
-        NativeCaptureBuilder(paths.capture_native_directory),
-    )
     return ScreenshotService(
         transport,
         settings.screenshot,
         publisher,
-        analysis_backend=analysis_backend,
+        analysis_backend=_analysis_backend(settings, transport),
     )
 
 
@@ -92,6 +98,7 @@ def _camera_service(
         transport,
         settings.screenshot,
         publisher,
+        analysis_backend=_analysis_backend(settings, transport),
     )
 
 
@@ -279,6 +286,31 @@ def camera_command(
         "--pane",
         help="Capture from this Scene Viewer pane-tab name.",
     ),
+    capture_pass: str = typer.Option(
+        "beauty",
+        "--pass",
+        help="Render beauty, depth, grid, normal, object-id, or curvature.",
+    ),
+    model: list[str] | None = typer.Option(
+        None,
+        "--model",
+        help="Filter a non-beauty pass to this OBJ path; repeat as needed.",
+    ),
+    unit: float | None = typer.Option(
+        None,
+        "--unit",
+        help="World-space grid spacing; required with --pass grid.",
+    ),
+    curvature_scale: float | None = typer.Option(
+        None,
+        "--curvature-scale",
+        help="Curvature response multiplier; valid only with --pass curvature.",
+    ),
+    curvature_colormap: str | None = typer.Option(
+        None,
+        "--curvature-colormap",
+        help="Curvature colormap gray or rg; valid only with --pass curvature.",
+    ),
     session: int | None = typer.Option(
         None,
         "--session",
@@ -286,18 +318,35 @@ def camera_command(
         help="Target this registered session instead of the primary session.",
     ),
 ) -> None:
-    if list_cameras and (camera_path is not None or detail or scale != 1.0 or pane is not None):
+    analysis_options_selected = (
+        capture_pass.strip().lower() != "beauty"
+        or bool(model)
+        or unit is not None
+        or curvature_scale is not None
+        or curvature_colormap is not None
+    )
+    if list_cameras and (
+        camera_path is not None
+        or detail
+        or scale != 1.0
+        or pane is not None
+        or analysis_options_selected
+    ):
         terminate_with_bridge_error(
             BridgeError(
                 "capture_camera_list_conflict",
-                "--list cannot be combined with CAMERA_PATH, --detail, --scale, or --pane.",
+                "--list cannot be combined with camera capture options.",
             )
         )
-    if detail and (scale != 1.0 or pane is not None):
+    if detail and (
+        scale != 1.0
+        or pane is not None
+        or analysis_options_selected
+    ):
         terminate_with_bridge_error(
             BridgeError(
                 "capture_camera_detail_conflict",
-                "--detail cannot be combined with --scale or --pane.",
+                "--detail cannot be combined with camera capture options.",
             )
         )
     if not list_cameras and camera_path is None:
@@ -310,6 +359,15 @@ def camera_command(
 
     try:
         settings = load_config()
+        analysis = None
+        if not list_cameras and not detail:
+            analysis = build_analysis_request(
+                capture_pass,
+                model_paths=tuple(model or ()),
+                unit=unit,
+                curvature_scale=curvature_scale,
+                curvature_colormap=curvature_colormap,
+            )
         resolver, transport = _resolver_and_transport(settings)
         resolved = resolver.resolve(session)
         service = _camera_service(settings, transport)
@@ -318,11 +376,16 @@ def camera_command(
         elif detail:
             payload = service.detail(resolved, camera_path)
         else:
+            capture_kwargs = {
+                "scale": scale,
+                "pane": pane,
+            }
+            if analysis is not None:
+                capture_kwargs["analysis"] = analysis
             payload = service.capture(
                 resolved,
                 camera_path,
-                scale=scale,
-                pane=pane,
+                **capture_kwargs,
             )
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:

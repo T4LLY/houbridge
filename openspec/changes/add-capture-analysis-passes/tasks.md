@@ -21,9 +21,9 @@
 
 ## 4. Camera Depth and Grid
 
-- [ ] 4.1 Route supported OBJ Camera analysis captures through the same Depth/Grid renderers.
-- [ ] 4.2 Route supported Camera SOP analysis captures through the same Depth/Grid renderers.
-- [ ] 4.3 Preserve camera composition and camera-resolution sizing with existing scale/clamp behavior.
+- [x] 4.1 Route supported OBJ Camera analysis captures through the same Depth/Grid renderers.
+- [x] 4.2 Route supported Camera SOP analysis captures through the same Depth/Grid renderers.
+- [x] 4.3 Preserve camera composition and camera-resolution sizing with existing scale/clamp behavior.
 
 ## 5. Shared displayed-geometry layer and Normal
 

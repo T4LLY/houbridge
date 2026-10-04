@@ -22,6 +22,7 @@ class NativeAnalysisCaptureBackend:
         builder: NativeCaptureBuilder,
         *,
         viewport_script_path: Path | None = None,
+        camera_script_path: Path | None = None,
     ) -> None:
         self._transport = transport
         self._builder = builder
@@ -29,7 +30,12 @@ class NativeAnalysisCaptureBackend:
             from houbridge.houdini.scripts.capture import analysis_viewport
 
             viewport_script_path = Path(analysis_viewport.__file__)
+        if camera_script_path is None:
+            from houbridge.houdini.scripts.capture import analysis_camera
+
+            camera_script_path = Path(analysis_camera.__file__)
         self._viewport_script_path = viewport_script_path.resolve()
+        self._camera_script_path = camera_script_path.resolve()
 
     def render_viewport(
         self,
@@ -91,10 +97,48 @@ class NativeAnalysisCaptureBackend:
         source: CameraAnalysisSource,
         workspace: TemporaryWorkspace,
     ) -> None:
-        raise BridgeError(
-            "capture_analysis_camera_unavailable",
-            "Camera analysis capture is not implemented yet.",
+        if request.capture_pass not in {"depth", "grid"}:
+            raise BridgeError(
+                "capture_analysis_pass_unavailable",
+                f"Capture pass {request.capture_pass!r} is not implemented yet.",
+            )
+        artifact = self._builder.ensure(
+            houdini_build=session.probe.version,
+            hcommand=self._transport.executable,
+            environ=self._transport.subprocess_environment(),
         )
+        result_path = workspace.path_for("analysis-result.json")
+        request_path = workspace.path_for("analysis-request.json")
+        trigger_path = workspace.path_for("analysis-trigger.png")
+        request_path.write_text(
+            json.dumps(
+                {
+                    "dso_path": str(artifact.path),
+                    "generation": artifact.generation,
+                    "analysis": request.to_dict(),
+                    "png_path": str(source.png_path),
+                    "trigger_path": str(trigger_path),
+                    "camera_path": source.camera_path,
+                    "scale": source.scale,
+                    "max_width": source.max_width,
+                    "max_height": source.max_height,
+                    "pane": source.pane,
+                    "result_path": str(result_path),
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
+        runner = write_runpy_runner(
+            workspace,
+            script_path=self._camera_script_path,
+            request_path=request_path,
+            filename="analysis_camera.py",
+        )
+        self._transport.execute_script(session.target, runner)
+        _require_analysis_success(result_path)
 
 
 def _require_analysis_success(path: Path) -> None:

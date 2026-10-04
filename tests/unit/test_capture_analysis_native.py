@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from houbridge.capture.analysis import ViewportAnalysisSource, build_analysis_request
+from houbridge.capture.analysis import CameraAnalysisSource, ViewportAnalysisSource, build_analysis_request
 from houbridge.capture.analysis_native import NativeAnalysisCaptureBackend
 from houbridge.capture.models import ScreenshotPreset
 from houbridge.capture.native import NativeCaptureArtifact
@@ -56,7 +56,10 @@ class _Transport:
         request_path = runner.parent / "analysis-request.json"
         request = json.loads(request_path.read_text(encoding="utf-8"))
         self.requests.append(request)
-        for output in request["png_paths"]:
+        outputs = request.get("png_paths")
+        if outputs is None:
+            outputs = [request["png_path"]]
+        for output in outputs:
             Path(output).write_bytes(_png(320, 180))
         Path(request["result_path"]).write_text('{"ok":true}', encoding="utf-8")
 
@@ -139,6 +142,79 @@ def test_native_backend_rejects_unimplemented_viewport_pass_before_build(tmp_pat
                 max_width=2048,
                 max_height=2048,
                 preset=ScreenshotPreset(),
+                pane=None,
+            ),
+            workspace,
+        )
+
+    assert caught.value.code == "capture_analysis_pass_unavailable"
+    assert builder.calls == []
+
+
+def test_native_backend_forwards_camera_depth_grid_request(tmp_path: Path) -> None:
+    artifact = NativeCaptureArtifact(
+        path=tmp_path / "capture.dll",
+        generation="abc123",
+        houdini_build="22.0.429",
+    )
+    artifact.path.write_bytes(b"dll")
+    builder = _Builder(artifact)
+    transport = _Transport()
+    backend = NativeAnalysisCaptureBackend(transport, builder)
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
+    output = workspace.path_for("camera.png")
+    request = build_analysis_request(
+        "grid",
+        model_paths=("/obj/a", "/obj/b"),
+        unit=0.25,
+    )
+    assert request is not None
+
+    backend.render_camera(
+        _session(),
+        request,
+        CameraAnalysisSource(
+            png_path=output,
+            camera_path="/obj/geo1/camera1:2",
+            scale=0.5,
+            max_width=1920,
+            max_height=1080,
+            pane="panetab4",
+        ),
+        workspace,
+    )
+
+    assert output.is_file()
+    assert len(builder.calls) == 1
+    sent = transport.requests[0]
+    assert sent["analysis"]["pass"] == "grid"
+    assert sent["analysis"]["model_paths"] == ["/obj/a", "/obj/b"]
+    assert sent["analysis"]["unit"] == 0.25
+    assert sent["camera_path"] == "/obj/geo1/camera1:2"
+    assert sent["scale"] == 0.5
+    assert sent["max_width"] == 1920
+    assert sent["max_height"] == 1080
+    assert sent["pane"] == "panetab4"
+
+
+def test_native_backend_rejects_unimplemented_camera_pass_before_build(tmp_path: Path) -> None:
+    artifact = NativeCaptureArtifact(tmp_path / "capture.dll", "abc", "22.0.429")
+    builder = _Builder(artifact)
+    backend = NativeAnalysisCaptureBackend(_Transport(), builder)
+    workspace = TemporaryWorkspaceService(temp_root=tmp_path).allocate(prefix="analysis")
+    request = build_analysis_request("normal")
+    assert request is not None
+
+    with pytest.raises(BridgeError) as caught:
+        backend.render_camera(
+            _session(),
+            request,
+            CameraAnalysisSource(
+                png_path=workspace.path_for("camera.png"),
+                camera_path="/obj/cam1",
+                scale=1.0,
+                max_width=2048,
+                max_height=2048,
                 pane=None,
             ),
             workspace,
