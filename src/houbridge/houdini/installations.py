@@ -131,8 +131,8 @@ def resolve_session_launch_executable(
     """Resolve the Session launch executable without transport-config leakage.
 
     Resolution order is invocation override, global configuration, then the
-    default ``houdini`` executable.  Headless mode resolves the corresponding
-    ``hython`` from the selected Houdini installation and never launches the GUI
+    default ``houdini`` executable. Headless mode resolves the corresponding
+    ``hbatch`` from the selected Houdini installation and never launches the GUI
     executable visibly.
     """
 
@@ -168,10 +168,10 @@ def resolve_session_launch_executable(
     if not headless:
         return gui
 
-    hython_name = _executable_name("hython", platform_name)
-    if gui.name.casefold() == hython_name.casefold():
+    hbatch_name = _executable_name("hbatch", platform_name)
+    if gui.name.casefold() == hbatch_name.casefold():
         return gui
-    sibling = gui.parent / hython_name
+    sibling = gui.parent / hbatch_name
     if sibling.is_file():
         return sibling.resolve()
     raise BridgeError(

@@ -23,6 +23,7 @@ def _make_installation(root: Path, *, platform: str = "win32") -> None:
     (bin_dir / f"houdini{suffix}").write_bytes(b"")
     (bin_dir / f"hcommand{suffix}").write_bytes(b"")
     (bin_dir / f"hython{suffix}").write_bytes(b"")
+    (bin_dir / f"hbatch{suffix}").write_bytes(b"")
 
 
 def test_discovers_standard_macos_installation(
@@ -149,7 +150,7 @@ def test_session_launch_resolution_prefers_explicit_then_config_then_default(tmp
     ) == configured.resolve()
 
 
-def test_session_headless_resolution_uses_matching_hython(tmp_path: Path) -> None:
+def test_session_headless_resolution_uses_matching_hbatch(tmp_path: Path) -> None:
     root = tmp_path / "Houdini21.0.1"
     _make_installation(root)
 
@@ -161,7 +162,7 @@ def test_session_headless_resolution_uses_matching_hython(tmp_path: Path) -> Non
         platform="win32",
     )
 
-    assert resolved == (root / "bin" / "hython.exe").resolve()
+    assert resolved == (root / "bin" / "hbatch.exe").resolve()
 
 
 def test_session_launch_override_does_not_accept_argument_string(tmp_path: Path) -> None:

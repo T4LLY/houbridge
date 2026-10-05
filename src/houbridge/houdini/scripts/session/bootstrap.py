@@ -9,7 +9,6 @@ _BOOTSTRAP_DIR_ENV = "HOUBRIDGE_SESSION_BOOTSTRAP_DIR"
 _BOOTSTRAP_DIR = Path(os.environ[_BOOTSTRAP_DIR_ENV])
 _REQUEST = _BOOTSTRAP_DIR / "bootstrap.request.json"
 _RESULT = _BOOTSTRAP_DIR / "bootstrap.result.json"
-_HEADLESS_STDIN_HOLD: int | None = None
 
 
 def _publish(payload: dict[str, object]) -> None:
@@ -34,18 +33,6 @@ def _selected_port(hou: object) -> int:
     return port
 
 
-def _prepare_headless_console_wait() -> None:
-    global _HEADLESS_STDIN_HOLD
-    read_fd, write_fd = os.pipe()
-    try:
-        os.dup2(read_fd, 0)
-    finally:
-        os.close(read_fd)
-    # Keep one writer open in this process so ``hython -b -i`` waits for input
-    # without consuming the user's console and without seeing EOF after Houbridge exits.
-    _HEADLESS_STDIN_HOLD = write_fd
-
-
 def main() -> None:
     pid = os.getpid()
     _publish({"pid": pid, "port": None})
@@ -61,9 +48,6 @@ def main() -> None:
             hou.hipFile.load(hip_file)
         if not isinstance(headless, bool):
             raise RuntimeError("bootstrap headless request is invalid")
-        if headless:
-            _prepare_headless_console_wait()
-
         port = _selected_port(hou)
         _publish({"pid": pid, "port": port})
     except BaseException as exc:

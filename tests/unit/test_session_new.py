@@ -328,8 +328,8 @@ def test_launcher_release_reaps_successful_process_in_background(tmp_path: Path)
     assert waited.wait(timeout=1.0)
 
 
-def test_launcher_passes_b_flag_to_matching_headless_runtime(tmp_path: Path) -> None:
-    executable = tmp_path / "hython.exe"
+def test_launcher_uses_hbatch_native_openport_wait_for_headless_runtime(tmp_path: Path) -> None:
+    executable = tmp_path / "hbatch.exe"
     executable.write_bytes(b"")
     process = FakeProcess(pid=18744)
     captured: dict[str, object] = {}
@@ -347,13 +347,38 @@ def test_launcher_passes_b_flag_to_matching_headless_runtime(tmp_path: Path) -> 
                 open_ports=(port,),
             )
 
+    class HeadlessInput:
+        def __init__(self) -> None:
+            self.writes: list[str] = []
+            self.closed = False
+
+        def write(self, value: str) -> int:
+            self.writes.append(value)
+            return len(value)
+
+        def flush(self) -> None:
+            env = captured["kwargs"]["env"]
+            bootstrap_dir = Path(env["HOUBRIDGE_SESSION_BOOTSTRAP_DIR"])
+            text = "".join(self.writes)
+            if "openport -a -q -r" in text:
+                (bootstrap_dir / "bootstrap.result.json").write_text(
+                    json.dumps({"pid": 18744, "port": 49153}),
+                    encoding="utf-8",
+                )
+            if "openport -q -w 49153" in text:
+                (bootstrap_dir / "bootstrap.rebind.ready").write_text(
+                    "ready\n", encoding="utf-8"
+                )
+
+        def close(self) -> None:
+            self.closed = True
+
+    input_stream = HeadlessInput()
+    process.stdin = input_stream  # type: ignore[attr-defined]
+
     def popen(args, **kwargs):
         captured["args"] = args
         captured["kwargs"] = kwargs
-        script = Path(args[-1])
-        script.with_name("bootstrap.result.json").write_text(
-            json.dumps({"pid": 18744, "port": 49153}), encoding="utf-8"
-        )
         return process
 
     launcher = HoudiniSessionLauncher(
@@ -363,6 +388,8 @@ def test_launcher_passes_b_flag_to_matching_headless_runtime(tmp_path: Path) -> 
         popen=popen,
         identity_reader=lambda pid: ProcessIdentity(pid, "start"),
         executable_resolver=lambda *args, **kwargs: executable,
+        port_ready=lambda port: port == 49153,
+        python_executable=tmp_path / "python.exe",
         platform="win32",
         environ={"PATH": ""},
     )
@@ -370,9 +397,14 @@ def test_launcher_passes_b_flag_to_matching_headless_runtime(tmp_path: Path) -> 
     result = launcher.launch(hip_file=requested, headless=True)
 
     assert result.port == 49153
-    assert captured["args"][0] == str(executable)
-    assert captured["args"][1:3] == ["-b", "-i"]
-    assert "--port" not in captured["args"]
+    assert captured["args"] == [str(executable), str(requested.resolve())]
+    commands = "".join(input_stream.writes)
+    assert "openport -a -q -r" in commands
+    assert "openport -q -w 49153" in commands
+    assert "quit -f" in commands
+    assert "-b" not in captured["args"]
+    assert "-i" not in captured["args"]
+    assert input_stream.closed is True
     launch_env = captured["kwargs"]["env"]
     assert Path(launch_env["HOUBRIDGE_SESSION_BOOTSTRAP_DIR"]).name.startswith("session-new-")
 
@@ -521,6 +553,54 @@ def test_physical_bootstrap_loads_file_and_uses_automatic_openport(tmp_path: Pat
     assert payload == {"pid": 18744, "port": 49153}
     assert calls == ["openport -a -q"]
     assert loaded == [str(requested)]
+
+
+def test_physical_headless_port_notifier_publishes_selected_port(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source = (
+        Path(__file__).parents[2]
+        / "src"
+        / "houbridge"
+        / "houdini"
+        / "scripts"
+        / "session"
+        / "headless_port_notifier.py"
+    )
+    script = tmp_path / "headless_port_notifier.py"
+    shutil.copyfile(source, script)
+    monkeypatch.setenv("HOUBRIDGE_SESSION_BOOTSTRAP_DIR", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", [str(script), "18744", "49153"])
+
+    with pytest.raises(SystemExit) as caught:
+        exec(compile(script.read_text(encoding="utf-8"), str(script), "exec"), {"__name__": "__main__"})
+
+    assert caught.value.code == 0
+    assert json.loads((tmp_path / "bootstrap.result.json").read_text(encoding="utf-8")) == {
+        "pid": 18744,
+        "port": 49153,
+    }
+
+
+def test_physical_headless_rebind_publishes_ready_marker(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source = (
+        Path(__file__).parents[2]
+        / "src"
+        / "houbridge"
+        / "houdini"
+        / "scripts"
+        / "session"
+        / "headless_rebind.py"
+    )
+    script = tmp_path / "headless_rebind.py"
+    shutil.copyfile(source, script)
+    monkeypatch.setenv("HOUBRIDGE_SESSION_BOOTSTRAP_DIR", str(tmp_path))
+
+    exec(compile(script.read_text(encoding="utf-8"), str(script), "exec"), {"__name__": "__main__"})
+
+    assert (tmp_path / "bootstrap.rebind.ready").read_text(encoding="utf-8") == "ready\n"
 
 
 def test_session_new_forwards_stale_records_to_cleanup_hook(tmp_path: Path) -> None:

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -56,25 +58,36 @@ class HoudiniSessionLauncher:
         *,
         workspaces: TemporaryWorkspaceService | None = None,
         bootstrap_script: Path | None = None,
+        headless_notifier_script: Path | None = None,
+        headless_rebind_script: Path | None = None,
+        python_executable: Path | None = None,
         popen: Callable[..., _Process] = subprocess.Popen,  # type: ignore[assignment]
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         identity_reader: Callable[[int], ProcessIdentity] = process_identity_for_pid,
         executable_resolver: Callable[..., Path] = resolve_session_launch_executable,
+        port_ready: Callable[[int], bool] | None = None,
         environ: Mapping[str, str] | None = None,
         platform: str | None = None,
     ) -> None:
         self._config = config
         self._probe_factory = probe_factory
         self._workspaces = workspaces or TemporaryWorkspaceService()
-        self._bootstrap_script = bootstrap_script or (
-            Path(__file__).parents[1] / "houdini" / "scripts" / "session" / "bootstrap.py"
+        session_scripts = Path(__file__).parents[1] / "houdini" / "scripts" / "session"
+        self._bootstrap_script = bootstrap_script or (session_scripts / "bootstrap.py")
+        self._headless_notifier_script = headless_notifier_script or (
+            session_scripts / "headless_port_notifier.py"
         )
+        self._headless_rebind_script = headless_rebind_script or (
+            session_scripts / "headless_rebind.py"
+        )
+        self._python_executable = python_executable or Path(sys.executable)
         self._popen = popen
         self._monotonic = monotonic
         self._sleep = sleep
         self._identity_reader = identity_reader
         self._executable_resolver = executable_resolver
+        self._port_ready = port_ready or _local_port_accepting
         self._environ = os.environ if environ is None else environ
         self._platform = sys.platform if platform is None else platform
 
@@ -98,16 +111,6 @@ class HoudiniSessionLauncher:
         bootstrap_pid: int | None = None
         failed = False
         try:
-            script_path = workspace.path_for("bootstrap.py")
-            try:
-                shutil.copyfile(self._bootstrap_script, script_path)
-            except OSError as exc:
-                raise BridgeError(
-                    "session_bootstrap_unavailable",
-                    "Unable to prepare the Houdini Session bootstrap script.",
-                    f"{type(exc).__name__}: {exc}",
-                ) from exc
-
             request = {
                 "file": str(requested_file) if requested_file is not None else None,
                 "headless": bool(headless),
@@ -117,11 +120,22 @@ class HoudiniSessionLauncher:
                 json.dumps(request, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
             )
             result_path = workspace.path_for("bootstrap.result.json")
+            rebind_marker = workspace.path_for("bootstrap.rebind.ready")
 
-            args = [str(executable)]
             if headless:
-                args.extend(("-b", "-i"))
-            args.append(str(script_path))
+                notifier_path = workspace.path_for("headless_port_notifier.py")
+                rebind_path = workspace.path_for("headless_rebind.py")
+                self._copy_bootstrap_script(self._headless_notifier_script, notifier_path)
+                self._copy_bootstrap_script(self._headless_rebind_script, rebind_path)
+                args = [str(executable)]
+                if requested_file is not None:
+                    args.append(str(requested_file))
+            else:
+                script_path = workspace.path_for("bootstrap.py")
+                self._copy_bootstrap_script(self._bootstrap_script, script_path)
+                args = [str(executable), str(script_path)]
+                notifier_path = None
+                rebind_path = None
 
             launch_env = subprocess_environment_for(executable, environ=self._environ)
             launch_env["HOUBRIDGE_SESSION_BOOTSTRAP_DIR"] = str(workspace.directory)
@@ -139,14 +153,19 @@ class HoudiniSessionLauncher:
             )
             kwargs: dict[str, object] = {
                 "env": launch_env,
-                "stdin": subprocess.DEVNULL,
+                "stdin": subprocess.PIPE if headless else subprocess.DEVNULL,
                 "stdout": subprocess.DEVNULL,
                 "stderr": subprocess.DEVNULL,
             }
+            if headless:
+                kwargs.update(text=True, encoding="utf-8", errors="replace")
             if executable.parent.name.casefold() == "bin":
                 kwargs["cwd"] = str(executable.parent.parent)
             if self._platform.startswith("win"):
-                kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                if headless:
+                    creationflags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                kwargs["creationflags"] = creationflags
             else:
                 kwargs["start_new_session"] = True
 
@@ -159,9 +178,23 @@ class HoudiniSessionLauncher:
                     f"{type(exc).__name__}: {exc}",
                 ) from exc
 
+            if headless:
+                assert notifier_path is not None
+                wrapper_path = self._write_headless_notifier_wrapper(
+                    workspace,
+                    notifier_path,
+                    process.pid,
+                )
+                self._write_headless_input(
+                    process,
+                    f"openport -a -q -r {_hscript_quote_path(wrapper_path)} -p\n",
+                    close=False,
+                )
+
             probe = self._probe_factory(executable)
             deadline = self._monotonic() + self._config.startup_timeout_seconds
             last_state: dict[str, object] | None = None
+            headless_rebind_queued = False
             while self._monotonic() < deadline:
                 state = _read_bootstrap_state(result_path)
                 if state is not None:
@@ -178,6 +211,23 @@ class HoudiniSessionLauncher:
                         )
                     port = _state_port(state)
                     if port is not None:
+                        if headless:
+                            assert rebind_path is not None
+                            if not headless_rebind_queued:
+                                self._write_headless_input(
+                                    process,
+                                    (
+                                        f"python {_hscript_quote_path(rebind_path)}\n"
+                                        f"openport -q -w {port}\n"
+                                        "quit -f\n"
+                                    ),
+                                    close=True,
+                                )
+                                headless_rebind_queued = True
+                            if not rebind_marker.is_file() or not self._port_ready(port):
+                                self._sleep(self._config.startup_poll_interval_seconds)
+                                continue
+
                         probe_result = probe.inspect(port)
                         _validate_probe(
                             probe_result,
@@ -243,6 +293,82 @@ class HoudiniSessionLauncher:
             if not failed:
                 workspace.remove()
 
+    @staticmethod
+    def _copy_bootstrap_script(source: Path, destination: Path) -> None:
+        try:
+            shutil.copyfile(source, destination)
+        except OSError as exc:
+            raise BridgeError(
+                "session_bootstrap_unavailable",
+                "Unable to prepare the Houdini Session bootstrap script.",
+                f"{type(exc).__name__}: {exc}",
+            ) from exc
+
+    def _write_headless_notifier_wrapper(
+        self,
+        workspace,
+        notifier_path: Path,
+        houdini_pid: int,
+    ) -> Path:
+        python_executable = str(self._python_executable)
+        if self._platform.startswith("win"):
+            path = workspace.path_for("headless-port-notifier.cmd")
+            command = subprocess.list2cmdline(
+                [python_executable, "-I", str(notifier_path), str(houdini_pid)]
+            ).replace("%", "%%")
+            content = "\r\n".join(
+                (
+                    "@echo off",
+                    "set PYTHONHOME=",
+                    "set PYTHONPATH=",
+                    "set PYTHONSTARTUP=",
+                    "set PYTHONUSERBASE=",
+                    command + " %*",
+                    "",
+                )
+            )
+        else:
+            path = workspace.path_for("headless-port-notifier.sh")
+            command = shlex.join(
+                [python_executable, "-I", str(notifier_path), str(houdini_pid)]
+            )
+            content = (
+                "#!/bin/sh\n"
+                "unset PYTHONHOME PYTHONPATH PYTHONSTARTUP PYTHONUSERBASE\n"
+                f"exec {command} \"$@\"\n"
+            )
+        try:
+            path.write_text(content, encoding="utf-8", newline="")
+            if not self._platform.startswith("win"):
+                path.chmod(0o700)
+        except OSError as exc:
+            raise BridgeError(
+                "session_bootstrap_unavailable",
+                "Unable to prepare the headless Session port notifier.",
+                f"{type(exc).__name__}: {exc}",
+            ) from exc
+        return path
+
+    @staticmethod
+    def _write_headless_input(process: _Process, text: str, *, close: bool) -> None:
+        stream = getattr(process, "stdin", None)
+        if stream is None:
+            raise BridgeError(
+                "session_bootstrap_unavailable",
+                "Headless Houdini did not provide the expected HScript input pipe.",
+            )
+        try:
+            stream.write(text)
+            stream.flush()
+            if close:
+                stream.close()
+        except (OSError, ValueError) as exc:
+            raise BridgeError(
+                "houdini_bootstrap_failed",
+                "Unable to drive the headless Houdini Session bootstrap.",
+                f"{type(exc).__name__}: {exc}",
+            ) from exc
+
     def release(self, result: SessionLaunchResult) -> None:
         """Keep ownership of the Popen handle until the launched process exits."""
 
@@ -285,6 +411,25 @@ class HoudiniSessionLauncher:
                 os.kill(bootstrap_pid, signal.SIGTERM)
             except (ProcessLookupError, PermissionError, OSError):
                 pass
+
+
+def _hscript_quote_path(path: Path) -> str:
+    value = path.resolve().as_posix()
+    if any(character in value for character in ('"', "\n", "\r")):
+        raise BridgeError(
+            "session_bootstrap_unavailable",
+            "Session bootstrap path cannot be represented safely in HScript.",
+            value,
+        )
+    return f'"{value}"'
+
+
+def _local_port_accepting(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+            return True
+    except OSError:
+        return False
 
 
 def _validate_hip_file(path: Path | None) -> Path | None:

@@ -173,7 +173,7 @@ Once at least one live Session record already exists, Session promotion SHALL be
 
 ### Requirement: Launch the selected Houdini process mode without selecting a license edition
 
-`session new` SHALL launch either the normal Houdini GUI mode or, when headless launch is selected, a Houdini-provided headless Python runtime that can remain available for openport commands. Both modes SHALL bootstrap `openport -a` and SHALL use the same post-launch Session probe. Houbridge SHALL NOT add Apprentice, Indie, Core, Education, or Commercial-specific launch logic.
+`session new` SHALL launch either the normal Houdini GUI mode or, when headless launch is selected, a Houdini-provided non-graphical runtime that can remain available for openport commands. Both modes SHALL obtain the session port from `openport -a` and SHALL use the same post-launch Session probe. Headless startup SHALL enter a native HScript openport wait before success is reported; Houbridge SHALL NOT choose or scan candidate TCP ports itself. Houbridge SHALL NOT add Apprentice, Indie, Core, Education, or Commercial-specific launch logic.
 
 #### Scenario: Launch a GUI session
 - **WHEN** headless launch is not requested
@@ -182,9 +182,10 @@ Once at least one live Session record already exists, Session promotion SHALL be
 
 #### Scenario: Launch a headless session
 - **WHEN** headless launch is requested
-- **THEN** Houbridge starts a new compatible headless Houdini runtime
-- **AND** enables background handling of openport commands
-- **AND** obtains an automatically selected openport before reporting startup success
+- **THEN** Houbridge starts the corresponding `hbatch` runtime
+- **AND** obtains the port from `openport -a`
+- **AND** enters a native HScript openport wait that continues servicing transport commands
+- **AND** reports startup success only after the normal Session probe succeeds on that persistent port
 
 ### Requirement: Resolve the Session new launch executable by explicit override, global configuration, then default
 
@@ -194,7 +195,7 @@ For `session new`, the Houdini launch executable SHALL resolve in this order:
 2. global `[houdini].hcommand` when non-empty;
 3. executable name `houdini` for the normal GUI launch path.
 
-`--hcommand` and `[houdini].hcommand` SHALL identify an executable only and SHALL NOT contain command-line arguments. For `--headless`, Session SHALL resolve the corresponding compatible headless Houdini runtime rather than launching the GUI executable as a visible process. A local `<cwd>/.houbridge.toml` SHALL NOT override the global launch executable.
+`--hcommand` and `[houdini].hcommand` SHALL identify an executable only and SHALL NOT contain command-line arguments. For `--headless`, Session SHALL resolve the corresponding `hbatch` executable from the selected Houdini installation rather than launching the GUI executable as a visible process. A local `<cwd>/.houbridge.toml` SHALL NOT override the global launch executable.
 
 SideFX transport tooling required after bootstrap MAY be resolved from the selected Houdini installation, a usable `HFS`, or `PATH`; normal commands SHALL not expose a per-invocation transport-executable override.
 
