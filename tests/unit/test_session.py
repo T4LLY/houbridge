@@ -336,7 +336,11 @@ def test_session_info_all_removes_dead_sessions_before_listing(
         probe,  # type: ignore[arg-type]
         identity_reader=identity,
     )
-    cleanup = SessionStaleCleanupService(registry, identity_reader=identity)
+    cleanup = SessionStaleCleanupService(
+        registry,
+        identity_reader=identity,
+        port_status_reader=lambda _port: True,
+    )
 
     payload = SessionInfoService(
         registry,

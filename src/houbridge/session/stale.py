@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import socket
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
 from houbridge.process_coordination import ProcessIdentity, process_identity_for_pid
 
 from .registry import SessionRecord, SessionRegistry, SessionRegistryState
+
+
+PortStatusReader = Callable[[int], bool | None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,17 +19,21 @@ class StaleCleanupResult:
 
 
 class SessionStaleCleanupService:
-    """Remove registry entries proven stale by operating-system process identity."""
+    """Remove registry entries proven stale by process identity or closed port."""
 
     def __init__(
         self,
         registry: SessionRegistry,
         *,
         identity_reader: Callable[[int], ProcessIdentity] = process_identity_for_pid,
+        port_status_reader: PortStatusReader | None = None,
         on_stale: Callable[[SessionRecord], None] | None = None,
     ) -> None:
         self._registry = registry
         self._identity_reader = identity_reader
+        self._port_status_reader = (
+            _local_port_status if port_status_reader is None else port_status_reader
+        )
         self._on_stale = on_stale
 
     def cleanup(self) -> SessionRegistryState:
@@ -85,4 +93,20 @@ class SessionStaleCleanupService:
             and identity.process_start_identity != record.process_start_identity
         ):
             return False
-        return True
+
+        # Cleanup is destructive. Only an explicit connection refusal proves that
+        # the registered local listener is gone; timeout and other socket errors
+        # can occur while Houdini is busy or the host is temporarily constrained.
+        return self._port_status_reader(record.port) is not False
+
+
+def _local_port_status(port: int) -> bool | None:
+    """Return True for open, False for refused, and None when inconclusive."""
+
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+            return True
+    except ConnectionRefusedError:
+        return False
+    except OSError:
+        return None

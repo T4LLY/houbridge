@@ -7,7 +7,7 @@ from houbridge.process_coordination import ProcessIdentity, process_identity_for
 
 from .launcher import HoudiniSessionLauncher
 from .registry import SessionRecord, SessionRegistry, SessionRegistryState
-from .stale import SessionStaleCleanupService
+from .stale import PortStatusReader, SessionStaleCleanupService
 
 
 class SessionNewService:
@@ -19,6 +19,7 @@ class SessionNewService:
         launcher: HoudiniSessionLauncher,
         *,
         identity_reader: Callable[[int], ProcessIdentity] = process_identity_for_pid,
+        port_status_reader: PortStatusReader | None = None,
         on_stale: Callable[[SessionRecord], None] | None = None,
     ) -> None:
         self._registry = registry
@@ -26,6 +27,7 @@ class SessionNewService:
         self._stale_cleanup = SessionStaleCleanupService(
             registry,
             identity_reader=identity_reader,
+            port_status_reader=port_status_reader,
             on_stale=on_stale,
         )
 

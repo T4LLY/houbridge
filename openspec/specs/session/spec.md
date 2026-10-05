@@ -68,11 +68,30 @@ Cross-process Session registry mutation SHALL use a process-coordination lock. W
 - **THEN** each process has one positive integer session number
 - **AND** `primary` remains a single registry-level selection
 
+### Requirement: Conservatively clean stale session registrations
+
+Normal stale cleanup SHALL remove a registered Session only when staleness is proven by one of these conditions:
+
+- the recorded operating-system process identity no longer identifies the same live process; or
+- that process identity is still valid and a lightweight TCP connection attempt to the registered local port is explicitly refused.
+
+A timeout, temporary socket failure, permission-related socket error, or other inconclusive port result SHALL NOT by itself prove that the Session is stale. Stale cleanup SHALL NOT require a Houdini command, HOM execution, or full Session probe merely to test liveness. If stale cleanup removes the Session referenced by `primary`, Session SHALL unset `primary` and SHALL NOT automatically promote another existing Session.
+
+#### Scenario: Live process has a closed registered port
+- **WHEN** the recorded process identity still identifies the same live process
+- **AND** connecting to the registered local TCP port is explicitly refused
+- **THEN** stale cleanup removes that Session record
+
+#### Scenario: Port liveness is inconclusive
+- **WHEN** the recorded process identity still identifies the same live process
+- **AND** the registered port check times out or otherwise cannot prove that the listener is closed
+- **THEN** stale cleanup preserves that Session record
+
 ### Requirement: Create a new process without reuse probing
 
 `session new` SHALL always launch a new Houdini process or selected headless Houdini runtime. It SHALL NOT reuse an already-running process and SHALL NOT perform an "already started" decision before launch.
 
-Before allocating a session number, Session SHALL check the recorded PIDs in the registry and remove entries whose processes are no longer alive. If stale cleanup removes the session referenced by `primary`, Session SHALL unset `primary`. It SHALL NOT promote another existing session automatically.
+Before allocating a session number, Session SHALL apply the normal stale-cleanup rule to the registry. If cleanup removes the session referenced by `primary`, Session SHALL unset `primary`. It SHALL NOT promote another existing session automatically.
 
 After stale cleanup, the newly launched process SHALL receive the smallest unused positive session number. On first-ever registry creation, the first successful session SHALL be session `1` and SHALL automatically become primary. If stale cleanup leaves zero live sessions, the newly created session SHALL become primary even when the registry file already exists. If a registry already exists without a primary and at least one live session remains, later `session new` operations SHALL NOT automatically create a new primary.
 
@@ -85,8 +104,8 @@ After stale cleanup, the newly launched process SHALL receive the smallest unuse
 - **WHEN** stale cleanup makes session number `2` unused while higher live numbers remain
 - **THEN** the next successfully created process is assigned session `2`
 
-#### Scenario: Primary process died while other live sessions remain
-- **WHEN** stale cleanup discovers that the primary PID is no longer alive
+#### Scenario: Primary session becomes stale while other live sessions remain
+- **WHEN** stale cleanup proves that the primary Session is stale
 - **AND** at least one other live session remains
 - **THEN** its registry entry is removed
 - **AND** `primary` is unset

@@ -43,6 +43,7 @@ def test_stale_session_cleanup_retires_only_exact_stale_history(tmp_path: Path) 
     cleanup = SessionStaleCleanupService(
         registry,
         identity_reader=identity_reader,
+        port_status_reader=lambda _port: True,
         on_stale=lambda record: retirement.retire(
             ProcessIdentity(record.pid, record.process_start_identity or "missing")
         ),

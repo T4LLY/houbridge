@@ -139,6 +139,7 @@ def test_concurrent_new_calls_allocate_distinct_sessions(tmp_path: Path) -> None
             registry,
             launcher,  # type: ignore[arg-type]
             identity_reader=lambda value: ProcessIdentity(value, f"start-{value}"),
+            port_status_reader=lambda _port: True,
         )
         try:
             payload = service.create()
@@ -186,6 +187,7 @@ def test_additional_session_never_reuses_a_live_process(tmp_path: Path) -> None:
         registry,
         launcher,  # type: ignore[arg-type]
         identity_reader=lambda pid: ProcessIdentity(pid, "live-1"),
+        port_status_reader=lambda _port: True,
     )
 
     payload = service.create()
@@ -218,6 +220,7 @@ def test_stale_session_number_is_reused_and_stale_primary_is_not_replaced(tmp_pa
         registry,
         launcher,  # type: ignore[arg-type]
         identity_reader=identity,
+        port_status_reader=lambda _port: True,
     ).create()
 
     assert payload["session"] == 2
@@ -283,6 +286,7 @@ def test_existing_registry_without_primary_but_with_live_sessions_does_not_promo
         registry,
         launcher,  # type: ignore[arg-type]
         identity_reader=lambda pid: ProcessIdentity(pid, "live-1") if pid == 1001 else ProcessIdentity(pid, f"start-{pid}"),
+        port_status_reader=lambda _port: True,
     ).create()
 
     assert registry.load().primary is None

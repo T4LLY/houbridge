@@ -7,7 +7,7 @@ from houbridge.process_coordination import ProcessIdentity, process_identity_for
 
 from .probe import SessionProbe, SessionProbeResult
 from .registry import SessionRecord, SessionRegistry, SessionRegistryState
-from .stale import SessionStaleCleanupService
+from .stale import PortStatusReader, SessionStaleCleanupService
 
 
 class SessionAttachService:
@@ -19,6 +19,7 @@ class SessionAttachService:
         probe: SessionProbe,
         *,
         identity_reader: Callable[[int], ProcessIdentity] = process_identity_for_pid,
+        port_status_reader: PortStatusReader | None = None,
         on_stale: Callable[[SessionRecord], None] | None = None,
     ) -> None:
         self._registry = registry
@@ -27,6 +28,7 @@ class SessionAttachService:
         self._stale_cleanup = SessionStaleCleanupService(
             registry,
             identity_reader=identity_reader,
+            port_status_reader=port_status_reader,
             on_stale=on_stale,
         )
 

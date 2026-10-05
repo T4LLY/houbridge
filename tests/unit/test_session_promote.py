@@ -61,6 +61,7 @@ def _promote_service(
     cleanup = SessionStaleCleanupService(
         registry,
         identity_reader=identity_reader,
+        port_status_reader=lambda _port: True,
     )
     return SessionPromoteService(registry, resolver, stale_cleanup=cleanup)
 
@@ -178,6 +179,7 @@ def test_stale_cleanup_removes_reused_pid_and_unsets_primary(tmp_path: Path) -> 
     cleanup = SessionStaleCleanupService(
         registry,
         identity_reader=_identity_reader({1001: "start-1", 1002: "new-start"}),
+        port_status_reader=lambda _port: True,
     )
 
     state = cleanup.cleanup()
@@ -248,6 +250,7 @@ def test_promote_preserves_registry_changes_made_during_target_probe(tmp_path: P
     cleanup = SessionStaleCleanupService(
         registry,
         identity_reader=_identity_reader({1001: "start-1", 1003: "start-3"}),
+        port_status_reader=lambda _port: True,
     )
     service = SessionPromoteService(
         registry,

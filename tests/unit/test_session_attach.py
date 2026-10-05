@@ -69,6 +69,7 @@ def test_attach_additional_session_preserves_existing_primary(tmp_path: Path) ->
         registry,
         probe,  # type: ignore[arg-type]
         identity_reader=_identity,
+        port_status_reader=lambda _port: True,
     ).attach(49153)
 
     assert payload == {"session": 2, "port": 49153, "pid": 2002}
@@ -118,6 +119,7 @@ def test_attach_does_not_create_primary_when_other_live_sessions_remain(tmp_path
         registry,
         probe,  # type: ignore[arg-type]
         identity_reader=_identity,
+        port_status_reader=lambda _port: True,
     ).attach(49153)
 
     assert registry.load().primary is None
@@ -137,6 +139,7 @@ def test_attach_same_registered_target_is_idempotent(tmp_path: Path) -> None:
         registry,
         probe,  # type: ignore[arg-type]
         identity_reader=_identity,
+        port_status_reader=lambda _port: True,
     ).attach(49153)
 
     assert payload == {"session": 1, "port": 49153, "pid": 18744}
@@ -158,6 +161,7 @@ def test_attach_rejects_second_port_for_already_registered_process(tmp_path: Pat
             registry,
             probe,  # type: ignore[arg-type]
             identity_reader=_identity,
+            port_status_reader=lambda _port: True,
         ).attach(49153)
 
     assert caught.value.code == "session_already_registered"

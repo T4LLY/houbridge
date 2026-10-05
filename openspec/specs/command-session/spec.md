@@ -16,7 +16,7 @@ houbridge session info [--session INTEGER]
 
 `--session` SHALL be a positive registered session number.
 
-When `--session` is omitted, `session info` SHALL first remove registry entries whose recorded operating-system process identity is proven stale, using the normal stale-cleanup rule. An identity-read failure that does not prove process death SHALL NOT remove the entry. It SHALL then inspect all remaining registered sessions and return the registry primary selection plus one public info object per session:
+When `--session` is omitted, `session info` SHALL first apply the normal stale-cleanup rule. A process-identity read failure or port-liveness result that does not prove staleness SHALL NOT remove the entry. It SHALL then inspect all remaining registered sessions and return the registry primary selection plus one public info object per session:
 
 ```json
 {
@@ -95,7 +95,7 @@ houbridge session new [--file PATH] [--headless] [--hcommand PATH]
 
 `session new` SHALL always create a new Houdini process. It SHALL NOT probe for or reuse an already-running Houdini process before launch.
 
-Before allocating the new session number, Houbridge SHALL remove stale registry entries whose recorded PID is no longer alive. It SHALL then allocate the smallest unused positive session number. Houdini SHALL choose the TCP port by executing `openport -a`; Houbridge SHALL NOT choose or probe candidate free ports itself.
+Before allocating the new session number, Houbridge SHALL apply the normal stale-cleanup rule and remove only entries proven stale. It SHALL then allocate the smallest unused positive session number. Houdini SHALL choose the TCP port by executing `openport -a`; Houbridge SHALL NOT choose or probe candidate free ports itself.
 
 Successful creation SHALL return exactly:
 
