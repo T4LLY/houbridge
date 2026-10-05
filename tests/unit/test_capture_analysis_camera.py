@@ -96,7 +96,7 @@ def _run_camera(
     monkeypatch.setattr(analysis_camera, "_analysis_runtime", lambda: analysis_runtime)
     monkeypatch.setattr(analysis_camera, "_camera_runtime", lambda: camera_runtime)
 
-    hou = SimpleNamespace(geometryViewportLayout=SimpleNamespace(Single="single"))
+    hou = SimpleNamespace(geometryViewportLayout=SimpleNamespace(Single="single"), isUIAvailable=lambda: True)
     request = {
         "analysis": {
             "pass": capture_pass,
@@ -238,3 +238,76 @@ def test_analysis_camera_matches_beauty_tiny_resolution_workaround(monkeypatch) 
     assert result == {"ok": True}
     assert calls[0][1]["resolution"] == (2, 2)
     assert calls[1] == ("resize", (Path("D:/Temp/camera.png"), (1, 1)))
+
+
+def test_analysis_camera_headless_uses_flipbook_rop_without_scene_viewer(monkeypatch) -> None:
+    node = _Node()
+    resolved = {
+        "path": "/obj/cam1",
+        "type": "obj",
+        "node": node,
+        "prim": None,
+        "viewport_selector": None,
+    }
+    calls = []
+    destroyed = []
+    rop = object()
+
+    class _CaptureRequestError(RuntimeError):
+        def __init__(self, code, message, context=None):
+            super().__init__(message)
+            self.code = code
+            self.context = context
+
+    runtime = {
+        "CaptureRequestError": _CaptureRequestError,
+        "constrained_size": lambda width, height, scale, max_width, max_height: (800, 450),
+    }
+    analysis_runtime = {
+        "install_dso": lambda path: calls.append(("install", path)),
+        "resolve_models": lambda paths, _hou, _error: tuple(paths),
+        "flipbook_analysis_rop": lambda *args, **kwargs: calls.append(("render", args, kwargs)),
+    }
+    camera_runtime = {
+        "resolve_camera": lambda path, _hou, _runtime: resolved,
+        "_obj_resolution": lambda value: [1920, 1080],
+        "_camera_resolution": lambda camera: list(camera.resolution()),
+    }
+    headless_runtime = {
+        "create_flipbook_rop": lambda _hou, **kwargs: calls.append(("create", kwargs)) or rop,
+        "destroy_flipbook_rop": lambda value: destroyed.append(value),
+    }
+    monkeypatch.setattr(analysis_camera, "_runtime", lambda: runtime)
+    monkeypatch.setattr(analysis_camera, "_analysis_runtime", lambda: analysis_runtime)
+    monkeypatch.setattr(analysis_camera, "_camera_runtime", lambda: camera_runtime)
+    monkeypatch.setattr(analysis_camera, "_headless_runtime", lambda: headless_runtime)
+
+    request = {
+        "analysis": {
+            "pass": "normal",
+            "model_paths": ["/obj/a"],
+            "unit": None,
+            "curvature_scale": 1.0,
+            "curvature_colormap": "rg",
+        },
+        "dso_path": "D:/cache/capture.dll",
+        "generation": "abc123",
+        "camera_path": "/obj/cam1",
+        "png_path": "D:/Temp/camera.png",
+        "trigger_path": "D:/Temp/trigger.png",
+        "scale": 0.5,
+        "max_width": 800,
+        "max_height": 600,
+        "pane": None,
+    }
+    hou = SimpleNamespace(isUIAvailable=lambda: False)
+
+    result = analysis_camera._run(request, hou)
+
+    assert result == {"ok": True}
+    assert ("create", {"camera_path": "/obj/cam1", "resolution": (800, 450)}) in calls
+    render = next(item for item in calls if item[0] == "render")
+    assert render[1] == (rop,)
+    assert render[2]["capture_pass"] == "normal"
+    assert render[2]["model_paths"] == ("/obj/a",)
+    assert destroyed == [rop]

@@ -140,7 +140,7 @@ Supported options SHALL be:
 | `--list` | List initially supported cameras without capturing; CAMERA_PATH SHALL be omitted. |
 | `--detail` | Return bounded detail for CAMERA_PATH without capturing. |
 | `--scale FLOAT` | Camera capture only; greater than zero, default `1.0`; camera resolution is scaled before shared screenshot maximums are enforced. |
-| `--pane TEXT` | Camera capture only; exact Scene Viewer pane-tab name to use as the display/capture source. |
+| `--pane TEXT` | Graphical camera capture only; exact Scene Viewer pane-tab name to use as the display/capture source. |
 | `--pass TEXT` | Camera capture only; `beauty`, `depth`, `grid`, `normal`, `object-id`, or `curvature`; default `beauty`. |
 | `--model PATH` | Camera capture only; repeatable absolute OBJ node path, valid only for non-beauty passes. |
 | `--unit FLOAT` | Camera capture only; required only for `--pass grid`; finite and greater than zero. |
@@ -183,13 +183,13 @@ A successful detail result SHALL have the shape:
 }
 ```
 
-Camera capture SHALL use the same Scene Viewer pane-selection semantics and structured pane errors as viewport and turntable capture. It SHALL preserve camera framing, use the camera's own resolution as the source dimensions, apply `--scale` and the shared screenshot maximums, and emit exactly:
+Camera capture in a graphical Session SHALL use the same Scene Viewer pane-selection semantics and structured pane errors as viewport and turntable capture. Camera capture in a non-graphical Session SHALL NOT require `hou.ui` or a Scene Viewer and SHALL instead render the resolved camera through a temporary Flipbook ROP. Supplying `--pane` to non-graphical camera capture SHALL fail with `viewport_unavailable` rather than being ignored. Both paths SHALL preserve camera framing, use the camera's own resolution as the source dimensions, apply `--scale` and the shared screenshot maximums, and emit exactly:
 
 ```json
 {"path":"D:/Temp/.../camera20260928-1145-001.png"}
 ```
 
-Non-beauty camera capture SHALL use the same source camera framing, source resolution, scale/clamp rule, pane-selection behavior, and success JSON shape as Beauty camera capture. `--model` SHALL filter only analysis geometry and SHALL NOT reframe the camera.
+Non-beauty camera capture SHALL use the same source camera framing, source resolution, scale/clamp rule, runtime-specific preparation, and success JSON shape as Beauty camera capture. In graphical Sessions it SHALL retain the existing Scene Viewer preparation. In non-graphical Sessions it SHALL use the same temporary Flipbook ROP path as headless Beauty capture and SHALL reuse the existing native analysis SceneHook backend rather than implementing a second analysis renderer. `--model` SHALL filter only analysis geometry and SHALL NOT reframe the camera.
 
 An explicit camera path SHALL be absolute. Initial explicit support SHALL accept standard OBJ Camera paths and standard Camera SOP first-output paths. A Camera SOP path MAY omit its selector only when exactly one camera primitive is present; otherwise it SHALL fail with `camera_ambiguous`. A missing camera or primitive SHALL fail with `camera_not_found`, a Camera SOP that produces no camera primitive or an OBJ Camera path with a primitive selector SHALL fail with `camera_invalid`, and node types outside the initial support set SHALL fail with `camera_unsupported`.
 
@@ -215,6 +215,22 @@ An explicit camera path SHALL be absolute. Initial explicit support SHALL accept
 - **AND** the published PNG uses the same scaled/clamped dimension rule as Beauty capture
 - **AND** camera composition is not reframed
 - **AND** output retains the single `path` success schema
+
+#### Scenario: Capture one camera in a headless Session
+- **WHEN** camera capture targets a registered non-graphical Session without `--pane`
+- **THEN** capture does not access `hou.ui` or require a Scene Viewer
+- **AND** a temporary Flipbook ROP renders the resolved camera
+- **AND** the temporary ROP is removed after capture
+
+#### Scenario: Capture one camera analysis pass in a headless Session
+- **WHEN** a non-beauty camera capture targets a registered non-graphical Session without `--pane`
+- **THEN** the same temporary Flipbook ROP triggers the existing native analysis SceneHook backend
+- **AND** no separate headless analysis renderer is introduced
+
+#### Scenario: Headless camera capture rejects pane selection
+- **WHEN** camera capture targets a non-graphical Session with `--pane`
+- **THEN** the command fails with `viewport_unavailable`
+- **AND** the pane selector is not silently ignored
 
 #### Scenario: Camera path is omitted outside list mode
 - **WHEN** `houbridge capture camera` or `houbridge capture camera --detail` is invoked without CAMERA_PATH

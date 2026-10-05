@@ -213,6 +213,9 @@ def test_camera_injected_code_reuses_capture_runtime_and_preserves_camera_framin
     runtime_source = Path(runtime.__file__).read_text(encoding="utf-8")
 
     assert 'runtime["resolve_scene_viewer"]' in source
+    assert 'hou.isUIAvailable()' in source
+    assert '_capture_camera_headless' in source
+    assert 'headless["create_flipbook_rop"]' in source
     assert 'runtime["clone_scene_viewer"]' in source
     assert 'runtime["close_scene_viewer"]' in source
     assert 'runtime["flipbook_png"]' in source

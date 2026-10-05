@@ -83,6 +83,31 @@ def _restore_environment(previous: dict[str, str | None]) -> None:
             os.environ[key] = value
 
 
+def _analysis_environment(
+    *,
+    output_path: Path,
+    generation: str,
+    capture_pass: str,
+    model_paths: tuple[str, ...],
+    grid_unit,
+    curvature_scale: float,
+    curvature_colormap: str,
+) -> dict[str, str]:
+    values = {
+        "HOUBRIDGE_CAPTURE_GENERATION": generation,
+        "HOUBRIDGE_CAPTURE_ANALYSIS_REQUEST": uuid.uuid4().hex,
+        "HOUBRIDGE_CAPTURE_ANALYSIS_PASS": capture_pass,
+        "HOUBRIDGE_CAPTURE_ANALYSIS_OUTPUT": str(output_path),
+        "HOUBRIDGE_CAPTURE_ANALYSIS_MODELS": ";".join(model_paths),
+    }
+    if grid_unit is not None:
+        values["HOUBRIDGE_CAPTURE_ANALYSIS_UNIT"] = format(float(grid_unit), ".17g")
+    if capture_pass == "curvature":
+        values["HOUBRIDGE_CAPTURE_CURVATURE_SCALE"] = format(float(curvature_scale), ".17g")
+        values["HOUBRIDGE_CAPTURE_CURVATURE_COLORMAP"] = curvature_colormap
+    return values
+
+
 def flipbook_analysis(
     scene,
     viewport,
@@ -109,22 +134,57 @@ def flipbook_analysis(
     settings.outputZoom(100)
     if crop_camera:
         settings.cropOutMaskOverlay(True)
-    request_id = uuid.uuid4().hex
-    values = {
-        "HOUBRIDGE_CAPTURE_GENERATION": generation,
-        "HOUBRIDGE_CAPTURE_ANALYSIS_REQUEST": request_id,
-        "HOUBRIDGE_CAPTURE_ANALYSIS_PASS": capture_pass,
-        "HOUBRIDGE_CAPTURE_ANALYSIS_OUTPUT": str(output_path),
-        "HOUBRIDGE_CAPTURE_ANALYSIS_MODELS": ";".join(model_paths),
-    }
-    if grid_unit is not None:
-        values["HOUBRIDGE_CAPTURE_ANALYSIS_UNIT"] = format(float(grid_unit), ".17g")
-    if capture_pass == "curvature":
-        values["HOUBRIDGE_CAPTURE_CURVATURE_SCALE"] = format(float(curvature_scale), ".17g")
-        values["HOUBRIDGE_CAPTURE_CURVATURE_COLORMAP"] = curvature_colormap
+    values = _analysis_environment(
+        output_path=output_path,
+        generation=generation,
+        capture_pass=capture_pass,
+        model_paths=model_paths,
+        grid_unit=grid_unit,
+        curvature_scale=curvature_scale,
+        curvature_colormap=curvature_colormap,
+    )
     previous = _set_environment(values)
     try:
         scene.flipbook(viewport, settings)
+    finally:
+        _restore_environment(previous)
+        trigger_path.unlink(missing_ok=True)
+    if not output_path.is_file():
+        raise RuntimeError("Native analysis SceneHook did not produce the requested PNG.")
+
+
+def flipbook_analysis_rop(
+    rop,
+    *,
+    output_path: Path,
+    trigger_path: Path,
+    generation: str,
+    capture_pass: str,
+    model_paths: tuple[str, ...],
+    grid_unit,
+    curvature_scale: float,
+    curvature_colormap: str,
+    hou,
+) -> None:
+    values = _analysis_environment(
+        output_path=output_path,
+        generation=generation,
+        capture_pass=capture_pass,
+        model_paths=model_paths,
+        grid_unit=grid_unit,
+        curvature_scale=curvature_scale,
+        curvature_colormap=curvature_colormap,
+    )
+    previous = _set_environment(values)
+    try:
+        frame = hou.frame()
+        rop.render(
+            frame_range=(frame, frame),
+            output_file=str(trigger_path),
+            ignore_inputs=True,
+            verbose=True,
+            output_progress=True,
+        )
     finally:
         _restore_environment(previous)
         trigger_path.unlink(missing_ok=True)

@@ -149,7 +149,7 @@ Supported options SHALL be:
 | `--list` | List initially supported cameras without capturing; CAMERA_PATH SHALL be omitted. |
 | `--detail` | Return bounded detail for CAMERA_PATH without capturing. |
 | `--scale FLOAT` | Camera capture only; greater than zero, default `1.0`; camera resolution is scaled before shared screenshot maximums are enforced. |
-| `--pane TEXT` | Camera capture only; exact Scene Viewer pane-tab name to use as the display/capture source. |
+| `--pane TEXT` | Graphical camera capture only; exact Scene Viewer pane-tab name to use as the display/capture source. |
 | `--session INTEGER` | Positive registered session number; uses primary when omitted. |
 
 `CAMERA_PATH` SHALL be required unless `--list` is supplied. `--list` SHALL NOT be combined with CAMERA_PATH, `--detail`, non-default `--scale`, or `--pane`; those combinations SHALL fail with `capture_camera_list_conflict`. `--detail` SHALL require CAMERA_PATH and SHALL NOT be combined with non-default `--scale` or `--pane`; those combinations SHALL fail with `capture_camera_detail_conflict`. A missing CAMERA_PATH outside list mode SHALL fail with `camera_path_required` through the normal handled-error output path.
@@ -187,7 +187,7 @@ A successful detail result SHALL have the shape:
 }
 ```
 
-Camera capture SHALL use the same Scene Viewer pane-selection semantics and structured pane errors as viewport and turntable capture. It SHALL preserve camera framing, use the camera's own resolution as the source dimensions, apply `--scale` and the shared screenshot maximums, and emit exactly:
+Camera capture in a graphical Session SHALL use the same Scene Viewer pane-selection semantics and structured pane errors as viewport and turntable capture. Camera capture in a non-graphical Session SHALL NOT require `hou.ui` or a Scene Viewer and SHALL instead render the resolved camera through a temporary Flipbook ROP. Supplying `--pane` to non-graphical camera capture SHALL fail with `viewport_unavailable` rather than being ignored. Both paths SHALL preserve camera framing, use the camera's own resolution as the source dimensions, apply `--scale` and the shared screenshot maximums, and emit exactly:
 
 ```json
 {"path":"D:/Temp/.../camera20260928-1145-001.png"}
@@ -210,6 +210,22 @@ An explicit camera path SHALL be absolute. Initial explicit support SHALL accept
 - **THEN** the source dimensions are the camera resolution
 - **AND** the published PNG uses the scaled/clamped dimensions
 - **AND** camera composition is not reframed
+
+#### Scenario: Capture one camera in a headless Session
+- **WHEN** camera capture targets a registered non-graphical Session without `--pane`
+- **THEN** capture does not access `hou.ui` or require a Scene Viewer
+- **AND** a temporary Flipbook ROP renders the resolved camera
+- **AND** the temporary ROP is removed after capture
+
+#### Scenario: Capture one camera analysis pass in a headless Session
+- **WHEN** a non-beauty camera capture targets a registered non-graphical Session without `--pane`
+- **THEN** the same temporary Flipbook ROP triggers the existing native analysis SceneHook backend
+- **AND** no separate headless analysis renderer is introduced
+
+#### Scenario: Headless camera capture rejects pane selection
+- **WHEN** camera capture targets a non-graphical Session with `--pane`
+- **THEN** the command fails with `viewport_unavailable`
+- **AND** the pane selector is not silently ignored
 
 #### Scenario: Camera path is omitted outside list mode
 - **WHEN** `houbridge capture camera` or `houbridge capture camera --detail` is invoked without CAMERA_PATH

@@ -11,6 +11,10 @@ def _runtime():
     return runpy.run_path(str(Path(__file__).with_name("runtime.py")))
 
 
+def _headless_runtime():
+    return runpy.run_path(str(Path(__file__).with_name("headless_camera.py")))
+
+
 def _node_type(hou, category, name):
     return hou.nodeType(category, name)
 
@@ -238,7 +242,9 @@ def describe_camera(resolved):
     return _sop_detail(resolved)
 
 
-def capture_camera(request, resolved, hou, QtCore, QtGui, QtWidgets, runtime):
+def _capture_camera_gui(request, resolved, hou, runtime):
+    from PySide6 import QtCore, QtGui, QtWidgets
+
     resolve_scene_viewer = runtime["resolve_scene_viewer"]
     clone_scene_viewer = runtime["clone_scene_viewer"]
     close_scene_viewer = runtime["close_scene_viewer"]
@@ -288,9 +294,46 @@ def capture_camera(request, resolved, hou, QtCore, QtGui, QtWidgets, runtime):
         close_scene_viewer(scene)
 
 
+def _capture_camera_headless(request, resolved, hou, runtime):
+    if request.get("pane") is not None:
+        raise runtime["CaptureRequestError"](
+            "viewport_unavailable",
+            "--pane is unavailable for headless camera capture.",
+        )
+
+    constrained_size = runtime["constrained_size"]
+    headless = _headless_runtime()
+    if resolved["type"] == "obj":
+        resolution = _obj_resolution(resolved["node"])
+    else:
+        resolution = _camera_resolution(resolved["prim"].camera())
+    output_resolution = constrained_size(
+        int(resolution[0]),
+        int(resolution[1]),
+        float(request["scale"]),
+        int(request["max_width"]),
+        int(request["max_height"]),
+    )
+    rop = headless["create_flipbook_rop"](
+        hou,
+        camera_path=resolved["path"],
+        resolution=output_resolution,
+    )
+    try:
+        headless["render_flipbook_rop"](rop, Path(request["png_path"]), hou)
+    finally:
+        headless["destroy_flipbook_rop"](rop)
+
+
+def capture_camera(request, resolved, hou, runtime):
+    if hou.isUIAvailable():
+        _capture_camera_gui(request, resolved, hou, runtime)
+    else:
+        _capture_camera_headless(request, resolved, hou, runtime)
+
+
 def run(request_path: str) -> None:
     import hou
-    from PySide6 import QtCore, QtGui, QtWidgets
 
     request = json.loads(Path(request_path).read_text(encoding="utf-8"))
     result_path = Path(request["result_path"])
@@ -304,7 +347,7 @@ def run(request_path: str) -> None:
             if mode == "detail":
                 payload = {"ok": True, "camera": describe_camera(resolved)}
             elif mode == "capture":
-                capture_camera(request, resolved, hou, QtCore, QtGui, QtWidgets, runtime)
+                capture_camera(request, resolved, hou, runtime)
                 payload = {"ok": True}
             else:
                 raise RuntimeError(f"Unsupported camera mode: {mode!r}")
