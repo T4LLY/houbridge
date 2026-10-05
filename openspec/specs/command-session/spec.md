@@ -222,10 +222,10 @@ If the selected Session is primary, `primary` SHALL become `null`. No other Sess
 The syntax SHALL be:
 
 ```text
-houbridge session stop SESSION
+houbridge session stop SESSION [--discard]
 ```
 
-`SESSION` SHALL be a positive registered live session number. The command SHALL use the same stop behavior for sessions created by `session new` and sessions registered by `session attach`.
+`SESSION` SHALL be a positive registered live session number. The command SHALL use the same stop behavior for sessions created by `session new` and sessions registered by `session attach`. `--discard` SHALL explicitly authorize graceful exit without preserving unsaved HIP changes; it SHALL NOT save the HIP and SHALL NOT imply forced termination.
 
 Successful graceful stop SHALL return exactly:
 
@@ -233,7 +233,7 @@ Successful graceful stop SHALL return exactly:
 {"stopped":3}
 ```
 
-For graphical Sessions, a HIP file with unsaved changes SHALL cause the command to fail through the common BridgeError envelope without saving or exiting Houdini. For non-graphical Sessions, normal stop SHALL fail because Houdini does not provide a reliable unsaved-change state there; Houbridge SHALL NOT assume the HIP is clean. Registry removal SHALL occur only after the recorded process incarnation is confirmed exited. Normal stop SHALL NOT automatically fall back to force termination.
+Without `--discard`, a graphical Session with unsaved HIP changes SHALL cause the command to fail through the common BridgeError envelope without saving or exiting Houdini. Without `--discard`, a non-graphical Session SHALL fail because Houdini does not provide a reliable unsaved-change state there; Houbridge SHALL NOT assume the HIP is clean. With `--discard`, Houbridge SHALL skip those dirty-state guards and request graceful exit with save prompting suppressed for either graphical or non-graphical Sessions. Registry removal SHALL occur only after the recorded process incarnation is confirmed exited. Neither normal stop nor `--discard` SHALL automatically fall back to force termination.
 
 #### Scenario: Stop a clean session
 - **WHEN** `houbridge session stop 3` targets a registered live Session with no unsaved HIP changes
@@ -252,6 +252,17 @@ For graphical Sessions, a HIP file with unsaved changes SHALL cause the command 
 - **THEN** the command fails with `session_dirty_state_unavailable` without requesting Houdini exit
 - **AND** Houbridge does not infer a clean HIP from the session being newly created or named `untitled.hip`
 - **AND** session `3` remains registered
+
+#### Scenario: Discard unsaved graphical HIP changes
+- **WHEN** `houbridge session stop 3 --discard` targets a graphical Session with unsaved HIP changes
+- **THEN** Houdini is asked to exit normally without saving the HIP file
+- **AND** session `3` is removed only after process-exit confirmation
+
+#### Scenario: Discard a non-graphical Session
+- **WHEN** `houbridge session stop 3 --discard` targets a non-graphical Houdini Session
+- **THEN** Houdini is asked to exit normally without requiring dirty-state availability
+- **AND** no implicit save is performed
+- **AND** session `3` is removed only after process-exit confirmation
 
 #### Scenario: Graceful stop times out
 - **WHEN** Houdini does not exit before the bounded graceful-stop wait expires

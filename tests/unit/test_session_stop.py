@@ -131,6 +131,36 @@ def test_stop_refuses_unsaved_changes_without_registry_mutation(tmp_path: Path) 
     assert registry.load() == original
 
 
+def test_stop_discard_is_forwarded_to_houdini_request(tmp_path: Path) -> None:
+    registry, record = _registry(tmp_path)
+
+    class _InspectingTransport(_Transport):
+        def __init__(self) -> None:
+            super().__init__({"ok": True, "status": "stopping", "path": "C:/scene.hip"})
+            self.request: dict[str, object] | None = None
+
+        def execute_script(self, target: HoudiniTarget, runner: Path):
+            self.request = json.loads((runner.parent / "request.json").read_text(encoding="utf-8"))
+            return super().execute_script(target, runner)
+
+    transport = _InspectingTransport()
+
+    def exited(_pid: int) -> ProcessIdentity:
+        raise ProcessLookupError(record.pid)
+
+    result = _service(
+        tmp_path,
+        registry,
+        record,
+        transport,
+        identity_reader=exited,
+    ).stop(1, discard=True)
+
+    assert result == {"stopped": 1}
+    assert transport.request is not None
+    assert transport.request["discard"] is True
+
+
 def test_stop_accepts_hcommand_disconnect_after_stopping_marker(tmp_path: Path) -> None:
     registry, record = _registry(tmp_path)
     transport = _Transport(

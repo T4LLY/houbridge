@@ -163,6 +163,8 @@ Detachment SHALL operate on the registry entry itself and SHALL NOT require the 
 
 `session stop SESSION` SHALL target the selected registered live Session regardless of whether it originated from `session new` or `session attach`. For a graphical Session, before requesting shutdown Houdini itself SHALL check whether the active HIP has unsaved changes. If unsaved changes are present, shutdown SHALL be refused and the registry SHALL remain unchanged. For a non-graphical Session, normal stop SHALL refuse shutdown because Houdini does not expose a reliable unsaved-change state; Houbridge SHALL NOT treat `untitled.hip`, a newly created Session, or any other heuristic as proof that the HIP is clean. Normal stop SHALL NOT implicitly save the HIP file.
 
+`session stop SESSION --discard` SHALL explicitly authorize loss of unsaved HIP changes. In discard mode, Houbridge SHALL NOT require a dirty-state check and SHALL request the same graceful Houdini exit with save prompting suppressed for both graphical and non-graphical Sessions. Discard mode SHALL NOT save the HIP, SHALL NOT force-kill the process, and SHALL retain the same process-exit confirmation and registry-removal rules as normal stop.
+
 When a graphical Session reports that the HIP is clean, Houbridge SHALL request a normal Houdini exit with save prompting suppressed only after the explicit dirty check has passed. Houbridge SHALL confirm that the recorded process incarnation has exited before removing the Session record from the registry. Shutdown confirmation SHALL be bounded by the configured Houdini transport timeout and SHALL NOT fall back to forced termination automatically.
 
 If the stopped Session is `primary`, successful registry removal SHALL set `primary` to `null` and SHALL NOT promote another Session automatically. If the Session registry record changes while shutdown is in progress, Houbridge SHALL NOT remove the replacement record.
@@ -184,6 +186,18 @@ If the stopped Session is `primary`, successful registry removal SHALL set `prim
 - **THEN** normal stop fails with `session_dirty_state_unavailable` before requesting Houdini exit
 - **AND** Houbridge does not infer that the HIP is clean from its path, age, or Session origin
 - **AND** the Session registry remains unchanged
+
+#### Scenario: Discard unsaved graphical changes
+- **WHEN** a graphical Session with unsaved HIP changes is stopped with `--discard`
+- **THEN** the dirty-state guard is bypassed explicitly
+- **AND** Houdini is asked to exit normally without saving the HIP file
+- **AND** registry removal still waits for process-exit confirmation
+
+#### Scenario: Discard a non-graphical session
+- **WHEN** a non-graphical Session is stopped with `--discard`
+- **THEN** unavailable dirty-state information does not block the explicitly destructive stop
+- **AND** Houdini is asked to exit normally without saving the HIP file
+- **AND** registry removal still waits for process-exit confirmation
 
 #### Scenario: Graceful exit does not complete
 - **WHEN** the graceful exit request is accepted but the recorded process incarnation remains alive beyond the bounded shutdown wait

@@ -46,24 +46,24 @@ class SessionStopService:
             script_path = Path(stop.__file__)
         self._script_path = script_path.resolve()
 
-    def stop(self, session: int) -> dict[str, int]:
+    def stop(self, session: int, *, discard: bool = False) -> dict[str, int]:
         _require_positive_session(session)
         resolved = self._resolver.resolve(session)
         record = resolved.record
 
-        self._request_stop(resolved.target)
+        self._request_stop(resolved.target, discard=discard)
         self._wait_for_exit(record)
         self._remove_record_if_unchanged(record)
         return {"stopped": session}
 
-    def _request_stop(self, target) -> None:
+    def _request_stop(self, target, *, discard: bool) -> None:
         workspace = self._workspaces.allocate(prefix="session-stop")
         try:
             result_path = workspace.path_for("result.json")
             request_path = workspace.path_for("request.json")
             request_path.write_text(
                 json.dumps(
-                    {"output_path": str(result_path)},
+                    {"output_path": str(result_path), "discard": discard},
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ),

@@ -165,13 +165,18 @@ def detach_command(
 
 @session_app.command(
     "stop",
-    help="Gracefully stop a session after refusing unsaved HIP changes.",
+    help="Gracefully stop a session without implicitly saving it.",
 )
 def stop_command(
     session_number: int = typer.Argument(
         ...,
         metavar="SESSION",
         help="Registered live session number to stop.",
+    ),
+    discard: bool = typer.Option(
+        False,
+        "--discard",
+        help="Discard unsaved HIP changes before graceful exit.",
     ),
 ) -> None:
     settings = load_config()
@@ -189,7 +194,7 @@ def stop_command(
         transport,
         shutdown_timeout_seconds=settings.houdini.transport_timeout_seconds,
         poll_interval_seconds=settings.houdini.startup_poll_interval_seconds,
-    ).stop(session_number)
+    ).stop(session_number, discard=discard)
     emit_result(payload)
 
 

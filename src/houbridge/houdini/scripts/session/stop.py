@@ -22,7 +22,8 @@ def run(request_path: str) -> None:
 
     try:
         hip_path = str(hou.hipFile.path())
-        if not bool(hou.isUIAvailable()):
+        discard = request.get("discard") is True
+        if not discard and not bool(hou.isUIAvailable()):
             _write_result(
                 output_path,
                 {
@@ -37,7 +38,7 @@ def run(request_path: str) -> None:
             )
             return
 
-        if bool(hou.hipFile.hasUnsavedChanges()):
+        if not discard and bool(hou.hipFile.hasUnsavedChanges()):
             _write_result(
                 output_path,
                 {

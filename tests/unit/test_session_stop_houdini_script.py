@@ -34,6 +34,7 @@ def _run(
     *,
     dirty: bool,
     ui_available: bool = True,
+    discard: bool = False,
     exit_type: type[BaseException] = _SystemExit,
 ):
     hip_file = _HipFile(dirty=dirty)
@@ -63,7 +64,10 @@ def _run(
     runtime = runpy.run_path(str(script))
     result_path = tmp_path / "result.json"
     request_path = tmp_path / "request.json"
-    request_path.write_text(json.dumps({"output_path": str(result_path)}), encoding="utf-8")
+    request_path.write_text(
+        json.dumps({"output_path": str(result_path), "discard": discard}),
+        encoding="utf-8",
+    )
     return runtime["run"], request_path, result_path, hip_file, exit_calls
 
 
@@ -95,6 +99,30 @@ def test_houdini_stop_script_refuses_dirty_hip_without_save_or_exit(
     assert payload["code"] == "session_unsaved_changes"
     assert hip_file.save_calls == 0
     assert exit_calls == []
+
+
+@pytest.mark.parametrize("ui_available", [True, False])
+def test_houdini_stop_script_discard_exits_without_dirty_check_or_save(
+    tmp_path: Path, monkeypatch, ui_available: bool
+) -> None:
+    run, request_path, result_path, hip_file, exit_calls = _run(
+        tmp_path,
+        monkeypatch,
+        dirty=True,
+        ui_available=ui_available,
+        discard=True,
+    )
+
+    with pytest.raises(_SystemExit):
+        run(str(request_path))
+
+    assert json.loads(result_path.read_text(encoding="utf-8")) == {
+        "ok": True,
+        "status": "stopping",
+        "path": "C:/scene.hip",
+    }
+    assert hip_file.save_calls == 0
+    assert exit_calls == [(0, True)]
 
 
 def test_houdini_stop_script_publishes_marker_then_exits_without_save(

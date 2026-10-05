@@ -138,6 +138,13 @@ def test_session_detach_emits_exact_public_success_shape(monkeypatch, tmp_path) 
     assert result.stdout == '{"detached":3}\n'
 
 
+def test_session_stop_help_exposes_discard() -> None:
+    result = CliRunner().invoke(app, ["session", "stop", "--help"])
+
+    assert result.exit_code == 0
+    assert "--discard" in result.stdout
+
+
 def test_session_stop_emits_exact_public_success_shape(monkeypatch, tmp_path) -> None:
     from types import SimpleNamespace
 
@@ -165,16 +172,61 @@ def test_session_stop_emits_exact_public_success_shape(monkeypatch, tmp_path) ->
         "from_config",
         lambda *_args, **_kwargs: SimpleNamespace(),
     )
-    monkeypatch.setattr(
-        session_cmd.SessionStopService,
-        "stop",
-        lambda self, session: {"stopped": session},
-    )
+    calls: list[tuple[int, bool]] = []
+
+    def stop(_self, session: int, *, discard: bool = False):
+        calls.append((session, discard))
+        return {"stopped": session}
+
+    monkeypatch.setattr(session_cmd.SessionStopService, "stop", stop)
 
     result = CliRunner().invoke(app, ["session", "stop", "3"])
 
     assert result.exit_code == 0
     assert result.stdout == '{"stopped":3}\n'
+    assert calls == [(3, False)]
+
+
+def test_session_stop_discard_forwards_explicit_policy(monkeypatch, tmp_path) -> None:
+    from types import SimpleNamespace
+
+    from houbridge.cli import common, session_cmd
+
+    monkeypatch.setattr(
+        session_cmd,
+        "load_config",
+        lambda: SimpleNamespace(
+            storage=SimpleNamespace(data_dir=tmp_path),
+            houdini=SimpleNamespace(
+                transport_timeout_seconds=120.0,
+                lock_timeout_seconds=120.0,
+                startup_poll_interval_seconds=0.25,
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        common,
+        "load_config",
+        lambda: SimpleNamespace(output=SimpleNamespace(inline_max_tokens=4096)),
+    )
+    monkeypatch.setattr(
+        session_cmd.HoudiniTransport,
+        "from_config",
+        lambda *_args, **_kwargs: SimpleNamespace(),
+    )
+    calls: list[tuple[int, bool]] = []
+
+    def stop(_self, session: int, *, discard: bool = False):
+        calls.append((session, discard))
+        return {"stopped": session}
+
+    monkeypatch.setattr(session_cmd.SessionStopService, "stop", stop)
+
+    result = CliRunner().invoke(app, ["session", "stop", "3", "--discard"])
+
+    assert result.exit_code == 0
+    assert result.stdout == '{"stopped":3}\n'
+    assert calls == [(3, True)]
 
 
 def test_session_promote_emits_exact_public_success_shape(monkeypatch, tmp_path) -> None:
