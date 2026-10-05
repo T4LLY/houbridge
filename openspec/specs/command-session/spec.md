@@ -217,6 +217,48 @@ If the selected Session is primary, `primary` SHALL become `null`. No other Sess
 - **THEN** detachment fails through the common BridgeError envelope
 - **AND** the registry is unchanged
 
+### Requirement: Expose graceful session stop
+
+The syntax SHALL be:
+
+```text
+houbridge session stop SESSION
+```
+
+`SESSION` SHALL be a positive registered live session number. The command SHALL use the same stop behavior for sessions created by `session new` and sessions registered by `session attach`.
+
+Successful graceful stop SHALL return exactly:
+
+```json
+{"stopped":3}
+```
+
+For graphical Sessions, a HIP file with unsaved changes SHALL cause the command to fail through the common BridgeError envelope without saving or exiting Houdini. For non-graphical Sessions, normal stop SHALL fail because Houdini does not provide a reliable unsaved-change state there; Houbridge SHALL NOT assume the HIP is clean. Registry removal SHALL occur only after the recorded process incarnation is confirmed exited. Normal stop SHALL NOT automatically fall back to force termination.
+
+#### Scenario: Stop a clean session
+- **WHEN** `houbridge session stop 3` targets a registered live Session with no unsaved HIP changes
+- **THEN** Houdini exits normally
+- **AND** session `3` is removed only after process-exit confirmation
+- **AND** success returns `{"stopped":3}`
+
+#### Scenario: Stop refuses dirty HIP
+- **WHEN** `houbridge session stop 3` finds unsaved HIP changes
+- **THEN** the command fails without saving the HIP file
+- **AND** Houdini remains running
+- **AND** session `3` remains registered
+
+#### Scenario: Stop refuses non-graphical session when dirty state is unavailable
+- **WHEN** `houbridge session stop 3` targets a non-graphical Houdini Session
+- **THEN** the command fails with `session_dirty_state_unavailable` without requesting Houdini exit
+- **AND** Houbridge does not infer a clean HIP from the session being newly created or named `untitled.hip`
+- **AND** session `3` remains registered
+
+#### Scenario: Graceful stop times out
+- **WHEN** Houdini does not exit before the bounded graceful-stop wait expires
+- **THEN** the command fails through the common BridgeError envelope
+- **AND** session `3` remains registered
+- **AND** no force termination is attempted automatically
+
 ### Requirement: Expose session promote
 
 The syntax SHALL be:

@@ -22,6 +22,7 @@ from houbridge.session.promote import SessionPromoteService
 from houbridge.session.registry import SessionRecord, SessionRegistry
 from houbridge.session.resolver import SessionResolver
 from houbridge.session.stale import SessionStaleCleanupService
+from houbridge.session.stop import SessionStopService
 
 
 session_app = create_cli_app(no_args_is_help=True)
@@ -159,6 +160,36 @@ def detach_command(
         lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
     )
     payload = SessionDetachService(registry).detach(session_number)
+    emit_result(payload)
+
+
+@session_app.command(
+    "stop",
+    help="Gracefully stop a session after refusing unsaved HIP changes.",
+)
+def stop_command(
+    session_number: int = typer.Argument(
+        ...,
+        metavar="SESSION",
+        help="Registered live session number to stop.",
+    ),
+) -> None:
+    settings = load_config()
+    paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
+    registry = SessionRegistry(
+        paths.sessions_registry,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+    )
+    transport = HoudiniTransport.from_config(settings.houdini)
+    probe = SessionProbe(lambda: HoudiniTransport.from_config(settings.houdini))
+    resolver = SessionResolver(registry, probe)
+    payload = SessionStopService(
+        registry,
+        resolver,
+        transport,
+        shutdown_timeout_seconds=settings.houdini.transport_timeout_seconds,
+        poll_interval_seconds=settings.houdini.startup_poll_interval_seconds,
+    ).stop(session_number)
     emit_result(payload)
 
 
