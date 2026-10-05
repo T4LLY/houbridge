@@ -12,13 +12,14 @@ def test_root_help_exposes_implemented_session_family() -> None:
     assert "session" in result.stdout
 
 
-def test_session_help_exposes_info_new_attach_and_promote() -> None:
+def test_session_help_exposes_info_new_attach_detach_and_promote() -> None:
     result = CliRunner().invoke(app, ["session", "--help"])
 
     assert result.exit_code == 0
     assert "info" in result.stdout
     assert "new" in result.stdout
     assert "attach" in result.stdout
+    assert "detach" in result.stdout
     assert "promote" in result.stdout
 
 
@@ -104,6 +105,36 @@ def test_session_new_emits_exact_public_success_shape(monkeypatch, tmp_path) -> 
 
     assert result.exit_code == 0
     assert result.stdout == '{"session":2,"port":49153,"pid":18744}\n'
+
+
+def test_session_detach_emits_exact_public_success_shape(monkeypatch, tmp_path) -> None:
+    from types import SimpleNamespace
+
+    from houbridge.cli import common, session_cmd
+
+    monkeypatch.setattr(
+        session_cmd,
+        "load_config",
+        lambda: SimpleNamespace(
+            storage=SimpleNamespace(data_dir=tmp_path),
+            houdini=SimpleNamespace(lock_timeout_seconds=120.0),
+        ),
+    )
+    monkeypatch.setattr(
+        common,
+        "load_config",
+        lambda: SimpleNamespace(output=SimpleNamespace(inline_max_tokens=4096)),
+    )
+    monkeypatch.setattr(
+        session_cmd.SessionDetachService,
+        "detach",
+        lambda self, session: {"detached": session},
+    )
+
+    result = CliRunner().invoke(app, ["session", "detach", "3"])
+
+    assert result.exit_code == 0
+    assert result.stdout == '{"detached":3}\n'
 
 
 def test_session_promote_emits_exact_public_success_shape(monkeypatch, tmp_path) -> None:

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the public syntax, options, and JSON response contract for creating, attaching, inspecting, and selecting registered local Houdini sessions.
+Define the public syntax, options, and JSON response contract for creating, attaching, detaching, inspecting, and selecting registered local Houdini sessions.
 
 ## Requirements
 
@@ -182,6 +182,40 @@ The attached session SHALL become `primary` only when stale cleanup leaves no li
 - **WHEN** stale cleanup leaves another live registered session but `primary` is `null`
 - **THEN** the attached session is registered
 - **AND** `primary` remains `null`
+
+### Requirement: Expose session detach
+
+The syntax SHALL be:
+
+```text
+houbridge session detach SESSION
+```
+
+`SESSION` SHALL be a positive registered session number. Detachment SHALL remove the registry entry without validating or contacting the Houdini process. It SHALL NOT stop the process or close its openport.
+
+Successful detachment SHALL return exactly:
+
+```json
+{"detached":3}
+```
+
+If the selected Session is primary, `primary` SHALL become `null`. No other Session SHALL be promoted automatically.
+
+#### Scenario: Detach a registered session
+- **WHEN** `houbridge session detach 3` is invoked for a registered Session
+- **THEN** session `3` is removed from the registry
+- **AND** success returns `{"detached":3}`
+- **AND** Houdini is not contacted or stopped
+
+#### Scenario: Detach the primary session
+- **WHEN** session `3` is primary and is detached
+- **THEN** `primary` becomes `null`
+- **AND** no remaining Session becomes primary automatically
+
+#### Scenario: Detach an unknown session
+- **WHEN** the requested Session is not registered
+- **THEN** detachment fails through the common BridgeError envelope
+- **AND** the registry is unchanged
 
 ### Requirement: Expose session promote
 

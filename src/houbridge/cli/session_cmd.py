@@ -13,6 +13,7 @@ from houbridge.history.retirement import HistoryRetirementService
 from houbridge.paths import GlobalDataPaths
 from houbridge.process_coordination import ProcessIdentity
 from houbridge.session.attach import SessionAttachService
+from houbridge.session.detach import SessionDetachService
 from houbridge.session.info import SessionInfoService
 from houbridge.session.launcher import HoudiniSessionLauncher
 from houbridge.session.new import SessionNewService
@@ -137,6 +138,27 @@ def attach_command(
             lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
         ),
     ).attach(port)
+    emit_result(payload)
+
+
+@session_app.command(
+    "detach",
+    help="Unregister a session without stopping Houdini.",
+)
+def detach_command(
+    session_number: int = typer.Argument(
+        ...,
+        metavar="SESSION",
+        help="Registered session number to unregister.",
+    ),
+) -> None:
+    settings = load_config()
+    paths = GlobalDataPaths.from_data_dir(settings.storage.data_dir)
+    registry = SessionRegistry(
+        paths.sessions_registry,
+        lock_timeout_seconds=settings.houdini.lock_timeout_seconds,
+    )
+    payload = SessionDetachService(registry).detach(session_number)
     emit_result(payload)
 
 

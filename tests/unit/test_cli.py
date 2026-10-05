@@ -131,6 +131,7 @@ def test_subcommand_help_has_concise_descriptions() -> None:
         "session": (
             "Show active Houdini sessions.",
             "Start a new Houdini session.",
+            "Unregister a session without stopping Houdini.",
             "Set a session as the primary session.",
         ),
     }

@@ -137,6 +137,28 @@ A single live Houdini process SHALL have at most one Session record. Reattaching
 - **THEN** the new Session record is added
 - **AND** `primary` remains `null`
 
+### Requirement: Detach a registered session without stopping Houdini
+
+`session detach SESSION` SHALL remove only the selected Session record from the global registry. It SHALL NOT send a command to Houdini, close the registered openport, terminate the Houdini process, save or modify the active HIP file, or retire that process's History.
+
+Detachment SHALL operate on the registry entry itself and SHALL NOT require the target process or port to be reachable. If the detached Session is the current `primary`, Houbridge SHALL set `primary` to `null` and SHALL NOT promote another Session automatically.
+
+#### Scenario: Detach a non-primary session
+- **WHEN** a registered non-primary session is detached
+- **THEN** only that Session record is removed
+- **AND** the existing primary selection is preserved
+- **AND** the Houdini process and openport are not contacted or stopped
+
+#### Scenario: Detach the primary session
+- **WHEN** the registered primary session is detached while another Session remains
+- **THEN** the selected Session record is removed
+- **AND** `primary` becomes `null`
+- **AND** no remaining Session is promoted automatically
+
+#### Scenario: Detach an unreachable registered session
+- **WHEN** the selected Session record exists but its Houdini process or port is unreachable
+- **THEN** detachment can still remove the registry entry without probing Houdini
+
 ### Requirement: Let Houdini choose the openport
 
 Houbridge SHALL NOT expose a persistent user-configurable bridge port and SHALL NOT search the host for a free bridge port. During `session new` bootstrap, Houdini SHALL execute `openport -a` and choose an available local port. `session attach` MAY accept an already-open runtime port as its required positional target, but Houbridge SHALL NOT choose that port or open it in the existing process. Houbridge SHALL persist the validated port together with the Houdini process PID in the Session registry.
