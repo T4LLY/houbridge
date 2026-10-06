@@ -6,6 +6,7 @@ import errno
 import hashlib
 import os
 from pathlib import Path
+import sys
 import time
 from typing import BinaryIO, Iterator
 
@@ -160,7 +161,7 @@ def _ensure_lock_byte(handle: BinaryIO) -> None:
     handle.seek(0)
 
 
-if os.name == "nt":
+if sys.platform == "win32":
     import msvcrt
 
     def _try_lock(handle: BinaryIO) -> None:
@@ -181,14 +182,14 @@ else:
 
     def _try_lock(handle: BinaryIO) -> None:
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore[attr-defined]
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
             if exc.errno in {errno.EACCES, errno.EAGAIN}:
                 raise BlockingIOError from exc
             raise
 
     def _unlock(handle: BinaryIO) -> None:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def process_identity_for_pid(pid: int) -> ProcessIdentity:
@@ -201,7 +202,7 @@ def process_identity_for_pid(pid: int) -> ProcessIdentity:
     if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
         raise ValueError("pid must be a positive integer")
 
-    if os.name == "nt":
+    if sys.platform == "win32":
         identity = _windows_process_start_identity(pid)
     elif _linux_proc_stat_path(pid).exists():
         identity = _linux_process_start_identity(pid)
@@ -246,7 +247,7 @@ def _windows_process_start_identity(pid: int) -> str:
     wait_object_0 = 0x00000000
     wait_timeout = 0x00000102
     wait_failed = 0xFFFFFFFF
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
     kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     kernel32.OpenProcess.restype = wintypes.HANDLE
     kernel32.GetProcessTimes.argtypes = [
@@ -268,7 +269,7 @@ def _windows_process_start_identity(pid: int) -> str:
         pid,
     )
     if not handle:
-        error = ctypes.get_last_error()  # type: ignore[attr-defined]
+        error = int(getattr(ctypes, "get_last_error")())
         if error in {87, 1168}:  # invalid parameter / not found
             raise ProcessLookupError(pid)
         raise OSError(error, f"OpenProcess failed for PID {pid}.")
@@ -285,14 +286,14 @@ def _windows_process_start_identity(pid: int) -> str:
             ctypes.byref(kernel),
             ctypes.byref(user),
         ):
-            error = ctypes.get_last_error()  # type: ignore[attr-defined]
+            error = int(getattr(ctypes, "get_last_error")())
             raise OSError(error, f"GetProcessTimes failed for PID {pid}.")
 
         wait_result = kernel32.WaitForSingleObject(handle, 0)
         if wait_result == wait_object_0:
             raise ProcessLookupError(pid)
         if wait_result == wait_failed:
-            error = ctypes.get_last_error()  # type: ignore[attr-defined]
+            error = int(getattr(ctypes, "get_last_error")())
             raise OSError(error, f"WaitForSingleObject failed for PID {pid}.")
         if wait_result != wait_timeout:
             raise OSError(
