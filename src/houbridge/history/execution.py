@@ -64,6 +64,7 @@ class SynchronousExecutionHistory:
                 "history_finalize_failed",
                 "History preparation target changed before finalization.",
             )
+        assert invocation.source_path is not None
         source_path = Path(invocation.source_path)
         if not source_path.is_absolute():
             source_path = Path(invocation.origin_cwd) / source_path

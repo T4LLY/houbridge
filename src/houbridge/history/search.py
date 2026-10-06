@@ -151,12 +151,14 @@ class HistorySearchService:
         profile: str,
         reader: HistoryReader,
     ) -> tuple[SQLiteVecIndex, SQLiteFtsIndex]:
-        assert self._store is not None
+        store = self._store
+        assert store is not None
+
         def factory():
             return history_connection_scope(
-                self._store.database,
+                store.database,
                 require_existing=True,
-                lock_timeout_seconds=self._store.lock_timeout_seconds,
+                lock_timeout_seconds=store.lock_timeout_seconds,
             )
         cache = SQLiteEmbeddingCache(factory, table_name=SOURCE_EMBEDDING_TABLE)
         dense = SQLiteVecIndex(factory, schema=DENSE_SCHEMA)

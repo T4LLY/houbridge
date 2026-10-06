@@ -115,7 +115,7 @@ def _effective_token_vectors(model: Any) -> np.ndarray:
 @lru_cache(maxsize=2)
 def _load_potion_state(model_id: str) -> _PotionState:
     try:
-        from huggingface_hub.utils import disable_progress_bars
+        from huggingface_hub.utils import disable_progress_bars  # pyright: ignore[reportPrivateImportUsage]
         from model2vec import StaticModel
 
         with disable_progress_bars():

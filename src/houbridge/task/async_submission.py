@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from houbridge.errors import BridgeError
 from houbridge.execution.models import ExecutionInvocation
 from houbridge.houdini.transport import HoudiniTransport
@@ -9,7 +7,7 @@ from houbridge.session.resolver import SessionResolver
 
 from .store import TaskStore
 from .submission import freeze_task_submission
-from .supervisor import TaskRuntimeSupervisor
+from .supervisor import RuntimeLauncher, TaskRuntimeSupervisor
 
 
 class AsyncExecutionSubmitter:
@@ -21,7 +19,7 @@ class AsyncExecutionSubmitter:
         transport: HoudiniTransport,
         store: TaskStore,
         supervisor: TaskRuntimeSupervisor,
-        runtime_launcher: Callable[[str], None],
+        runtime_launcher: RuntimeLauncher,
         *,
         lock_timeout_seconds: float,
         history_enabled: bool,

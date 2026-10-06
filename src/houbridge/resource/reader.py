@@ -3,8 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from json.decoder import scanstring
-from typing import Any
+from typing import Any, Never
 
 from houbridge.config import HARD_EMIT_LIMIT_BYTES, HARD_RESOURCE_SEARCH_LIMIT
 from houbridge.errors import BridgeError
@@ -78,9 +77,11 @@ class _JsonSpanParser:
                 raise self._invalid_json()
             key_start = index
             try:
-                key, key_end = scanstring(self.text, index + 1, True)
+                key, key_end = self.decoder.raw_decode(self.text, index)
             except (ValueError, json.JSONDecodeError) as exc:
                 raise self._invalid_json() from exc
+            if not isinstance(key, str):
+                raise self._invalid_json()
 
             index = self._skip_ws(key_end)
             if index >= self.length or self.text[index] != ":":
@@ -370,5 +371,5 @@ class ResourceReader:
             raise BridgeError("invalid_resource_id", "Resource id must not be empty.")
 
     @staticmethod
-    def _raise_not_found(resource_id: str) -> None:
+    def _raise_not_found(resource_id: str) -> Never:
         raise BridgeError("resource_not_found", f"Resource not found: {resource_id}")

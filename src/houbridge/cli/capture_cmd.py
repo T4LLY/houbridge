@@ -373,20 +373,22 @@ def camera_command(
         service = _camera_service(settings, transport)
         if list_cameras:
             payload = service.list(resolved)
-        elif detail:
-            payload = service.detail(resolved, camera_path)
         else:
-            capture_kwargs = {
-                "scale": scale,
-                "pane": pane,
-            }
-            if analysis is not None:
-                capture_kwargs["analysis"] = analysis
-            payload = service.capture(
-                resolved,
-                camera_path,
-                **capture_kwargs,
-            )
+            assert camera_path is not None
+            if detail:
+                payload = service.detail(resolved, camera_path)
+            else:
+                capture_kwargs = {
+                    "scale": scale,
+                    "pane": pane,
+                }
+                if analysis is not None:
+                    capture_kwargs["analysis"] = analysis
+                payload = service.capture(
+                    resolved,
+                    camera_path,
+                    **capture_kwargs,
+                )
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:
         terminate_with_bridge_error(exc)

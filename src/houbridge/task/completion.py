@@ -10,7 +10,9 @@ from .store import TaskStore
 
 
 class CompletionResource(Protocol):
-    semantic_alias: str
+    @property
+    def semantic_alias(self) -> str:
+        ...
 
 
 class CompletionResourceStore(Protocol):

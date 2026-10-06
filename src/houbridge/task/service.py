@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 from houbridge.errors import BridgeError
 
 from .presentation import task_get_payload, task_list_item
 from .store import TaskStore
-from .supervisor import TaskRuntimeSupervisor
+from .supervisor import RuntimeLauncher, TaskRuntimeSupervisor
 
 
 class TaskCommandService:
@@ -17,7 +16,7 @@ class TaskCommandService:
         self,
         store: TaskStore,
         supervisor: TaskRuntimeSupervisor,
-        runtime_launcher: Callable[[str], None],
+        runtime_launcher: RuntimeLauncher,
         *,
         ttl_hours: int,
     ) -> None:

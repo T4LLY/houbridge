@@ -23,6 +23,7 @@ def freeze_task_submission(
     """Freeze all mutable dispatch inputs needed after the submitting CLI exits."""
 
     origin_cwd = Path(invocation.origin_cwd).resolve()
+    assert invocation.source_path is not None
     source_path = Path(invocation.source_path).expanduser()
     if not source_path.is_absolute():
         source_path = origin_cwd / source_path

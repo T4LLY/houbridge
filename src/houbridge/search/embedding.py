@@ -38,7 +38,7 @@ class Model2VecEmbeddingProvider:
         if model is None:
             try:
                 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
-                from huggingface_hub.utils import disable_progress_bars
+                from huggingface_hub.utils import disable_progress_bars  # pyright: ignore[reportPrivateImportUsage]
                 from model2vec import StaticModel
 
                 with disable_progress_bars():
