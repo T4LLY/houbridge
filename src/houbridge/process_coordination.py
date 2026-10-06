@@ -246,7 +246,7 @@ def _windows_process_start_identity(pid: int) -> str:
     wait_object_0 = 0x00000000
     wait_timeout = 0x00000102
     wait_failed = 0xFFFFFFFF
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
     kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     kernel32.OpenProcess.restype = wintypes.HANDLE
     kernel32.GetProcessTimes.argtypes = [
@@ -268,7 +268,7 @@ def _windows_process_start_identity(pid: int) -> str:
         pid,
     )
     if not handle:
-        error = ctypes.get_last_error()
+        error = ctypes.get_last_error()  # type: ignore[attr-defined]
         if error in {87, 1168}:  # invalid parameter / not found
             raise ProcessLookupError(pid)
         raise OSError(error, f"OpenProcess failed for PID {pid}.")
@@ -285,14 +285,14 @@ def _windows_process_start_identity(pid: int) -> str:
             ctypes.byref(kernel),
             ctypes.byref(user),
         ):
-            error = ctypes.get_last_error()
+            error = ctypes.get_last_error()  # type: ignore[attr-defined]
             raise OSError(error, f"GetProcessTimes failed for PID {pid}.")
 
         wait_result = kernel32.WaitForSingleObject(handle, 0)
         if wait_result == wait_object_0:
             raise ProcessLookupError(pid)
         if wait_result == wait_failed:
-            error = ctypes.get_last_error()
+            error = ctypes.get_last_error()  # type: ignore[attr-defined]
             raise OSError(error, f"WaitForSingleObject failed for PID {pid}.")
         if wait_result != wait_timeout:
             raise OSError(
