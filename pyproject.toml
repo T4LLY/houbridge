@@ -29,3 +29,9 @@ packages = ["src/houbridge"]
 addopts = "-q"
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.pyright]
+exclude = ["src/houbridge/houdini/scripts"]
+
+[tool.mypy]
+exclude = "^src/houbridge/houdini/scripts/"
