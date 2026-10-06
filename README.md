@@ -7,7 +7,7 @@ Houbridge is a CLI for controlling and inspecting local SideFX Houdini sessions.
 > [!NOTE]
 > Houbridge is currently pre-beta and intended primarily for personal and experimental use. Version 0.4 is planned to mark the start of the beta phase.
 
-CI runs the unit test suite on Python 3.11, 3.12, and 3.13, with Ruff linting as a separate required check.
+CI runs the unit test suite on Python 3.11, 3.12, and 3.13, with Ruff linting and host-side Pyright and Mypy type checks.
 
 ## Requirements
 

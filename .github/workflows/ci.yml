@@ -27,6 +27,27 @@ jobs:
       - name: Run Ruff
         run: uvx --from ruff==0.15.22 ruff check src tests
 
+  typecheck:
+    name: Type checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.11.32"
+          enable-cache: true
+
+      - name: Run Pyright
+        run: uv run --with pyright pyright src
+
+      - name: Run Mypy
+        run: uv run --with mypy mypy src
+
   test:
     name: pytest (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
