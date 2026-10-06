@@ -11,7 +11,6 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from houbridge.errors import BridgeError
 from houbridge.history.service import HistoryStorageService
 from houbridge.houdini.scripts.task.runtime import run as run_task_script
 from houbridge.paths import GlobalDataPaths

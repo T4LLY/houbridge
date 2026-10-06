@@ -6,7 +6,7 @@ import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Mapping
 
 from platformdirs import user_config_path, user_data_path
 

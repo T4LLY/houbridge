@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import runpy
 import shutil
 import sys
 import threading

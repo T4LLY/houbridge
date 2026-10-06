@@ -6,13 +6,11 @@ import zlib
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 
 from houbridge.capture.analysis import CameraAnalysisSource, ViewportAnalysisSource, build_analysis_request
 from houbridge.capture.analysis_native import NativeAnalysisCaptureBackend
 from houbridge.capture.models import ScreenshotPreset
 from houbridge.capture.native import NativeCaptureArtifact
-from houbridge.errors import BridgeError
 from houbridge.houdini.transport import HoudiniTarget
 from houbridge.temporary_workspace import TemporaryWorkspaceService
 

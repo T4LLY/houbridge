@@ -19,7 +19,6 @@ from houbridge.history.search import HistorySearchService
 from houbridge.history.store import HistoryStore
 from houbridge.output.policy import OutputPolicy
 from houbridge.process_coordination import ProcessIdentity
-from houbridge.session.resolver import ResolvedSession
 
 
 class FakeEmbeddingProvider:

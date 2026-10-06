@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Protocol

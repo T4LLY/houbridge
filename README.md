@@ -1,9 +1,13 @@
 # Houbridge
 
+[![CI](https://github.com/T4LLY/houbridge/actions/workflows/ci.yml/badge.svg)](https://github.com/T4LLY/houbridge/actions/workflows/ci.yml)
+
 Houbridge is a CLI for controlling and inspecting local SideFX Houdini sessions. It can run Houdini Python, manage sessions, capture images, and search scene code or nodes.
 
 > [!NOTE]
 > Houbridge is currently pre-beta and intended primarily for personal and experimental use. Version 0.4 is planned to mark the start of the beta phase.
+
+CI runs the unit test suite on Python 3.11, 3.12, and 3.13, with Ruff linting as a separate required check.
 
 ## Requirements
 
