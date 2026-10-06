@@ -243,7 +243,7 @@ class SQLiteVecIndex:
 
 def load_sqlite_vec(connection: sqlite3.Connection) -> None:
     try:
-        import sqlite_vec
+        import sqlite_vec  # type: ignore[import-untyped]
 
         connection.enable_load_extension(True)
         try:

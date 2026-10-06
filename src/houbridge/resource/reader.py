@@ -263,6 +263,7 @@ class ResourceReader:
 
         resource, text = self._require_text_payload(resource_id)
         matches = _substring_matches(text, query)
+        hits: list[dict[str, object]]
         if resource.content_class == "json":
             hit_count, hits = self._json_hits(
                 text,
@@ -271,7 +272,7 @@ class ResourceReader:
                 limit=self.search_limit,
             )
         else:
-            all_hits = [{"offset": start} for start, _end in matches]
+            all_hits: list[dict[str, object]] = [{"offset": start} for start, _end in matches]
             hit_count = len(all_hits)
             hits = all_hits[offset : offset + self.search_limit]
 

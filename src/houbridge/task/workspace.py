@@ -53,7 +53,7 @@ def stage_task_request(
     source_path = workspace.path_for("source.py")
     source_path.write_text(task.source, encoding="utf-8", newline="")
     request_path = workspace.path_for("request.json")
-    request = {
+    request: dict[str, object] = {
         "task_id": task.id,
         "source_file": str(source_path),
         "source_path": task.file_path,

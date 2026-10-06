@@ -181,14 +181,14 @@ else:
 
     def _try_lock(handle: BinaryIO) -> None:
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore[attr-defined]
         except OSError as exc:
             if exc.errno in {errno.EACCES, errno.EAGAIN}:
                 raise BlockingIOError from exc
             raise
 
     def _unlock(handle: BinaryIO) -> None:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]
 
 
 def process_identity_for_pid(pid: int) -> ProcessIdentity:

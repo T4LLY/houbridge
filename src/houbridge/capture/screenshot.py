@@ -104,6 +104,7 @@ class ScreenshotService:
             if preset_path is not None
             else ScreenshotPreset()
         )
+        effective_crop: str | None
         if crop is not None:
             effective_crop = crop.strip()
             if not effective_crop:

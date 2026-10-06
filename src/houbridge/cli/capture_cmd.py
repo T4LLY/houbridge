@@ -242,17 +242,13 @@ def viewport_command(
             )
             resolver, transport = _resolver_and_transport(settings)
             resolved = resolver.resolve(session)
-            capture_kwargs = {
-                "views": selected,
-                "scale": scale,
-                "preset_path": preset,
-                "pane": pane,
-            }
-            if analysis is not None:
-                capture_kwargs["analysis"] = analysis
             payload = _screenshot_service(settings, transport).capture_viewport(
                 resolved,
-                **capture_kwargs,
+                views=selected,
+                scale=scale,
+                preset_path=preset,
+                pane=pane,
+                analysis=analysis,
             )
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:
@@ -378,16 +374,12 @@ def camera_command(
             if detail:
                 payload = service.detail(resolved, camera_path)
             else:
-                capture_kwargs = {
-                    "scale": scale,
-                    "pane": pane,
-                }
-                if analysis is not None:
-                    capture_kwargs["analysis"] = analysis
                 payload = service.capture(
                     resolved,
                     camera_path,
-                    **capture_kwargs,
+                    scale=scale,
+                    pane=pane,
+                    analysis=analysis,
                 )
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:

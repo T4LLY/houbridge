@@ -29,7 +29,7 @@ def stage_invocation(
 
     request_path = workspace.path_for("request.json")
     source_import_root = _source_import_root(invocation)
-    request = {
+    request: dict[str, object] = {
         "source_file": str(source_path),
         "source_path": invocation.source_path,
         "source_import_root": source_import_root,

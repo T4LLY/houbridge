@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -89,7 +90,7 @@ class HistoryReader:
             raise _database_error(exc) from exc
         return _decode_entry(row, changes)
 
-    def list(self, limit: int) -> list[HistoryEntryRecord]:
+    def list(self, limit: int) -> builtins.list[HistoryEntryRecord]:
         try:
             with history_connection_scope(
                 self._database,
@@ -111,7 +112,7 @@ class HistoryReader:
             raise _database_error(exc) from exc
         return [_decode_entry(row, ()) for row in rows]
 
-    def all_for_search(self) -> list[HistoryEntryRecord]:
+    def all_for_search(self) -> builtins.list[HistoryEntryRecord]:
         try:
             with history_connection_scope(
                 self._database,
@@ -137,7 +138,7 @@ class HistoryReader:
         except sqlite3.Error as exc:
             raise _database_error(exc) from exc
 
-        changes_by_entry: dict[int, list[sqlite3.Row]] = {}
+        changes_by_entry: dict[int, builtins.list[sqlite3.Row]] = {}
         for change in change_rows:
             changes_by_entry.setdefault(int(change["entry_id"]), []).append(change)
         return [
@@ -145,7 +146,7 @@ class HistoryReader:
             for row in rows
         ]
 
-    def all_metadata_for_search(self) -> list[HistoryEntryRecord]:
+    def all_metadata_for_search(self) -> builtins.list[HistoryEntryRecord]:
         """Read search metadata without hydrating Action Change payloads."""
         try:
             with history_connection_scope(
@@ -168,7 +169,7 @@ class HistoryReader:
 
     def changes_for_search(
         self,
-        entry_ids: list[int],
+        entry_ids: builtins.list[int],
     ) -> dict[int, tuple[dict[str, object], ...]]:
         """Hydrate Action Changes only for entries that still need indexing."""
         if not entry_ids:
@@ -180,8 +181,8 @@ class HistoryReader:
                 require_existing=True,
                 lock_timeout_seconds=self._lock_timeout_seconds,
             ) as connection:
-                where: list[str] = []
-                params: list[object] = []
+                where: builtins.list[str] = []
+                params: builtins.list[object] = []
                 append_membership_filter(
                     connection,
                     where,
@@ -204,7 +205,7 @@ class HistoryReader:
         except sqlite3.Error as exc:
             raise _database_error(exc) from exc
 
-        changes_by_entry: dict[int, list[sqlite3.Row]] = {}
+        changes_by_entry: dict[int, builtins.list[sqlite3.Row]] = {}
         for row in rows:
             changes_by_entry.setdefault(int(row["entry_id"]), []).append(row)
         return {

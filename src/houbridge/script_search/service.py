@@ -211,18 +211,18 @@ class ScriptSearchService:
             remove_metadata.append(existing.entry_id)
 
         for relative_path, current in current_by_path.items():
-            existing = existing_by_path.get(relative_path)
+            existing_entry = existing_by_path.get(relative_path)
             if (
-                existing is None
-                or existing.content_hash != current.content_hash
+                existing_entry is None
+                or existing_entry.content_hash != current.content_hash
                 or current.entry_id not in lexical_ids
             ):
                 lexical_changed.append(current)
             if (
-                existing is not None
-                and existing.content_hash == current.content_hash
-                and existing.semantic_hash == current.semantic_hash
-                and existing.embedding_profile == self.embedding_profile
+                existing_entry is not None
+                and existing_entry.content_hash == current.content_hash
+                and existing_entry.semantic_hash == current.semantic_hash
+                and existing_entry.embedding_profile == self.embedding_profile
             ):
                 continue
             changed.append(current)

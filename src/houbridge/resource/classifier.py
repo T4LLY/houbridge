@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Literal
 
-import filetype
+import filetype  # type: ignore[import-untyped]
 
 
 ContentClass = Literal["binary", "text", "json"]
