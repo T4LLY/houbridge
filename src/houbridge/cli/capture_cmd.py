@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import typer
@@ -242,14 +243,24 @@ def viewport_command(
             )
             resolver, transport = _resolver_and_transport(settings)
             resolved = resolver.resolve(session)
-            payload = _screenshot_service(settings, transport).capture_viewport(
-                resolved,
-                views=selected,
-                scale=scale,
-                preset_path=preset,
-                pane=pane,
-                analysis=analysis,
-            )
+            service = _screenshot_service(settings, transport)
+            if analysis is None:
+                payload = service.capture_viewport(
+                    resolved,
+                    views=selected,
+                    scale=scale,
+                    preset_path=preset,
+                    pane=pane,
+                )
+            else:
+                payload = service.capture_viewport(
+                    resolved,
+                    views=selected,
+                    scale=scale,
+                    preset_path=preset,
+                    pane=pane,
+                    analysis=analysis,
+                )
         emit_result(payload, policy=OutputPolicy.from_config(settings))
     except BridgeError as exc:
         terminate_with_bridge_error(exc)
@@ -367,12 +378,20 @@ def camera_command(
         resolver, transport = _resolver_and_transport(settings)
         resolved = resolver.resolve(session)
         service = _camera_service(settings, transport)
+        payload: Mapping[str, object]
         if list_cameras:
             payload = service.list(resolved)
         else:
             assert camera_path is not None
             if detail:
                 payload = service.detail(resolved, camera_path)
+            elif analysis is None:
+                payload = service.capture(
+                    resolved,
+                    camera_path,
+                    scale=scale,
+                    pane=pane,
+                )
             else:
                 payload = service.capture(
                     resolved,
