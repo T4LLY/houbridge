@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Sequence
-from pathlib import Path
 
 from houbridge.config import SearchHybridConfig
 from houbridge.db.connection import connection_scope
@@ -45,7 +44,8 @@ class TransientLiveCodeRanker:
             return []
         workspace = self._workspaces.allocate(prefix="live-code-index")
         try:
-            factory = lambda: connection_scope(workspace.path_for("index.db"))
+            def factory():
+                return connection_scope(workspace.path_for("index.db"))
             dense = self._dense_index(factory)
             lexical = SQLiteFtsIndex(
                 factory,
@@ -116,7 +116,8 @@ class TransientLiveCodeRanker:
             return []
         workspace = self._workspaces.allocate(prefix="live-code-index")
         try:
-            factory = lambda: connection_scope(workspace.path_for("index.db"))
+            def factory():
+                return connection_scope(workspace.path_for("index.db"))
             dense = self._dense_index(factory)
             vectors, query_vector = self._vectors(entries, query_source)
             dense.upsert(

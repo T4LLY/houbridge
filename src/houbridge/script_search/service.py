@@ -284,7 +284,8 @@ class ScriptSearchService:
             return self._repository, self._dense_index, self._lexical_index
 
         self.paths.workspace_directory.mkdir(parents=True, exist_ok=True)
-        factory = lambda: connection_scope(self.paths.search_database)
+        def factory():
+            return connection_scope(self.paths.search_database)
         repository = self._repository or ScriptIndexRepository(factory)
         dense = self._dense_index or SQLiteVecIndex(
             factory,

@@ -27,7 +27,6 @@ def capture(request, hou, QtCore, QtGui, QtWidgets):
     clone_scene_viewer = runtime["clone_scene_viewer"]
     close_scene_viewer = runtime["close_scene_viewer"]
     flipbook_png = runtime["flipbook_png"]
-    constrained_size = runtime["constrained_size"]
     apply_preset = runtime["apply_preset"]
     create_attribute_visualizers = runtime["create_attribute_visualizers"]
     destroy_visualizers = runtime["destroy_visualizers"]

@@ -6,7 +6,6 @@ import runpy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
 
 
 @dataclass(slots=True)
@@ -31,9 +30,8 @@ def prepare(request_path_value: str) -> HistoryCaptureContext:
     script_dir = Path(__file__).resolve().parent
     lifecycle = runpy.run_path(str(script_dir / "lifecycle.py"))
     lifecycle["install"](database_path, database_lock_path, lock_timeout_seconds)
-    generation_getter: Callable[[], int] = lambda: int(
-        lifecycle["current_generation"](database_path)
-    )
+    def generation_getter() -> int:
+        return int(lifecycle["current_generation"](database_path))
 
     recorder_runtime = runpy.run_path(str(script_dir / "action_recorder.py"))
     recorder = recorder_runtime["ActionRecorder"](
