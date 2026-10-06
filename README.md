@@ -2,6 +2,9 @@
 
 Houbridge is a CLI for controlling and inspecting local SideFX Houdini sessions. It can run Houdini Python, manage sessions, capture images, and search scene code or nodes.
 
+> [!NOTE]
+> Houbridge is currently pre-beta and intended primarily for personal and experimental use. Version 0.4 is planned to mark the start of the beta phase.
+
 ## Requirements
 
 - Python 3.11 or later
@@ -128,6 +131,11 @@ Houbridge is designed to give AI-assisted workflows a local, searchable memory.
 - `houbridge search script` semantically searches reusable Python tools in `.houbridge/python`, helping you find work created in previous sessions instead of recreating it.
 
 Both commands use hybrid semantic and lexical ranking, so they can retrieve related work even when the search terms do not exactly match.
+
+### Headless camera capture
+
+> [!WARNING]
+> Headless camera capture is currently not supported due to a reproducible Houdini 22.0.x Vulkan Flipbook crash. The issue has been reported to SideFX.
 
 ### Common commands
 
