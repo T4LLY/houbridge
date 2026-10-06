@@ -164,7 +164,7 @@ houbridge capture viewport --help
 
 ## Related tools
 
-`houbridge`, `houdocs`, and `houlayout` are separate CLIs designed for agent orchestration. Each can be assigned to the agent that needs its capabilities, keeping tool surfaces small and token-efficient.
+`houbridge` and `houdocs` are separate CLIs designed for agent orchestration. Each can be assigned to the agent that needs its capabilities, keeping tool surfaces small and token-efficient.
 
 ### Houbridge
 
@@ -178,12 +178,6 @@ It exposes raw `exec` for workflows that require direct Houdini Python execution
 
 It can be assigned to agents that only need Houdini API and documentation access without exposing runtime operations.
 
-### Houlayout
-
-`houlayout` is a node-oriented wrapper around Houbridge for inspecting, selecting, and organizing Houdini networks.
-
-It intentionally does not expose raw `exec`, providing agents with a smaller and more constrained command surface.
-
 Because these tools are ordinary CLIs, Houbridge can also be wrapped to create additional task-specific interfaces. A wrapper can expose only the operations required by an agent while deliberately omitting `exec` or other unrestricted capabilities.
 
 This allows orchestration systems to assign different interfaces to different agents instead of exposing the full Houdini control surface to every agent.
@@ -192,7 +186,6 @@ In short:
 
 - `houbridge` — general Houdini runtime and execution
 - `houdocs` — structured Houdini documentation search
-- `houlayout` — constrained node and network operations
 
 ## License
 
